@@ -1,0 +1,26 @@
+import { AsyncQueue, String } from "elp"
+import { getAboutContent } from "$app/internal/api"
+import { Paragraph } from "$components/paragraph"
+
+@Screen
+export fn Blog() -> Component {
+    var aboutContent String
+    var error Error
+
+	aboutContent, error = getAboutContent()
+
+    Column {
+        if error not None {
+            Row(class = "error-row") {
+                Text(error.asString())
+            }
+        } else {
+            Row {
+                Text(aboutContent.title, class="title")
+                Paragraph(aboutContent.body)
+            }
+        }
+    }
+}
+
+// vim: ft=kotlin

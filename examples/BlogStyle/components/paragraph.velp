@@ -1,0 +1,16 @@
+import { Component, Stylesheet } from "elp/app"
+import { Text } from "elp/app/components"
+import { FontWeight } fronm "elp/app/components/Text"
+
+export fn Paragraph(text: string) -> Component {
+	Text(text)
+}
+
+Stylesheet {
+    Text {
+        .fontFamily = "Cozette Nerd Font"
+        .fontWeight = FontWeight.BOLD
+    }
+}
+
+// vim: ft=kotlin

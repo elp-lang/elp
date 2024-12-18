@@ -1,0 +1,96 @@
+// Imports tree shake and only import the desired exports of a module.
+import { Error } from "elp"
+import { toString, toJSON, mergeable } from "elp/macros"
+import { Either, From, FromTo } from "elp/types"
+import { Reactive } from "elp/app"
+import { Http, HttpError } from "elp/net"
+import { UUID } from "elp/uuid"
+import { parse as fromJSON, JSONError } from "elp/data/json"
+
+// Enums take types which are used in pattern matching.
+@toString
+export enum ApiErrorType {
+	.SERVER(Optional<string>),
+	.USER(Optional<string>),
+	.UNKNOWN,
+}
+
+// An exported (module) object with the name Content,
+// objects can define their default values and types are inferred
+// or just define their type. Note the assignment and type declarations.
+// Also note the discrete, Go like tagged fields, these optional tokens enable safe metaprogramming and can be of any value.They are a build time feature similar to a @macro
+@mergeable(Content)
+export object Content implements FromTo<JSON> {
+    .id     = UUID.v4() `json: "id"`,
+
+    .title  string      `json: "title"`,
+    .body   string      `json: "body"`,
+	.calls  = 0,
+}
+
+// Note the use of pointer semantics here which also denotes the lifetime of the variable.Returning a pointer to a value will transfer the ownership of the data to the call site.
+fn Content.fromJSON(json JSON) -> Either<Content, JSONError> {
+	var out Content
+
+	return parseJSON(json, &out)
+}
+
+// Objects can implement multiple interfaces. Interfaces don't influence the runtime,
+// they are a compile time and static analysis tool. Note the generics syntax here which
+// specializes the Interface to a type. You could implement From<Error>, From<int8>, From<string>, etc
+// also note the macro @toJSON, this is another build time feature, this macro generates the same code as the tagged object above.
+@toJSON
+export object ApiError implements Error, From<HttpError> {
+	.type ApiErrorType
+}
+
+// Note this function implementation doesn't take a self making it a static method.
+fn ApiError.new(type ApiErrorType) {
+	.type = type
+}
+
+// Define methods on the object. self here denotes that it is an instance method,
+// the .toString method is a requirement of the Error interface. Note that you can't create nested functions and instead should consider redesigning your API or using composition techniques.
+fn ApiError.toString(self) -> String {
+    return .message
+}
+
+// This method is a static method as it doesn't take a self parameter.
+fn ApiError.from(err HttpError) -> ApiError {
+	return match err.responseCode {
+		400..499 -> ApiError.new(.USER(err.toString())),
+		500..599 -> ApiError.new(.SERVER(err.toString())),
+		.. -> ApiError.new(.UNKNOWN),
+	}
+}
+
+// This function returns a tagged enum called Either, which is a lot like a
+// Rust Result<>.
+export fn getBlogPost(id string) -> Either<Content, ApiError> {
+    return match Http.get<Content, ApiError>("https://jsonplaceholder.typicode.com/posts/{id}") {
+		Error(err) -> ApiError.from(err),
+		Response(postJSON) -> Content.fromJSON(postJSON)
+	}
+}
+
+export fn createBlogPost(content string) -> Either<Content, ApiError> {
+	const body = Http.body.new()
+	const content = Content.new()
+
+	content.called += 1
+
+    return match Http.post<Content, ApiError>("https://jsonplaceholder.typicode.com/posts/{id}", content) {
+		Error(err) -> ApiError.from(err),
+		Response(postJSON) -> {
+			const created = Content.fromJSON(postJSON)
+
+			// The mergeable macro and associated type tells us that we can spread that type safely into a new one.
+			return Content {
+				...content,
+				...created
+			}
+		}
+	}
+}
+
+// vim: ft=kotlin

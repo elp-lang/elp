@@ -1,0 +1,66 @@
+import { Column } from "elp/layout"
+import {
+	Form,
+	EmailInput,
+	SecureTextInput,
+	Button
+} from "elp/forms"
+import { error } from "elp/macros"
+import { Text } from "elp/components"
+import { User, UserMessage } from "$types/chat"
+
+export interface LoginProps {
+	email Optional<string>
+	password Optional<Protected<string>>
+}
+
+// This enum has the error macro which implements the Error interface.
+@error
+export enum LoginError {
+	NO_HANDLER
+	BAD_CREDENTIALS
+	BAD_REQUEST(string)
+	SERVER_ERROR(string)
+}
+
+// Components are a visual element that can be presented to the user.
+// Behind the scenes though this is just an object that implements the
+// Component and Either interfaces.
+export component LoginForm<LoginProps, LoginError> {
+	// Exports in a component are considered the props of the component.
+	// Similarly to the way that React and Svelte have props and SwiftUI has
+	// struct properties.
+	export var email Stateful<Optional<string>>
+	export var onSubmit fn(string, Protected<string>) -> nil
+
+	// They also have their own private variables as this is a block/lexical scope.
+	// Note that a variable is just that, it's variable in nature so it is mutable.
+	var password Stateful<Protected<string>>
+	var attempts = 0
+
+	// Functions can be declared in a block and are only available here unless returned (moved.)
+	// Functions that are declared here and are throwing will have an error boundary applied to them,
+	// the default behavior of the default error boundary is to continue throwing upwards to the default
+	// root error boundary (at the runtime error boundary.)
+	fn handleSubmit() {
+		attempts += 1
+
+		if onSubmit.notNil() {
+			throw LoginError.NO_HANDLER
+		}
+
+		onSubmit(email, password)
+	}
+
+	// A component must return something that implements Component or nil.
+	Form(onSubmit=handleSubmit) {
+		EmailInput(&email, placeholder="Enter your email")
+		SecureTextInput(&password, placeholder="Enter your password")
+
+		Button {
+			Text("Log in")
+		}
+	}
+}
+
+// vim: ft=kotlin

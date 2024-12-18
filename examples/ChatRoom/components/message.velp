@@ -1,0 +1,24 @@
+import { Column } from "elp/layout"
+import { Text, Component } from "elp/components"
+import { User, UserMessage } from "$types/chat"
+
+fn getRowType(from Optional<User>) -> some Component {
+	match from {
+		nil -> Column(class="from-me") {
+			Slot
+		}
+		Some(user) -> Column(class="to-me") {
+			Slot
+		}
+	}
+}
+
+export component Message(from User, body string) {
+	getRowType(from) {
+		Text(from.displayName, class="from")
+		Text(body)
+	}
+}
+
+
+// vim: ft=kotlin

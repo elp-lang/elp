@@ -1,0 +1,13 @@
+[package]
+name = "elp_parser"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+pest = { version = "2" }
+pest_derive = { version = "2" }
+pest-ast = "0.3.4"
+from-pest = "0.3.2"
+
+[dev-dependencies]
+pretty_assertions = "1.4.1"

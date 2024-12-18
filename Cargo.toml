@@ -1,0 +1,7 @@
+[workspace]
+resolver = "2"
+members = ["crates/parser"]
+authors = ["davemackintosh <me@dav3.co>"]
+license = "GNU version 3"
+license_file = "LICENSE"
+repository = "https://github.com/elp-lang/elpc/"

@@ -1,0 +1,18 @@
+import { UUID } from "elp/types"
+
+export object User {
+	.displayName: string
+}
+
+export object Message {
+	.body: const string
+	.user: const User
+	.reactions: []string
+}
+
+export enum Actions {
+	.LOGIN(User)
+	.SEND_MESSAGE(string)
+	.DELETE_MESSAGE(UUID)
+	.LOGOUT
+}

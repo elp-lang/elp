@@ -1,0 +1,13 @@
+import { App, Window } from "elp"
+import { Home } from "$screens/home"
+import Styles from "$app/styles"
+
+export fn HelloWorld -> App {
+	App(globalStyles = Styles()) {
+		Window {
+			Home()
+		}
+	}
+}
+
+// vim: ft=swift

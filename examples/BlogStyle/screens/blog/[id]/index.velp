@@ -1,0 +1,30 @@
+import { String } from "elp"
+import { getBlogPost } from "$app/internal/api"
+import { Paragraph } from "$components/paragraph"
+
+interface Params {
+    id: string
+}
+
+@Screen
+export fn BlogPost -> Component {
+    let post: Content
+    let error: Error
+
+	post, error = getBlogPost()
+
+    Column {
+        if error {
+            Row(class = "error-row") {
+                Text(error.AsString())
+            }
+        } else {
+            Row {
+                Text(post.title, class = "title")
+                Paragraph(post.body)
+            }
+        }
+    }
+}
+
+// vim: ft=kotlin
