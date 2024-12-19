@@ -15,6 +15,7 @@ expression = {
   | function_call
   | object_instantiation
   | match_tree
+  | pointer_semantics
   | variable_assignment
   | function_return_value
   | variable_access
@@ -37,8 +38,8 @@ variable_assignment_target = { variable_declaration | variable_access }
 variable_assignment        = { variable_assignment_target ~ value_assignment }
 value_assignment           = { (operand_assignment | EQUALITY) ~ expression }
 operand_assignment         = { OPERAND? ~ "=" }
-variable_access            = { pointer_semantics? ~ (IDENT ~ (("." ~ IDENT)*)?) }
-pointer_semantics          = { POINTER | REFERENCE }
+variable_access            = { IDENT ~ (("." ~ IDENT)*)? }
+pointer_semantics          = { POINTER | REFERENCE ~ variable_access }
 contextual_variable_access = { "." ~ IDENT }
 
 // Programming type info.
@@ -109,8 +110,8 @@ ARROW      = _{ "->" }
 IDENT      = @{ !number ~ !KEYWORD ~ (ASCII_ALPHANUMERIC+ | "_" | "\"" ~ inner ~ "\"")+ }
 SELF       =  { "self" }
 RETURN     =  { "return" }
-REFERENCE  =  { "&" }
-POINTER    =  { "*" }
+REFERENCE  = @{ "&" }
+POINTER    = @{ "*" }
 COMMENT    = _{ "//" ~ (!"\n" ~ ANY)* }
 WHITESPACE = _{ " " | "\t" | "\r" | "\n" }
 VAR        =  { "var" }

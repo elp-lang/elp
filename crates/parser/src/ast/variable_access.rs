@@ -4,29 +4,30 @@ use pest_ast::FromPest;
 
 use super::IDENT;
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
-#[pest_ast(rule(Rule::pointer_semantics))]
-pub enum PointerSemantics {
+fn span_into_pointer_semantics(span: Span) -> PointerSemanticsType {
+    match span.as_str() {
+        "*" => PointerSemanticsType::Pointer,
+        _ => PointerSemanticsType::Reference,
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum PointerSemanticsType {
     Pointer,
     Reference,
 }
 
-fn span_into_pointer_semantics(span: Span) -> Option<PointerSemantics> {
-    match span.as_str() {
-        "*" => Some(PointerSemantics::Pointer),
-        "&" => Some(PointerSemantics::Reference),
-        _ => None,
-    }
+#[derive(Debug, FromPest, PartialEq, Eq)]
+#[pest_ast(rule(Rule::pointer_semantics))]
+pub struct PointerSemantics {
+    #[pest_ast(inner(with(span_into_pointer_semantics)))]
+    pub semantics: PointerSemanticsType,
+    pub variable_access: VariableAccess,
 }
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::variable_access))]
 pub struct VariableAccess {
-    #[pest_ast(inner(with(span_into_pointer_semantics)))]
-    pub pointer_semantics: Option<PointerSemantics>,
-
-    // A member chain is something like this:
-    //   `foo.bar.baz` becomes `vec![IDENT { value: "foo".into() }, IDENT { value: "bar".into() }, IDENT { value: "baz".into() }]`
     pub names: Vec<IDENT>,
 }
 
@@ -42,6 +43,7 @@ mod tests {
     fn variable_access() {
         let expression_str = "hello.world.my.name.is.dave";
         let mut pairs = ElpParser::parse(Rule::variable_access, expression_str).unwrap();
+        println!("{:#?}", pairs);
         let ast = VariableAccess::from_pest(&mut pairs).unwrap();
 
         assert_eq!(
@@ -63,7 +65,39 @@ mod tests {
                         value: "dave".into()
                     },
                 ],
-                pointer_semantics: None,
+            }
+        )
+    }
+
+    #[test]
+    fn variable_access_reference() {
+        let expression_str = "&hello.world.my.name.is.dave";
+        let mut pairs = ElpParser::parse(Rule::pointer_semantics, expression_str).unwrap();
+        println!("{:#?}", pairs);
+        let ast = PointerSemantics::from_pest(&mut pairs).unwrap();
+
+        assert_eq!(
+            ast,
+            PointerSemantics {
+                semantics: PointerSemanticsType::Reference,
+                variable_access: VariableAccess {
+                    names: vec![
+                        IDENT {
+                            value: "hello".into()
+                        },
+                        IDENT {
+                            value: "world".into()
+                        },
+                        IDENT { value: "my".into() },
+                        IDENT {
+                            value: "name".into()
+                        },
+                        IDENT { value: "is".into() },
+                        IDENT {
+                            value: "dave".into()
+                        },
+                    ],
+                }
             }
         )
     }
