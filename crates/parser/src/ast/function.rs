@@ -1,13 +1,14 @@
 use super::{
-    block::Block, elp_type::ElpType, expression::Expression, variable_access::VariableAccess, IDENT,
+    block::Block, elp_type::ElpType, expression::Expression, variable_access::VariableAccess,
 };
+use crate::ast::ident::Ident;
 use crate::parser::Rule;
 use pest_ast::FromPest;
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::function_argument))]
 pub struct FunctionArgument {
-    pub name: IDENT,
+    pub name: Ident,
     pub type_annotation: Option<ElpType>,
 }
 

@@ -1,8 +1,7 @@
+use crate::ast::ident::Ident;
 use crate::parser::Rule;
 use pest::Span;
 use pest_ast::FromPest;
-
-use super::IDENT;
 
 fn span_into_pointer_semantics(span: Span) -> PointerSemanticsType {
     match span.as_str() {
@@ -28,7 +27,7 @@ pub struct PointerSemantics {
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::variable_access))]
 pub struct VariableAccess {
-    pub names: Vec<IDENT>,
+    pub names: Vec<Ident>,
 }
 
 #[cfg(test)]
@@ -50,18 +49,18 @@ mod tests {
             ast,
             VariableAccess {
                 names: vec![
-                    IDENT {
+                    Ident {
                         value: "hello".into()
                     },
-                    IDENT {
+                    Ident {
                         value: "world".into()
                     },
-                    IDENT { value: "my".into() },
-                    IDENT {
+                    Ident { value: "my".into() },
+                    Ident {
                         value: "name".into()
                     },
-                    IDENT { value: "is".into() },
-                    IDENT {
+                    Ident { value: "is".into() },
+                    Ident {
                         value: "dave".into()
                     },
                 ],
@@ -82,18 +81,18 @@ mod tests {
                 semantics: PointerSemanticsType::Reference,
                 variable_access: VariableAccess {
                     names: vec![
-                        IDENT {
+                        Ident {
                             value: "hello".into()
                         },
-                        IDENT {
+                        Ident {
                             value: "world".into()
                         },
-                        IDENT { value: "my".into() },
-                        IDENT {
+                        Ident { value: "my".into() },
+                        Ident {
                             value: "name".into()
                         },
-                        IDENT { value: "is".into() },
-                        IDENT {
+                        Ident { value: "is".into() },
+                        Ident {
                             value: "dave".into()
                         },
                     ],

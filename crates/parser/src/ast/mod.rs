@@ -3,6 +3,7 @@ pub(crate) mod elp_type;
 pub(crate) mod export;
 pub(crate) mod expression;
 pub(crate) mod function;
+pub(crate) mod ident;
 pub(crate) mod import;
 pub(crate) mod value_assignment;
 pub(crate) mod variable_access;
@@ -33,13 +34,6 @@ struct Eoi;
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::string))]
 pub struct StringValue {
-    #[pest_ast(inner(with(span_into_string)))]
-    pub value: String,
-}
-
-#[derive(Debug, FromPest, PartialEq, Eq)]
-#[pest_ast(rule(Rule::IDENT))]
-pub struct IDENT {
     #[pest_ast(inner(with(span_into_string)))]
     pub value: String,
 }
