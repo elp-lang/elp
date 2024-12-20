@@ -23,18 +23,18 @@ mod tests {
     #[test]
     fn parse_export_expression() {
         let expression_str = "export const hello";
-        let mut pairs = ElpParser::parse(Rule::expression, expression_str).unwrap();
-        let ast = Expression::from_pest(&mut pairs).unwrap();
+        let mut pairs = ElpParser::parse(Rule::export, expression_str).unwrap();
+        let ast = Export::from_pest(&mut pairs).unwrap();
 
         assert_eq!(
             ast,
-            Expression::Export(Box::new(Export {
+            Export {
                 expression: Expression::VariableDeclaration(Box::new(VariableDeclaration {
                     mutability: VariableMutability::Immutable,
                     name: "hello".into(),
                     type_annotation: None
                 }))
-            }))
+            }
         )
     }
 }

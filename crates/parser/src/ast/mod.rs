@@ -21,8 +21,8 @@ fn span_into_string(span: Span) -> String {
 }
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
-#[pest_ast(rule(Rule::program))]
-pub struct Program {
+#[pest_ast(rule(Rule::module))]
+pub struct Module {
     pub expressions: Vec<Expression>,
     _eoi: Eoi,
 }
@@ -54,12 +54,12 @@ mod tests {
     #[test]
     fn single_expression_ast_generation() {
         let expression_str = "import {Bar, Baz as BazAlias} from \"foo\"";
-        let mut pairs = ElpParser::parse(Rule::program, expression_str).unwrap();
-        let ast = Program::from_pest(&mut pairs).unwrap();
+        let mut pairs = ElpParser::parse(Rule::module, expression_str).unwrap();
+        let ast = Module::from_pest(&mut pairs).unwrap();
 
         assert_eq!(
             ast,
-            Program {
+            Module {
                 expressions: vec![Expression::Import(Box::new(Import {
                     names: vec![
                         ImportName {

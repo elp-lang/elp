@@ -1,3 +1,7 @@
+#![allow(clippy::clone_on_copy)]
+// We allow the clone on copy rule in this file because outer calls clone on a Copy-able object
+// which is actually a merged fix but not in the release.
+
 use crate::ast::span_into_string;
 use crate::parser::Rule;
 use pest_ast::FromPest;
@@ -5,7 +9,7 @@ use pest_ast::FromPest;
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::IDENT))]
 pub struct Ident {
-    #[pest_ast(inner(with(span_into_string)))]
+    #[pest_ast(outer(with(span_into_string)))]
     pub value: String,
 }
 

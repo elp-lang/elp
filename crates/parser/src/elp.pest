@@ -1,4 +1,4 @@
-program = { SOI ~ expression* ~ EOI }
+module = { SOI ~ expression* ~ EOI }
 
 expression = {
     import
@@ -18,8 +18,8 @@ expression = {
   | pointer_semantics
   | variable_assignment
   | function_return_value
-  | variable_access
   | variable_declaration
+  | variable_access
   | object_method_assignment
   | contextual_variable_access
   | function_component_call
@@ -107,7 +107,7 @@ number = @{
 
 // Lexer tokens
 ARROW      = _{ "->" }
-IDENT      = @{ !number ~ !KEYWORD ~ (ASCII_ALPHANUMERIC+ | "_" | "\"" ~ inner ~ "\"")+ }
+IDENT      = @{ !number ~ (ASCII_ALPHANUMERIC+ | "_")+ }
 SELF       =  { "self" }
 RETURN     =  { "return" }
 REFERENCE  = @{ "&" }
