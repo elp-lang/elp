@@ -39,7 +39,7 @@ variable_assignment        = { variable_assignment_target ~ value_assignment }
 value_assignment           = { (operand_assignment | EQUALITY) ~ expression }
 operand_assignment         = { OPERAND? ~ "=" }
 variable_access            = { IDENT ~ (("." ~ IDENT)*)? }
-pointer_semantics          = { POINTER | REFERENCE ~ variable_access }
+pointer_semantics          = { POINTER | REFERENCE }
 contextual_variable_access = { "." ~ IDENT }
 
 // Programming type info.
@@ -116,7 +116,6 @@ COMMENT    = _{ "//" ~ (!"\n" ~ ANY)* }
 WHITESPACE = _{ " " | "\t" | "\r" | "\n" }
 VAR        =  { "var" }
 CONST      =  { "const" }
-KEYWORD    = _{ "import" | "export" | "component" | "implements" | "enum" | "object" | "fn" | VAR | CONST | "object" | "match" }
 
 // operations.
 OPERAND  = { "+" | "-" | "*" | "/" | "^" | "&" }

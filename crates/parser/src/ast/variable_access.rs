@@ -1,27 +1,30 @@
 use crate::ast::ident::Ident;
 use crate::parser::Rule;
-use pest::Span;
+use from_pest::{ConversionError, FromPest, Void};
+use pest::iterators::Pairs;
 use pest_ast::FromPest;
 
-fn span_into_pointer_semantics(span: Span) -> PointerSemanticsType {
-    match span.as_str() {
-        "*" => PointerSemanticsType::Pointer,
-        _ => PointerSemanticsType::Reference,
-    }
-}
-
 #[derive(Debug, PartialEq, Eq)]
-pub enum PointerSemanticsType {
+pub enum PointerSemantics {
     Pointer,
     Reference,
 }
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
-#[pest_ast(rule(Rule::pointer_semantics))]
-pub struct PointerSemantics {
-    #[pest_ast(inner(with(span_into_pointer_semantics)))]
-    pub semantics: PointerSemanticsType,
-    pub variable_access: VariableAccess,
+impl<'pest> FromPest<'pest> for PointerSemantics {
+    type Rule = crate::Rule;
+    type FatalError = Void;
+
+    fn from_pest(
+        pest: &mut Pairs<'pest, Self::Rule>,
+    ) -> Result<Self, ConversionError<Self::FatalError>> {
+        let symbol = pest.next().unwrap();
+
+        match symbol.as_str() {
+            "*" => Ok(PointerSemantics::Pointer),
+            "&" => Ok(PointerSemantics::Reference),
+            _ => Err(ConversionError::NoMatch),
+        }
+    }
 }
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
@@ -33,16 +36,33 @@ pub struct VariableAccess {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parser::ElpParser;
+    use crate::{
+        ast::{expression::Expression, Eoi, Module},
+        parser::ElpParser,
+    };
     use from_pest::FromPest;
     use pest::Parser;
     use pretty_assertions::assert_eq;
 
     #[test]
+    fn test_pointer_semantics() {
+        let ref_expression_str = "&";
+        let mut ref_pairs = ElpParser::parse(Rule::pointer_semantics, ref_expression_str).unwrap();
+        let ref_ast = PointerSemantics::from_pest(&mut ref_pairs).unwrap();
+
+        assert_eq!(ref_ast, PointerSemantics::Reference);
+
+        let ptr_expression_str = "*";
+        let mut ptr_pairs = ElpParser::parse(Rule::pointer_semantics, ptr_expression_str).unwrap();
+        let ptr_ast = PointerSemantics::from_pest(&mut ptr_pairs).unwrap();
+
+        assert_eq!(ptr_ast, PointerSemantics::Pointer);
+    }
+
+    #[test]
     fn variable_access() {
         let expression_str = "hello.world.my.name.is.dave";
         let mut pairs = ElpParser::parse(Rule::variable_access, expression_str).unwrap();
-        println!("{:#?}", pairs);
         let ast = VariableAccess::from_pest(&mut pairs).unwrap();
 
         assert_eq!(
@@ -69,34 +89,37 @@ mod tests {
     }
 
     #[test]
-    fn variable_access_reference() {
-        let expression_str = "&hello.world.my.name.is.dave";
-        let mut pairs = ElpParser::parse(Rule::pointer_semantics, expression_str).unwrap();
-        println!("{:#?}", pairs);
-        let ast = PointerSemantics::from_pest(&mut pairs).unwrap();
+    fn variable_access_with_pointer_semantics() {
+        let expression_str_reference = "&hello.world.my.name.is.dave";
+        let mut pairs_reference = ElpParser::parse(Rule::module, expression_str_reference).unwrap();
+        println!("{:#?}", pairs_reference);
+        let reference_ast = Module::from_pest(&mut pairs_reference).unwrap();
 
         assert_eq!(
-            ast,
-            PointerSemantics {
-                semantics: PointerSemanticsType::Reference,
-                variable_access: VariableAccess {
-                    names: vec![
-                        Ident {
-                            value: "hello".into()
-                        },
-                        Ident {
-                            value: "world".into()
-                        },
-                        Ident { value: "my".into() },
-                        Ident {
-                            value: "name".into()
-                        },
-                        Ident { value: "is".into() },
-                        Ident {
-                            value: "dave".into()
-                        },
-                    ],
-                }
+            reference_ast,
+            Module {
+                expressions: vec![
+                    Expression::PointerSemantics(Box::new(PointerSemantics::Reference)),
+                    Expression::VariableAccess(Box::new(VariableAccess {
+                        names: vec![
+                            Ident {
+                                value: "hello".into()
+                            },
+                            Ident {
+                                value: "world".into()
+                            },
+                            Ident { value: "my".into() },
+                            Ident {
+                                value: "name".into()
+                            },
+                            Ident { value: "is".into() },
+                            Ident {
+                                value: "dave".into()
+                            },
+                        ],
+                    }))
+                ],
+                _eoi: Eoi {}
             }
         )
     }

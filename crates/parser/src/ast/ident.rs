@@ -1,7 +1,3 @@
-#![allow(clippy::clone_on_copy)]
-// We allow the clone on copy rule in this file because outer calls clone on a Copy-able object
-// which is actually a merged fix but not in the release.
-
 use crate::ast::span_into_string;
 use crate::parser::Rule;
 use pest_ast::FromPest;

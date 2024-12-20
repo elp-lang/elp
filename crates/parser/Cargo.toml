@@ -9,7 +9,7 @@ repository = "https://github.com/elp-lang/elp/"
 [dependencies]
 pest = { version = "2" }
 pest_derive = { version = "2" }
-pest-ast = "0.3.4"
+pest-ast = "0.3.5"
 from-pest = "0.3.2"
 
 [dev-dependencies]
