@@ -79,7 +79,7 @@ export fn createBlogPost(content string) -> Either<Content, ApiError> {
 
 	content.called += 1
 
-    return match Http.post<Content, ApiError>("https://jsonplaceholder.typicode.com/posts/{id}", content) {
+    return match Http.post<Content, ApiError>("https://jsonplaceholder.typicode.com/posts/", content) {
 		Error(err) -> ApiError.from(err),
 		Response(postJSON) -> {
 			const created = Content.fromJSON(postJSON)

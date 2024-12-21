@@ -1,4 +1,4 @@
-use super::{span_into_string, StringValue};
+use super::{span_into_string, string::StringValue};
 use crate::parser::Rule;
 use pest_ast::FromPest;
 

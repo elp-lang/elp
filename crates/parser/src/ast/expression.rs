@@ -2,10 +2,10 @@ use super::{
     export::Export,
     function::{FunctionDef, FunctionReturnValue},
     import::Import,
+    string::StringValue,
     variable_access::{PointerSemantics, VariableAccess},
     variable_assignment::VariableAssignment,
     variable_declaration::VariableDeclaration,
-    StringValue,
 };
 use crate::parser::Rule;
 use pest_ast::FromPest;

@@ -5,6 +5,7 @@ pub(crate) mod expression;
 pub(crate) mod function;
 pub(crate) mod ident;
 pub(crate) mod import;
+pub(crate) mod string;
 pub(crate) mod value_assignment;
 pub(crate) mod variable_access;
 pub(crate) mod variable_assignment;
@@ -31,13 +32,6 @@ pub struct Module {
 #[pest_ast(rule(Rule::EOI))]
 struct Eoi;
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
-#[pest_ast(rule(Rule::string))]
-pub struct StringValue {
-    #[pest_ast(inner(with(span_into_string)))]
-    pub value: String,
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -45,11 +39,9 @@ mod tests {
     use from_pest::FromPest;
     use import::Import;
     use pest::Parser;
+    use string::StringValue;
 
-    use crate::ast::{
-        import::{ImportModulePath, ImportName, ImportNameAlias},
-        StringValue,
-    };
+    use crate::ast::import::{ImportModulePath, ImportName, ImportNameAlias};
 
     #[test]
     fn single_expression_ast_generation() {

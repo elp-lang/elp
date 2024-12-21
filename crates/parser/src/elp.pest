@@ -15,7 +15,7 @@ expression = {
   | function_call
   | object_instantiation
   | match_tree
-  | pointer_semantics
+  | bitwise_operation
   | variable_assignment
   | function_return_value
   | variable_declaration
@@ -38,9 +38,12 @@ variable_assignment_target = { variable_declaration | variable_access }
 variable_assignment        = { variable_assignment_target ~ value_assignment }
 value_assignment           = { (operand_assignment | EQUALITY) ~ expression }
 operand_assignment         = { OPERAND? ~ "=" }
-variable_access            = { IDENT ~ (("." ~ IDENT)*)? }
+variable_access            = { pointer_semantics? ~ IDENT ~ (("." ~ IDENT)*)? }
 pointer_semantics          = { POINTER | REFERENCE }
 contextual_variable_access = { "." ~ IDENT }
+
+// Bitwise
+bitwise_operation = { (variable_access | number) ~ BITWISE_OPERAND ~ (variable_access | number) }
 
 // Programming type info.
 elp_type    = { IDENT ~ elp_generic? }
@@ -118,5 +121,26 @@ VAR        =  { "var" }
 CONST      =  { "const" }
 
 // operations.
-OPERAND  = { "+" | "-" | "*" | "/" | "^" | "&" }
-EQUALITY = { "!" | "=" | "!=" }
+BITWISE_OPERAND = {
+    "~"
+  | "<<"
+  | ">>"
+  | "|"
+  | "&"
+}
+OPERAND         = {
+    "+"
+  | "-"
+  | "*"
+  | "/"
+  | "^"
+  | "&"
+  | "**"
+  | "|"
+}
+EQUALITY        = {
+    "!"
+  | "~"
+  | "="
+  | "!="
+}
