@@ -38,7 +38,8 @@ variable_assignment_target = { variable_declaration | variable_access }
 variable_assignment        = { variable_assignment_target ~ value_assignment }
 value_assignment           = { (operand_assignment | EQUALITY) ~ expression }
 operand_assignment         = { OPERAND? ~ "=" }
-variable_access            = { pointer_semantics? ~ IDENT ~ (("." ~ IDENT)*)? }
+variable_access            = { pointer_semantics* ~ variable_access_names }
+variable_access_names      = { IDENT ~ ("." ~ IDENT)* }
 pointer_semantics          = { POINTER | REFERENCE }
 contextual_variable_access = { "." ~ IDENT }
 

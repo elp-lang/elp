@@ -21,6 +21,10 @@ fn span_into_string(span: Span) -> String {
     span.as_str().into()
 }
 
+fn span_into_string_option(span: Span) -> Option<String> {
+    Some(span.as_str().into())
+}
+
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::module))]
 pub struct Module {
