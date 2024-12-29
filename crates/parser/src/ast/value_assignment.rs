@@ -1,7 +1,5 @@
-use crate::parser::Rule;
 use from_pest::{ConversionError, FromPest, Void};
 use pest::iterators::Pairs;
-use pest_ast::FromPest;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Operand {
@@ -42,4 +40,21 @@ impl<'pest> FromPest<'pest> for Operand {
 pub enum Equality {
     Equal,
     NotEqual,
+}
+
+impl<'pest> FromPest<'pest> for Equality {
+    type Rule = crate::Rule;
+    type FatalError = Void;
+
+    fn from_pest(
+        pest: &mut Pairs<'pest, Self::Rule>,
+    ) -> Result<Self, ConversionError<Self::FatalError>> {
+        let symbol = pest.next().unwrap();
+
+        match symbol.as_str() {
+            "==" => Ok(Equality::Equal),
+            "!=" => Ok(Equality::NotEqual),
+            _ => Err(ConversionError::NoMatch),
+        }
+    }
 }

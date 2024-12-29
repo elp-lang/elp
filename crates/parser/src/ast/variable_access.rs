@@ -1,30 +1,20 @@
 use crate::ast::ident::Ident;
 use crate::parser::Rule;
-use from_pest::{ConversionError, FromPest, Void};
-use pest::iterators::Pairs;
 use pest_ast::FromPest;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq)]
+#[pest_ast(rule(Rule::POINTER))]
+pub struct Pointer;
+
+#[derive(Debug, FromPest, PartialEq, Eq)]
+#[pest_ast(rule(Rule::REFERENCE))]
+pub struct Reference;
+
+#[derive(Debug, FromPest, PartialEq, Eq)]
+#[pest_ast(rule(Rule::pointer_semantics))]
 pub enum PointerSemantics {
-    Pointer,
-    Reference,
-}
-
-impl<'pest> FromPest<'pest> for PointerSemantics {
-    type Rule = crate::Rule;
-    type FatalError = Void;
-
-    fn from_pest(
-        pest: &mut Pairs<'pest, Self::Rule>,
-    ) -> Result<Self, ConversionError<Self::FatalError>> {
-        let symbol = pest.next().unwrap();
-
-        match symbol.as_str() {
-            "*" => Ok(PointerSemantics::Pointer),
-            "&" => Ok(PointerSemantics::Reference),
-            _ => Err(ConversionError::NoMatch),
-        }
-    }
+    Pointer(Pointer),
+    Reference(Reference),
 }
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
@@ -55,13 +45,13 @@ mod tests {
         let mut ref_pairs = ElpParser::parse(Rule::pointer_semantics, ref_expression_str).unwrap();
         let ref_ast = PointerSemantics::from_pest(&mut ref_pairs).unwrap();
 
-        assert_eq!(ref_ast, PointerSemantics::Reference);
+        assert_eq!(ref_ast, PointerSemantics::Reference(Reference {}));
 
         let ptr_expression_str = "*";
         let mut ptr_pairs = ElpParser::parse(Rule::pointer_semantics, ptr_expression_str).unwrap();
         let ptr_ast = PointerSemantics::from_pest(&mut ptr_pairs).unwrap();
 
-        assert_eq!(ptr_ast, PointerSemantics::Pointer);
+        assert_eq!(ptr_ast, PointerSemantics::Pointer(Pointer {}));
     }
 
     #[test]
@@ -106,7 +96,7 @@ mod tests {
         assert_eq!(
             reference_ast,
             VariableAccess {
-                pointer_semantics: vec![PointerSemantics::Reference],
+                pointer_semantics: vec![PointerSemantics::Reference(Reference {})],
                 names: VariableAccessNames {
                     names: vec![
                         Ident {
