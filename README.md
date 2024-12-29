@@ -1,7 +1,7 @@
 # elpc
 
 [![https://good-labs.github.io/greater-good-affirmation/assets/images/badge.svg](https://good-labs.github.io/greater-good-affirmation/assets/images/badge.svg)](https://good-labs.github.io/greater-good-affirmation)
-[![codecov](https://codecov.io/gh/elp-lang/elpc/graph/badge.svg?token=9HRZ43JYME)](https://codecov.io/gh/elp-lang/elpc)
+[![codecov](https://codecov.io/gh/elp-lang/elp/graph/badge.svg?token=YKcXc1uHNW)](https://codecov.io/gh/elp-lang/elp)
 
 GNU Licensed compiler for the Ellipsis ('elp) language, very much a work in progress programming language inspired by the likes of modern; platform-specific, UI languages and tools such as Swift UI and Jetpack Compose. Compiles to native binaries for Android, iOS, Mac, Windows and Linux and html/css/javascript for the web.
 
