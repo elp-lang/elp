@@ -2,6 +2,8 @@ use crate::ast::ident::Ident;
 use crate::parser::Rule;
 use pest_ast::FromPest;
 
+// Not a fan of having anonymous structs for these rules to fit into the enum
+// but it is what it is.
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::POINTER))]
 pub struct Pointer;
@@ -97,6 +99,36 @@ mod tests {
             reference_ast,
             VariableAccess {
                 pointer_semantics: vec![PointerSemantics::Reference(Reference {})],
+                names: VariableAccessNames {
+                    names: vec![
+                        Ident {
+                            value: "hello".into()
+                        },
+                        Ident {
+                            value: "world".into()
+                        },
+                        Ident { value: "my".into() },
+                        Ident {
+                            value: "name".into()
+                        },
+                        Ident { value: "is".into() },
+                        Ident {
+                            value: "dave".into()
+                        },
+                    ],
+                }
+            }
+        );
+
+        let expression_str_pointer = "*hello.world.my.name.is.dave";
+        let mut pairs_pointer =
+            ElpParser::parse(Rule::variable_access, expression_str_pointer).unwrap();
+        let pointer_ast = VariableAccess::from_pest(&mut pairs_pointer).unwrap();
+
+        assert_eq!(
+            pointer_ast,
+            VariableAccess {
+                pointer_semantics: vec![PointerSemantics::Pointer(Pointer {})],
                 names: VariableAccessNames {
                     names: vec![
                         Ident {
