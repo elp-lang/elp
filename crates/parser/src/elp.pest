@@ -36,8 +36,7 @@ export             = { "export" ~ expression }
 variable_declaration       = { (VAR | CONST) ~ IDENT ~ elp_type? }
 variable_assignment_target = { variable_declaration | variable_access }
 variable_assignment        = { variable_assignment_target ~ value_assignment }
-value_assignment           = { (operand_assignment | EQUALITY) ~ expression }
-operand_assignment         = { OPERAND? ~ "=" }
+value_assignment           = { OPERAND ~ expression }
 variable_access            = { pointer_semantics* ~ variable_access_names }
 variable_access_names      = { IDENT ~ ("." ~ IDENT)* }
 pointer_semantics          = { POINTER | REFERENCE }
@@ -122,26 +121,41 @@ VAR        =  { "var" }
 CONST      =  { "const" }
 
 // operations.
-BITWISE_OPERAND = {
-    "~"
-  | "<<"
-  | ">>"
-  | "|"
-  | "&"
+BITWISE_OPERAND_TILDE       = _{ "~" }
+BITWISE_OPERAND_LEFT_SHIFT  = _{ "<<" }
+BITWISE_OPERAND_RIGHT_SHIFT = _{ ">>" }
+BITWISE_OPERAND_OR          = _{ "|" }
+BITWISE_OPERAND             =  {
+    BITWISE_OPERAND_TILDE
+  | BITWISE_OPERAND_LEFT_SHIFT
+  | BITWISE_OPERAND_RIGHT_SHIFT
+  | BITWISE_OPERAND_OR
+  | REFERENCE
 }
-OPERAND         = {
-    "+"
-  | "-"
-  | "*"
-  | "/"
-  | "^"
-  | "&"
-  | "**"
-  | "|"
-}
-EQUALITY        = {
-    "!"
-  | "~"
-  | "="
-  | "!="
+
+OPERAND_PLUS          = _{ "+=" }
+OPERAND_MINUS         = _{ "-=" }
+OPERAND_MUL           = _{ "*=" }
+OPERAND_DIV           = _{ "/=" }
+OPERAND_MOD           = _{ "%=" }
+OPERAND_POW           = _{ "^=" }
+OPERAND_EXPO          = _{ "**" }
+OPERAND_EQUAL         = _{ "==" }
+OPERAND_NOT_EQUAL     = _{ "!=" }
+OPERAND_BIT_NOT_EQUAL = _{ "~=" }
+OPERAND_EQUALS        = _{ "=" }
+OPERAND               =  {
+    OPERAND_PLUS
+  | OPERAND_EQUALS
+  | OPERAND_MINUS
+  | OPERAND_MUL
+  | OPERAND_DIV
+  | OPERAND_MOD
+  | OPERAND_POW
+  | REFERENCE
+  | OPERAND_EXPO
+  | BITWISE_OPERAND_OR
+  | OPERAND_BIT_NOT_EQUAL
+  | OPERAND_EQUAL
+  | OPERAND_NOT_EQUAL
 }

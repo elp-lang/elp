@@ -1,37 +1,63 @@
-use super::{variable_access::VariableAccess, variable_declaration::VariableDeclaration};
+use super::{
+    value_assignment::ValueAssignment, variable_access::VariableAccess,
+    variable_declaration::VariableDeclaration,
+};
 use crate::parser::Rule;
 use pest_ast::FromPest;
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::variable_assignment_target))]
 pub enum VariableAssignmentTarget {
-    #[pest_ast(rule(Rule::variable_declaration))]
-    VariableDeclaration(Box<VariableDeclaration>),
-
-    #[pest_ast(rule(Rule::variable_access))]
-    VariableAccess(Box<VariableAccess>),
+    VariableDeclaration(VariableDeclaration),
+    VariableAccess(VariableAccess),
 }
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::variable_assignment))]
 pub struct VariableAssignment {
     pub variable_assignment_target: VariableAssignmentTarget,
+    pub value_assignment: ValueAssignment,
 }
 
-//#[cfg(test)]
-//mod tests {
-//    use super::*;
-//    use crate::parser::ElpParser;
-//    use from_pest::FromPest;
-//    use pest::Parser;
-//    use pretty_assertions::assert_eq;
-//
-//    #[test]
-//    fn test_pointer_semantics() {
-//        let ref_expression_str = "const hello = \"world\"";
-//        let mut ref_pairs = ElpParser::parse(Rule::pointer_semantics, ref_expression_str).unwrap();
-//        let ref_ast = VariableAssignment::from_pest(&mut ref_pairs).unwrap();
-//
-//        assert_eq!(ref_ast, VariableAssignment {});
-//    }
-//}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        ast::{
+            expression::Expression,
+            string::StringValue,
+            value_assignment::{Operand, Plus},
+            variable_declaration::VariableMutability,
+        },
+        parser::ElpParser,
+    };
+    use from_pest::FromPest;
+    use pest::Parser;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn test_variable_assignments() {
+        let expression_str = "const hello = \"world\"";
+        let mut pairs = ElpParser::parse(Rule::variable_assignment, expression_str).unwrap();
+        let ast = VariableAssignment::from_pest(&mut pairs).unwrap();
+
+        assert_eq!(
+            ast,
+            VariableAssignment {
+                variable_assignment_target: VariableAssignmentTarget::VariableDeclaration(
+                    VariableDeclaration {
+                        mutability: VariableMutability::Immutable,
+                        name: "hello".into(),
+                        type_annotation: None,
+                    }
+                ),
+                value_assignment: ValueAssignment {
+                    operand: Operand::Plus(Plus {}),
+                    value: Box::new(Expression::String(Box::new(StringValue {
+                        value: "world".into(),
+                    }))),
+                },
+            }
+        );
+    }
+}
