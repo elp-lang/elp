@@ -26,7 +26,7 @@ mod tests {
         ast::{
             expression::Expression,
             string::StringValue,
-            value_assignment::{Operand, Plus},
+            value_assignment::{Equals, Operand},
             variable_declaration::VariableMutability,
         },
         parser::ElpParser,
@@ -52,7 +52,7 @@ mod tests {
                     }
                 ),
                 value_assignment: ValueAssignment {
-                    operand: Operand::Plus(Plus {}),
+                    operand: Operand::Equals(Equals {}),
                     value: Box::new(Expression::String(Box::new(StringValue {
                         value: "world".into(),
                     }))),
