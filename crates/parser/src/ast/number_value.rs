@@ -9,7 +9,7 @@ use super::span_into_string;
 pub struct Number {
     // Numbers in elp are similar to numbers in JavaScript where they can appear in multiple forms.
     // For example, -1, 10, 10.5, 1e3, etc.
-    #[pest_ast(inner(with(span_into_string)))]
+    #[pest_ast(outer(with(span_into_string)))]
     pub value: String,
 }
 

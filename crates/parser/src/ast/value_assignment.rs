@@ -101,7 +101,10 @@ mod tests {
     use from_pest::FromPest;
     use pest::Parser;
 
-    use crate::{ast::string::StringValue, parser::ElpParser};
+    use crate::{
+        ast::{number_value::Number, string::StringValue},
+        parser::ElpParser,
+    };
 
     use super::*;
 
@@ -132,9 +135,7 @@ mod tests {
             ast,
             ValueAssignment {
                 operand: Operand::Plus(Plus {}),
-                value: Box::new(Expression::(Box::new(StringValue {
-                    value: "1".into()
-                }))),
+                value: Box::new(Expression::Number(Box::new(Number { value: "1".into() }))),
             }
         )
     }
