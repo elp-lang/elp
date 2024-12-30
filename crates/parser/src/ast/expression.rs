@@ -2,6 +2,7 @@ use super::{
     export::Export,
     function::{FunctionDef, FunctionReturnValue},
     import::Import,
+    number_value::Number,
     string::StringValue,
     variable_access::{PointerSemantics, VariableAccess},
     variable_assignment::VariableAssignment,
@@ -39,4 +40,7 @@ pub enum Expression {
 
     #[pest_ast(rule(Rule::string))]
     String(Box<StringValue>),
+
+    #[pest_ast(rule(Rule::number))]
+    Number(Box<Number>),
 }

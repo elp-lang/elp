@@ -121,11 +121,11 @@ VAR        =  { "var" }
 CONST      =  { "const" }
 
 // operations.
-BITWISE_OPERAND_TILDE       = _{ "~" }
-BITWISE_OPERAND_LEFT_SHIFT  = _{ "<<" }
-BITWISE_OPERAND_RIGHT_SHIFT = _{ ">>" }
-BITWISE_OPERAND_OR          = _{ "|" }
-BITWISE_OPERAND             =  {
+BITWISE_OPERAND_TILDE       = { "~" }
+BITWISE_OPERAND_LEFT_SHIFT  = { "<<" }
+BITWISE_OPERAND_RIGHT_SHIFT = { ">>" }
+BITWISE_OPERAND_OR          = { "|" }
+BITWISE_OPERAND             = {
     BITWISE_OPERAND_TILDE
   | BITWISE_OPERAND_LEFT_SHIFT
   | BITWISE_OPERAND_RIGHT_SHIFT

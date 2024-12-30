@@ -106,7 +106,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_value_assignment() {
+    fn test_value_assignment_equals() {
         let expression_str = "= \"world\"";
         let mut pairs = ElpParser::parse(Rule::value_assignment, expression_str).unwrap();
         let ast = ValueAssignment::from_pest(&mut pairs).unwrap();
@@ -117,6 +117,23 @@ mod tests {
                 operand: Operand::Equals(Equals {}),
                 value: Box::new(Expression::String(Box::new(StringValue {
                     value: "world".into(),
+                }))),
+            }
+        )
+    }
+
+    #[test]
+    fn test_value_assignment_plus() {
+        let expression_str = "+= 1";
+        let mut pairs = ElpParser::parse(Rule::value_assignment, expression_str).unwrap();
+        let ast = ValueAssignment::from_pest(&mut pairs).unwrap();
+
+        assert_eq!(
+            ast,
+            ValueAssignment {
+                operand: Operand::Plus(Plus {}),
+                value: Box::new(Expression::(Box::new(StringValue {
+                    value: "1".into()
                 }))),
             }
         )
