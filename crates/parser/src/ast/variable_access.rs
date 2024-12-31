@@ -32,6 +32,12 @@ pub struct VariableAccessNames {
     pub names: Vec<Ident>,
 }
 
+#[derive(Debug, FromPest, PartialEq, Eq)]
+#[pest_ast(rule(Rule::contextual_variable_access))]
+pub struct ContextualVariableAccess {
+    pub name: Ident,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -147,6 +153,23 @@ mod tests {
                         },
                     ],
                 }
+            }
+        )
+    }
+
+    #[test]
+    fn contextual_variable_access() {
+        let expression_str_pointer = ".CONTEXTUAL";
+        let mut pairs_pointer =
+            ElpParser::parse(Rule::contextual_variable_access, expression_str_pointer).unwrap();
+        let pointer_ast = ContextualVariableAccess::from_pest(&mut pairs_pointer).unwrap();
+
+        assert_eq!(
+            pointer_ast,
+            ContextualVariableAccess {
+                name: Ident {
+                    value: "CONTEXTUAL".into()
+                },
             }
         )
     }
