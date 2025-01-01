@@ -8,5 +8,5 @@ pub struct ElpType {
     #[pest_ast(inner(with(span_into_string)))]
     pub name: String,
 
-    pub type_parameters: Option<Vec<ElpType>>,
+    pub type_parameters: Vec<ElpType>,
 }

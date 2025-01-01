@@ -38,7 +38,7 @@ mod tests {
                         mutability: VariableMutability::Immutable,
                         type_annotation: Some(Box::new(ElpType {
                             name: "String".into(),
-                            type_parameters: Some(vec![]),
+                            type_parameters: vec![],
                         })),
                     }
                 ))]

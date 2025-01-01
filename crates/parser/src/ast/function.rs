@@ -51,6 +51,95 @@ mod tests {
     use pretty_assertions::assert_eq;
 
     #[test]
+    fn function_arguments_no_self() {
+        let expression_str = "(name String, hello String)";
+        let mut pairs = ElpParser::parse(Rule::function_arguments, expression_str).unwrap();
+        let ast = FunctionArguments::from_pest(&mut pairs).unwrap();
+
+        assert_eq!(
+            ast,
+            FunctionArguments {
+                arguments: vec![
+                    FunctionArgument {
+                        name: Ident {
+                            value: "name".into()
+                        },
+                        type_annotation: Some(ElpType {
+                            name: "String".into(),
+                            type_parameters: vec![],
+                        }),
+                    },
+                    FunctionArgument {
+                        name: Ident {
+                            value: "hello".into()
+                        },
+                        type_annotation: Some(ElpType {
+                            name: "String".into(),
+                            type_parameters: vec![],
+                        }),
+                    }
+                ]
+            }
+        );
+    }
+
+    #[test]
+    fn function_arguments_with_self() {
+        let expression_str = "(self, name String, hello String)";
+        let mut pairs = ElpParser::parse(Rule::function_arguments, expression_str).unwrap();
+        let ast = FunctionArguments::from_pest(&mut pairs).unwrap();
+
+        assert_eq!(
+            ast,
+            FunctionArguments {
+                arguments: vec![
+                    FunctionArgument {
+                        name: Ident {
+                            value: "self".into()
+                        },
+                        type_annotation: None,
+                    },
+                    FunctionArgument {
+                        name: Ident {
+                            value: "name".into()
+                        },
+                        type_annotation: Some(ElpType {
+                            name: "String".into(),
+                            type_parameters: vec![],
+                        }),
+                    },
+                    FunctionArgument {
+                        name: Ident {
+                            value: "hello".into()
+                        },
+                        type_annotation: Some(ElpType {
+                            name: "String".into(),
+                            type_parameters: vec![],
+                        }),
+                    }
+                ]
+            }
+        );
+    }
+
+    #[test]
+    fn function_return_type() {
+        let expression_str = "-> String";
+        let mut pairs = ElpParser::parse(Rule::function_return_type, expression_str).unwrap();
+        let ast = FunctionReturnType::from_pest(&mut pairs).unwrap();
+
+        assert_eq!(
+            ast,
+            FunctionReturnType {
+                type_annotations: vec![ElpType {
+                    name: "String".into(),
+                    type_parameters: vec![],
+                }]
+            }
+        );
+    }
+
+    #[test]
     fn simple_function_def() {
         let expression_str = "fn hello.name(name String) -> String { return \"hello {name}\" }";
         let mut pairs = ElpParser::parse(Rule::function_def, expression_str).unwrap();
@@ -79,14 +168,14 @@ mod tests {
                         },
                         type_annotation: Some(ElpType {
                             name: "String".into(),
-                            type_parameters: None,
+                            type_parameters: vec![],
                         }),
                     }],
                 }),
                 return_type: Some(FunctionReturnType {
                     type_annotations: vec![ElpType {
                         name: "String".into(),
-                        type_parameters: None,
+                        type_parameters: vec![],
                     }],
                 }),
                 block: Box::new(Block {

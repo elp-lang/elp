@@ -50,7 +50,7 @@ mod tests {
                 name: "hello".to_string(),
                 type_annotation: Some(Box::new(ElpType {
                     name: "String".to_string(),
-                    type_parameters: Some([].into()),
+                    type_parameters: vec![],
                 })),
             }
         );
