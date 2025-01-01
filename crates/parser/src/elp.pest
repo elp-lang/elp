@@ -53,7 +53,7 @@ enum_member = { "." ~ IDENT ~ ("(" ~ elp_type ~ ("," ~ elp_type)* ~ ")")? }
 
 // Functions.
 function_def            = { "fn" ~ variable_access ~ function_arguments? ~ function_return_type? ~ block }
-function_return_type    = { ARROW ~ elp_type }
+function_return_type    = { ARROW ~ elp_type ~ ("," ~ elp_type)* }
 function_arguments      = { "(" ~ (SELF ~ ","?)? ~ (function_argument ~ ("," ~ function_argument)*)? ~ ")" }
 function_argument       = { IDENT ~ elp_type }
 function_component_call = { function_call ~ block }

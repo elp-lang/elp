@@ -1,4 +1,4 @@
-# elpc
+# elp
 
 [![https://good-labs.github.io/greater-good-affirmation/assets/images/badge.svg](https://good-labs.github.io/greater-good-affirmation/assets/images/badge.svg)](https://good-labs.github.io/greater-good-affirmation)
 [![codecov](https://codecov.io/gh/elp-lang/elp/graph/badge.svg?token=YKcXc1uHNW)](https://codecov.io/gh/elp-lang/elp)
