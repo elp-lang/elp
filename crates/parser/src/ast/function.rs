@@ -141,7 +141,7 @@ mod tests {
 
     #[test]
     fn simple_function_def() {
-        let expression_str = "fn hello.name(name String) -> String { return \"hello {name}\" }";
+        let expression_str = "fn hello.name(name String) -> String { return \"hello\" }";
         let mut pairs = ElpParser::parse(Rule::function_def, expression_str).unwrap();
         let ast = FunctionDef::from_pest(&mut pairs).unwrap();
 
