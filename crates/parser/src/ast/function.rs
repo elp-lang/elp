@@ -41,6 +41,15 @@ pub struct FunctionDef {
     pub block: Box<Block>,
 }
 
+#[derive(Debug, FromPest, PartialEq, Eq)]
+#[pest_ast(rule(Rule::external_fn_def))]
+pub struct ExternalFunctionDef {
+    pub name: VariableAccess,
+    pub generics: Option<ElpTypeGeneric>,
+    pub arguments: FunctionArguments,
+    pub return_type: FunctionReturnType,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -161,14 +170,10 @@ mod tests {
     fn simple_function_def() {
         let expression_str = "fn hello.name(name String) -> String { return \"hello {name}\" }";
         let mut pairs = ElpParser::parse(Rule::function_def, expression_str).unwrap();
-        let ast = FunctionDef::from_pest(&mut pairs);
-
-        if ast.is_err() {
-            panic!("Failed to parse function definition: {}", ast.unwrap_err());
-        }
+        let ast = FunctionDef::from_pest(&mut pairs).unwrap();
 
         assert_eq!(
-            ast.unwrap(),
+            ast,
             FunctionDef {
                 name: VariableAccess {
                     names: VariableAccessNames {
@@ -210,6 +215,45 @@ mod tests {
                         }
                     ))]
                 })
+            }
+        )
+    }
+
+    #[test]
+    fn external_function_def() {
+        let expression_str = "fn hello(name String) -> String";
+        let mut pairs = ElpParser::parse(Rule::external_fn_def, expression_str).unwrap();
+        let ast = ExternalFunctionDef::from_pest(&mut pairs).unwrap();
+
+        assert_eq!(
+            ast,
+            ExternalFunctionDef {
+                name: VariableAccess {
+                    names: VariableAccessNames {
+                        names: vec![Ident {
+                            value: "hello".into()
+                        },],
+                    },
+                    pointer_semantics: vec![],
+                },
+                generics: None,
+                arguments: FunctionArguments {
+                    arguments: vec![FunctionArgument {
+                        name: Ident {
+                            value: "name".into()
+                        },
+                        type_annotation: Some(ElpType {
+                            name: "String".into(),
+                            type_parameters: vec![],
+                        }),
+                    }],
+                },
+                return_type: FunctionReturnType {
+                    type_annotations: vec![ElpType {
+                        name: "String".into(),
+                        type_parameters: vec![],
+                    }],
+                },
             }
         )
     }
