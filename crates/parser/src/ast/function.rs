@@ -1,3 +1,4 @@
+use super::elp_type::ElpTypeGeneric;
 use super::{
     block::Block, elp_type::ElpType, expression::Expression, variable_access::VariableAccess,
 };
@@ -34,6 +35,7 @@ pub struct FunctionReturnValue {
 #[pest_ast(rule(Rule::function_def))]
 pub struct FunctionDef {
     pub name: VariableAccess,
+    pub generics: Option<ElpTypeGeneric>,
     pub arguments: Option<FunctionArguments>,
     pub return_type: Option<FunctionReturnType>,
     pub block: Box<Block>,
@@ -141,7 +143,7 @@ mod tests {
 
     #[test]
     fn simple_function_def() {
-        let expression_str = "fn hello.name(name String) -> String { return \"hello\" }";
+        let expression_str = "fn hello(name String) -> String { return \"hello\" }";
         let mut pairs = ElpParser::parse(Rule::function_def, expression_str).unwrap();
         let ast = FunctionDef::from_pest(&mut pairs).unwrap();
 
@@ -161,6 +163,7 @@ mod tests {
                     },
                     pointer_semantics: vec![],
                 },
+                generics: None,
                 arguments: Some(FunctionArguments {
                     arguments: vec![FunctionArgument {
                         name: Ident {

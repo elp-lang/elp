@@ -7,6 +7,9 @@ import { Http, HttpError } from "elp/net"
 import { UUID } from "elp/uuid"
 import { parse as fromJSON, JSONError } from "elp/data/json"
 
+// You can call C, C++ and Objective C code by defining it as external and it's signature.
+external fn OBJC_msgSend<T: OBJC_Obj + Send>(T, OBJC_Selector) -> T
+
 // Enums take types which are used in pattern matching.
 @toString
 export enum ApiErrorType {
