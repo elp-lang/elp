@@ -67,7 +67,7 @@ function_argument       = { IDENT ~ elp_type? }
 function_component_call = { function_call ~ block }
 function_call           = { (variable_access | contextual_variable_access) ~ elp_generic? ~ "(" ~ function_call_arguments ~ ")" }
 function_call_arguments = { (expression ~ ("," ~ expression)*)? }
-function_return_value   = { RETURN ~ expression }
+function_return_value   = { "return" ~ expression }
 
 // Objects.
 object_def                  = { "object" ~ IDENT ~ object_implements? ~ "{" ~ (object_member ~ ("," ~ object_member)* ~ ","?)? ~ "}" }
@@ -119,7 +119,6 @@ number = @{
 // Lexer tokens
 ARROW      = _{ "->" }
 IDENT      = @{ !number ~ (ASCII_ALPHANUMERIC+ | "_")+ }
-RETURN     =  { "return" }
 REFERENCE  = @{ "&" }
 POINTER    = @{ "*" }
 COMMENT    = _{ "//" ~ (!"\n" ~ ANY)* }

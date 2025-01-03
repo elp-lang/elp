@@ -142,13 +142,33 @@ mod tests {
     }
 
     #[test]
-    fn simple_function_def() {
-        let expression_str = "fn hello(name String) -> String { return \"hello\" }";
-        let mut pairs = ElpParser::parse(Rule::function_def, expression_str).unwrap();
-        let ast = FunctionDef::from_pest(&mut pairs).unwrap();
+    fn function_return_value() {
+        let expression_str = "return \"hello\"";
+        let mut pairs = ElpParser::parse(Rule::function_return_value, expression_str).unwrap();
+        let ast = FunctionReturnValue::from_pest(&mut pairs).unwrap();
 
         assert_eq!(
             ast,
+            FunctionReturnValue {
+                value: Box::new(Expression::String(Box::new(StringValue {
+                    value: "hello".into()
+                })))
+            }
+        );
+    }
+
+    #[test]
+    fn simple_function_def() {
+        let expression_str = "fn hello.name(name String) -> String { return \"hello {name}\" }";
+        let mut pairs = ElpParser::parse(Rule::function_def, expression_str).unwrap();
+        let ast = FunctionDef::from_pest(&mut pairs);
+
+        if ast.is_err() {
+            panic!("Failed to parse function definition: {}", ast.unwrap_err());
+        }
+
+        assert_eq!(
+            ast.unwrap(),
             FunctionDef {
                 name: VariableAccess {
                     names: VariableAccessNames {
