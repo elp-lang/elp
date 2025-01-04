@@ -1,4 +1,5 @@
 use super::elp_type::ElpTypeGeneric;
+use super::variable_access::ContextualVariableAccess;
 use super::{
     block::Block, elp_type::ElpType, expression::Expression, variable_access::VariableAccess,
 };
@@ -48,6 +49,21 @@ pub struct ExternalFunctionDef {
     pub generics: Option<ElpTypeGeneric>,
     pub arguments: FunctionArguments,
     pub return_type: FunctionReturnType,
+}
+
+#[derive(Debug, FromPest, PartialEq, Eq)]
+#[pest_ast(rule(Rule::function_call_name))]
+pub enum FunctionCallName {
+    VariableAccess(VariableAccess),
+    ContextualVariableAccess(ContextualVariableAccess),
+}
+
+#[derive(Debug, FromPest, PartialEq, Eq)]
+#[pest_ast(rule(Rule::function_call))]
+pub struct FunctionCall {
+    pub name: FunctionCallName,
+    pub generics: Option<ElpTypeGeneric>,
+    pub arguments: Vec<Expression>,
 }
 
 #[cfg(test)]
@@ -254,6 +270,34 @@ mod tests {
                         type_parameters: vec![],
                     }],
                 },
+            }
+        )
+    }
+
+    #[test]
+    fn function_call() {
+        let expression_str = "hello.name()";
+        let mut pairs = ElpParser::parse(Rule::function_call, expression_str).unwrap();
+        let ast = FunctionCall::from_pest(&mut pairs).unwrap();
+
+        assert_eq!(
+            ast,
+            FunctionCall {
+                name: FunctionCallName::VariableAccess(VariableAccess {
+                    names: VariableAccessNames {
+                        names: vec![
+                            Ident {
+                                value: "hello".into()
+                            },
+                            Ident {
+                                value: "name".into()
+                            },
+                        ],
+                    },
+                    pointer_semantics: vec![],
+                }),
+                generics: None,
+                arguments: Vec::new(),
             }
         )
     }
