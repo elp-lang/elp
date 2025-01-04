@@ -20,6 +20,7 @@ expression = {
   | bitwise_operation
   | variable_assignment
   | function_return_value
+  | value_assignment
   | variable_declaration
   | variable_access
   | object_method_assignment
@@ -139,6 +140,7 @@ BITWISE_OPERAND             = {
   | REFERENCE
 }
 
+OPERAND_BITAND        = { "&=" }
 OPERAND_PLUS          = { "+=" }
 OPERAND_MINUS         = { "-=" }
 OPERAND_MUL           = { "*=" }
@@ -149,7 +151,6 @@ OPERAND_EQUAL         = { "==" }
 OPERAND_NOT_EQUAL     = { "!=" }
 OPERAND_BIT_NOT_EQUAL = { "~=" }
 OPERAND_EQUALS        = { "=" }
-OPERAND_BITAND        = { "&=" }
 OPERAND               = {
     OPERAND_PLUS
   | OPERAND_MINUS
@@ -157,7 +158,6 @@ OPERAND               = {
   | OPERAND_DIV
   | OPERAND_MOD
   | OPERAND_POW
-  | REFERENCE
   | OPERAND_BITAND
   | BITWISE_OPERAND_OR
   | OPERAND_BIT_NOT_EQUAL
