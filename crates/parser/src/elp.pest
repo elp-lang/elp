@@ -145,11 +145,11 @@ OPERAND_MUL           = { "*=" }
 OPERAND_DIV           = { "/=" }
 OPERAND_MOD           = { "%=" }
 OPERAND_POW           = { "^=" }
-OPERAND_EXPO          = { "**" }
 OPERAND_EQUAL         = { "==" }
 OPERAND_NOT_EQUAL     = { "!=" }
 OPERAND_BIT_NOT_EQUAL = { "~=" }
 OPERAND_EQUALS        = { "=" }
+OPERAND_BITAND        = { "&=" }
 OPERAND               = {
     OPERAND_PLUS
   | OPERAND_MINUS
@@ -158,7 +158,7 @@ OPERAND               = {
   | OPERAND_MOD
   | OPERAND_POW
   | REFERENCE
-  | OPERAND_EXPO
+  | OPERAND_BITAND
   | BITWISE_OPERAND_OR
   | OPERAND_BIT_NOT_EQUAL
   | OPERAND_EQUAL

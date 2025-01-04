@@ -55,10 +55,6 @@ pub struct Modulo;
 pub struct Power;
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
-#[pest_ast(rule(Rule::OPERAND_EXPO))]
-pub struct Exponential;
-
-#[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::OPERAND_NOT_EQUAL))]
 pub struct EqualityNot;
 
@@ -73,6 +69,10 @@ pub struct Equals;
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::OPERAND_EQUAL))]
 pub struct EqualityEqual;
+
+#[derive(Debug, FromPest, PartialEq, Eq)]
+#[pest_ast(rule(Rule::OPERAND_BITAND))]
+pub struct BitAnd;
 
 #[derive(Debug, PartialEq, Eq, FromPest)]
 #[pest_ast(rule(Rule::value_assignment))]
@@ -94,6 +94,7 @@ pub enum Operand {
     EqualityBitNot(EqualityBitNot),
     Equals(Equals),
     EqualityEqual(EqualityEqual),
+    BitAnd(BitAnd),
 }
 
 #[cfg(test)]
@@ -136,6 +137,81 @@ mod tests {
             ValueAssignment {
                 operand: Operand::Plus(Plus {}),
                 value: Box::new(Expression::Number(Box::new(Number { value: "1".into() }))),
+            }
+        )
+    }
+
+    #[test]
+    fn test_value_assignment_modulo() {
+        let expression_str = "%= 1";
+        let mut pairs = ElpParser::parse(Rule::value_assignment, expression_str).unwrap();
+        let ast = ValueAssignment::from_pest(&mut pairs).unwrap();
+
+        assert_eq!(
+            ast,
+            ValueAssignment {
+                operand: Operand::Modulo(Modulo {}),
+                value: Box::new(Expression::Number(Box::new(Number { value: "1".into() }))),
+            }
+        )
+    }
+
+    #[test]
+    fn test_value_assignment_equality_equal() {
+        let expression_str = "== 2";
+        let mut pairs = ElpParser::parse(Rule::value_assignment, expression_str).unwrap();
+        let ast = ValueAssignment::from_pest(&mut pairs).unwrap();
+
+        assert_eq!(
+            ast,
+            ValueAssignment {
+                operand: Operand::EqualityEqual(EqualityEqual {}),
+                value: Box::new(Expression::Number(Box::new(Number { value: "2".into() }))),
+            }
+        )
+    }
+
+    #[test]
+    fn test_value_assignment_equality_not() {
+        let expression_str = "!= 2";
+        let mut pairs = ElpParser::parse(Rule::value_assignment, expression_str).unwrap();
+        let ast = ValueAssignment::from_pest(&mut pairs).unwrap();
+
+        assert_eq!(
+            ast,
+            ValueAssignment {
+                operand: Operand::EqualityNot(EqualityNot {}),
+                value: Box::new(Expression::Number(Box::new(Number { value: "2".into() }))),
+            }
+        )
+    }
+
+    #[test]
+    fn test_value_assignment_equality_bit_not() {
+        let expression_str = "~= 2";
+        let mut pairs = ElpParser::parse(Rule::value_assignment, expression_str).unwrap();
+        let ast = ValueAssignment::from_pest(&mut pairs).unwrap();
+
+        assert_eq!(
+            ast,
+            ValueAssignment {
+                operand: Operand::EqualityBitNot(EqualityBitNot {}),
+                value: Box::new(Expression::Number(Box::new(Number { value: "2".into() }))),
+            }
+        )
+    }
+
+    #[test]
+    fn test_value_assignment_bitwise_and() {
+        let expression_str = "&= 2";
+        let mut pairs = ElpParser::parse(Rule::value_assignment, expression_str).unwrap();
+        let ast = ValueAssignment::from_pest(&mut pairs).unwrap();
+
+        assert_eq!(
+            ast,
+            ValueAssignment {
+                operand: Operand::BitAnd(BitAnd),
+                value: Box::new(Expression::Number(Box::new(Number { value: "2".into() }))),
             }
         )
     }
