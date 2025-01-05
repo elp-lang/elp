@@ -23,7 +23,6 @@ expression = {
   | value_assignment
   | variable_declaration
   | variable_access
-  | object_method_assignment
   | contextual_variable_access
   | function_component_call
 }
@@ -71,17 +70,17 @@ function_call_name      = { (variable_access | contextual_variable_access) }
 function_return_value   = { "return" ~ expression }
 
 // Objects.
-object_def                  = { "object" ~ IDENT ~ object_implements? ~ "{" ~ (object_member ~ ("," ~ object_member)* ~ ","?)? ~ "}" }
-object_implements           = { "implements" ~ elp_type ~ ("," ~ elp_type)* }
-object_member               = { object_member_visibility? ~ "." ~ IDENT ~ object_key_type? ~ object_key_default_value? ~ object_key_tags? }
-object_member_visibility    = { "private" | "public" }
-object_key_type             = { elp_type }
-object_key_default_value    = { "=" ~ expression }
-object_key_tags             = { "`" ~ IDENT ~ ":" ~ string ~ "`" }
-object_method_assignment    = { "." ~ IDENT ~ value_assignment }
-object_value_spread         = { "..." ~ expression }
+object_def               = { "object" ~ IDENT ~ object_implements? ~ "{" ~ (object_member ~ ("," ~ object_member)* ~ ","?)? ~ "}" }
+object_implements        = { "implements" ~ elp_type ~ ("," ~ elp_type)* }
+object_member            = { object_member_visibility? ~ "." ~ IDENT ~ elp_type? ~ object_key_default_value? ~ object_key_tags? }
+object_member_visibility = { PUBLIC | PRIVATE }
+object_key_default_value = { "=" ~ expression }
+object_key_tags          = { "`" ~ IDENT ~ ":" ~ string ~ "`" }
+
+// Object instantiation
 object_instantiation        = { IDENT ~ "{" ~ object_instantiation_member ~ ("," ~ object_instantiation_member)* ~ "}" }
 object_instantiation_member = { object_value_spread | ("." ~ IDENT ~ "=" ~ expression) }
+object_value_spread         = { "..." ~ expression }
 
 // Components
 component_def = { "component" ~ (IDENT ~ ("." ~ IDENT)*) ~ function_arguments? ~ function_return_type? ~ block }
@@ -126,6 +125,8 @@ COMMENT    = _{ "//" ~ (!"\n" ~ ANY)* }
 WHITESPACE = _{ " " | "\t" | "\r" | "\n" }
 VAR        =  { "var" }
 CONST      =  { "const" }
+PUBLIC     = @{ "public" }
+PRIVATE    = @{ "private" }
 
 // operations.
 BITWISE_OPERAND_TILDE       = { "~" }

@@ -7,6 +7,7 @@ pub(crate) mod function;
 pub(crate) mod ident;
 pub(crate) mod import;
 pub(crate) mod number_value;
+pub(crate) mod object;
 pub(crate) mod string;
 pub(crate) mod value_assignment;
 pub(crate) mod variable_access;

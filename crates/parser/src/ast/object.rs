@@ -1,0 +1,369 @@
+use super::{elp_type::ElpType, expression::Expression, ident::Ident, string::StringValue};
+use crate::parser::Rule;
+use pest_ast::FromPest;
+
+#[derive(Debug, FromPest, PartialEq, Eq)]
+#[pest_ast(rule(Rule::PUBLIC))]
+pub struct PublicVisibility;
+
+#[derive(Debug, FromPest, PartialEq, Eq)]
+#[pest_ast(rule(Rule::PRIVATE))]
+pub struct PrivateVisibility;
+
+#[derive(Debug, FromPest, PartialEq, Eq)]
+#[pest_ast(rule(Rule::object_member_visibility))]
+pub enum ObjectMemberVisibility {
+    Public(PublicVisibility),
+    Private(PrivateVisibility),
+}
+
+#[derive(Debug, FromPest, PartialEq, Eq)]
+#[pest_ast(rule(Rule::object_implements))]
+pub struct ObjectImplements {
+    pub types: Vec<ElpType>,
+}
+
+#[derive(Debug, FromPest, PartialEq, Eq)]
+#[pest_ast(rule(Rule::object_key_default_value))]
+pub struct ObjectMemberDefaultValue {
+    pub value: Expression,
+}
+
+#[derive(Debug, FromPest, PartialEq, Eq)]
+#[pest_ast(rule(Rule::object_key_tags))]
+pub struct ObjectMemberTags {
+    pub name: Ident,
+    pub contents: StringValue,
+}
+
+#[derive(Debug, FromPest, PartialEq, Eq)]
+#[pest_ast(rule(Rule::object_member))]
+pub struct ObjectMember {
+    pub visibility: Option<ObjectMemberVisibility>,
+    pub name: Ident,
+    pub type_annotation: Option<ElpType>,
+    pub default_value: Option<ObjectMemberDefaultValue>,
+    pub tags: Vec<ObjectMemberTags>,
+}
+
+#[derive(Debug, FromPest, PartialEq, Eq)]
+#[pest_ast(rule(Rule::object_def))]
+pub struct Object {
+    pub name: Ident,
+    pub implements: Option<ObjectImplements>,
+    pub members: Vec<ObjectMember>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::parser::ElpParser;
+    use from_pest::FromPest;
+    use pest::Parser;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn object_member_visibility() {
+        let expression_str_private = "private";
+        let mut private_pairs =
+            ElpParser::parse(Rule::object_member_visibility, expression_str_private).unwrap();
+        let private_ast = ObjectMemberVisibility::from_pest(&mut private_pairs).unwrap();
+
+        assert_eq!(
+            private_ast,
+            ObjectMemberVisibility::Private(PrivateVisibility {})
+        );
+
+        let expression_str_public = "public";
+        let mut public_pairs =
+            ElpParser::parse(Rule::object_member_visibility, expression_str_public).unwrap();
+        let public_ast = ObjectMemberVisibility::from_pest(&mut public_pairs).unwrap();
+
+        assert_eq!(
+            public_ast,
+            ObjectMemberVisibility::Public(PublicVisibility {})
+        );
+    }
+
+    #[test]
+    fn object_member_tags() {
+        let expression_str = "`name: \"example\"`";
+        let mut pairs = ElpParser::parse(Rule::object_key_tags, expression_str).unwrap();
+        let ast = ObjectMemberTags::from_pest(&mut pairs).unwrap();
+
+        assert_eq!(
+            ast,
+            ObjectMemberTags {
+                name: Ident {
+                    value: "name".into()
+                },
+                contents: StringValue {
+                    value: "example".into()
+                }
+            }
+        );
+    }
+
+    #[test]
+    fn basic_object_member() {
+        let expression_str = ".name String";
+        let mut pairs = ElpParser::parse(Rule::object_member, expression_str).unwrap();
+        let ast = ObjectMember::from_pest(&mut pairs).unwrap();
+
+        assert_eq!(
+            ast,
+            ObjectMember {
+                visibility: None,
+                name: Ident {
+                    value: "name".into()
+                },
+                type_annotation: Some(ElpType {
+                    name: "String".into(),
+                    type_parameters: vec![]
+                }),
+                default_value: None,
+                tags: vec![]
+            }
+        );
+    }
+
+    #[test]
+    fn private_object_member() {
+        let expression_str = "private .name String";
+        let mut pairs = ElpParser::parse(Rule::object_member, expression_str).unwrap();
+        let ast = ObjectMember::from_pest(&mut pairs).unwrap();
+
+        assert_eq!(
+            ast,
+            ObjectMember {
+                visibility: Some(ObjectMemberVisibility::Private(PrivateVisibility {})),
+                name: Ident {
+                    value: "name".into()
+                },
+                type_annotation: Some(ElpType {
+                    name: "String".into(),
+                    type_parameters: vec![]
+                }),
+                default_value: None,
+                tags: vec![]
+            }
+        );
+    }
+
+    #[test]
+    fn public_object_member() {
+        let expression_str = "public .name String";
+        let mut pairs = ElpParser::parse(Rule::object_member, expression_str).unwrap();
+        let ast = ObjectMember::from_pest(&mut pairs).unwrap();
+
+        assert_eq!(
+            ast,
+            ObjectMember {
+                visibility: Some(ObjectMemberVisibility::Public(PublicVisibility {})),
+                name: Ident {
+                    value: "name".into()
+                },
+                type_annotation: Some(ElpType {
+                    name: "String".into(),
+                    type_parameters: vec![]
+                }),
+                default_value: None,
+                tags: vec![]
+            }
+        );
+    }
+
+    #[test]
+    fn tagged_object_member() {
+        let expression_str = ".name String `name: \"example\"`";
+        let mut pairs = ElpParser::parse(Rule::object_member, expression_str).unwrap();
+        let ast = ObjectMember::from_pest(&mut pairs).unwrap();
+
+        assert_eq!(
+            ast,
+            ObjectMember {
+                visibility: None,
+                name: Ident {
+                    value: "name".into()
+                },
+                type_annotation: Some(ElpType {
+                    name: "String".into(),
+                    type_parameters: vec![]
+                }),
+                default_value: None,
+                tags: vec![ObjectMemberTags {
+                    name: Ident {
+                        value: "name".into()
+                    },
+                    contents: StringValue {
+                        value: "example".into()
+                    }
+                }]
+            }
+        );
+    }
+
+    #[test]
+    fn object_member_default_value() {
+        let expression_str = ".name String = \"example\"";
+        let mut pairs = ElpParser::parse(Rule::object_member, expression_str).unwrap();
+        let ast = ObjectMember::from_pest(&mut pairs).unwrap();
+
+        assert_eq!(
+            ast,
+            ObjectMember {
+                visibility: None,
+                name: Ident {
+                    value: "name".into()
+                },
+                type_annotation: Some(ElpType {
+                    name: "String".into(),
+                    type_parameters: vec![]
+                }),
+                default_value: Some(ObjectMemberDefaultValue {
+                    value: Expression::String(Box::new(StringValue {
+                        value: "example".into()
+                    }))
+                }),
+                tags: vec![]
+            }
+        );
+    }
+
+    #[test]
+    fn tagged_object_member_with_default_value() {
+        let expression_str = ".name String = \"example_default\" `name: \"example\"`";
+        let mut pairs = ElpParser::parse(Rule::object_member, expression_str).unwrap();
+        let ast = ObjectMember::from_pest(&mut pairs).unwrap();
+
+        assert_eq!(
+            ast,
+            ObjectMember {
+                visibility: None,
+                name: Ident {
+                    value: "name".into()
+                },
+                type_annotation: Some(ElpType {
+                    name: "String".into(),
+                    type_parameters: vec![]
+                }),
+                default_value: Some(ObjectMemberDefaultValue {
+                    value: Expression::String(Box::new(StringValue {
+                        value: "example_default".into()
+                    }))
+                }),
+                tags: vec![ObjectMemberTags {
+                    name: Ident {
+                        value: "name".into()
+                    },
+                    contents: StringValue {
+                        value: "example".into()
+                    }
+                }]
+            }
+        );
+    }
+
+    #[test]
+    fn basic_object() {
+        let expression_str = "object Test {.name String}";
+        let mut pairs = ElpParser::parse(Rule::object_def, expression_str).unwrap();
+        let ast = Object::from_pest(&mut pairs).unwrap();
+
+        assert_eq!(
+            ast,
+            Object {
+                name: Ident {
+                    value: "Test".into()
+                },
+                implements: None,
+                members: vec![ObjectMember {
+                    visibility: None,
+                    name: Ident {
+                        value: "name".into()
+                    },
+                    type_annotation: Some(ElpType {
+                        name: "String".into(),
+                        type_parameters: vec![]
+                    }),
+                    default_value: None,
+                    tags: vec![]
+                }],
+            }
+        );
+    }
+
+    #[test]
+    fn object_with_implements() {
+        let expression_str = "object Test implements MyInterface {.name String}";
+        let mut pairs = ElpParser::parse(Rule::object_def, expression_str).unwrap();
+        let ast = Object::from_pest(&mut pairs).unwrap();
+
+        assert_eq!(
+            ast,
+            Object {
+                name: Ident {
+                    value: "Test".into()
+                },
+                implements: Some(ObjectImplements {
+                    types: vec![ElpType {
+                        name: "MyInterface".into(),
+                        type_parameters: vec![]
+                    }]
+                }),
+                members: vec![ObjectMember {
+                    visibility: None,
+                    name: Ident {
+                        value: "name".into()
+                    },
+                    type_annotation: Some(ElpType {
+                        name: "String".into(),
+                        type_parameters: vec![]
+                    }),
+                    default_value: None,
+                    tags: vec![]
+                }],
+            }
+        );
+    }
+
+    #[test]
+    fn object_with_multiple_implements() {
+        let expression_str = "object Test implements MyInterface, AnotherInterface {.name String}";
+        let mut pairs = ElpParser::parse(Rule::object_def, expression_str).unwrap();
+        let ast = Object::from_pest(&mut pairs).unwrap();
+
+        assert_eq!(
+            ast,
+            Object {
+                name: Ident {
+                    value: "Test".into()
+                },
+                implements: Some(ObjectImplements {
+                    types: vec![
+                        ElpType {
+                            name: "MyInterface".into(),
+                            type_parameters: vec![]
+                        },
+                        ElpType {
+                            name: "AnotherInterface".into(),
+                            type_parameters: vec![]
+                        }
+                    ]
+                }),
+                members: vec![ObjectMember {
+                    visibility: None,
+                    name: Ident {
+                        value: "name".into()
+                    },
+                    type_annotation: Some(ElpType {
+                        name: "String".into(),
+                        type_parameters: vec![]
+                    }),
+                    default_value: None,
+                    tags: vec![]
+                }],
+            }
+        );
+    }
+}
