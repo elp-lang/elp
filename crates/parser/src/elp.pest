@@ -48,24 +48,25 @@ contextual_variable_access = { "." ~ IDENT }
 bitwise_operation = { (variable_access | number) ~ BITWISE_OPERAND ~ (variable_access | number) }
 
 // Programming type info.
-elp_type               = { IDENT ~ elp_generic? }
-elp_generic            = { "<" ~ elp_type ~ elp_generic_constraint? ~ ("," ~ elp_type ~ elp_generic_constraint?)* ~ ">" }
-elp_generic_constraint = { ":" ~ elp_type ~ ("+" ~ elp_type)* }
-enum                   = { "enum" ~ IDENT ~ "{" ~ (enum_member ~ ("," ~ enum_member)* ~ ","?)? ~ "}" }
-enum_member            = { "." ~ IDENT ~ ("(" ~ elp_type ~ ("," ~ elp_type)* ~ ")")? }
+elp_type                    = { IDENT ~ elp_type_generic? }
+elp_type_generic            = { "<" ~ elp_type_generic_param ~ ("," ~ elp_type_generic_param)* ~ ">" }
+elp_type_generic_param      = { elp_type ~ elp_type_generic_constraint? }
+elp_type_generic_constraint = { ":" ~ elp_type ~ ("+" ~ elp_type)* }
+enum                        = { "enum" ~ IDENT ~ "{" ~ (enum_member ~ ("," ~ enum_member)* ~ ","?)? ~ "}" }
+enum_member                 = { "." ~ IDENT ~ ("(" ~ elp_type ~ ("," ~ elp_type)* ~ ")")? }
 
 // C interop
 external_block  = { "external" ~ "{" ~ (external_fn_def | object_def)* ~ "}" }
 external_symbol = { "external" ~ (external_fn_def | object_def) }
-external_fn_def = { "fn" ~ variable_access ~ elp_generic? ~ function_arguments ~ function_return_type }
+external_fn_def = { "fn" ~ variable_access ~ elp_type_generic? ~ function_arguments ~ function_return_type }
 
 // Functions.
-function_def            = { "fn" ~ variable_access ~ elp_generic? ~ function_arguments? ~ function_return_type? ~ block }
+function_def            = { "fn" ~ variable_access ~ elp_type_generic? ~ function_arguments? ~ function_return_type? ~ block }
 function_return_type    = { ARROW ~ elp_type ~ ("," ~ elp_type)* }
 function_arguments      = { "(" ~ (function_argument ~ ("," ~ function_argument)*)? ~ ")" }
 function_argument       = { IDENT ~ elp_type? }
 function_component_call = { function_call ~ block }
-function_call           = { function_call_name ~ elp_generic? ~ "(" ~ (expression ~ ("," ~ expression)*)? ~ ")" }
+function_call           = { function_call_name ~ elp_type_generic? ~ "(" ~ (expression ~ ("," ~ expression)*)? ~ ")" }
 function_call_name      = { (variable_access | contextual_variable_access) }
 function_return_value   = { "return" ~ expression }
 

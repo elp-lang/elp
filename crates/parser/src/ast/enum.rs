@@ -56,7 +56,7 @@ mod tests {
                 name: "Member".into(),
                 params: vec![ElpType {
                     name: "T".into(),
-                    type_parameters: vec![],
+                    generics: vec![]
                 }]
             }
         )

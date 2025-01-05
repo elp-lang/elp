@@ -57,10 +57,67 @@ pub struct Object {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parser::ElpParser;
+    use crate::{
+        ast::{
+            elp_type::{ElpTypeGeneric, ElpTypeGenericParam},
+            number_value::Number,
+        },
+        parser::ElpParser,
+    };
     use from_pest::FromPest;
     use pest::Parser;
     use pretty_assertions::assert_eq;
+
+    #[test]
+    fn object_implements() {
+        let expression_str_basic = "implements String";
+        let mut pairs_basic =
+            ElpParser::parse(Rule::object_implements, expression_str_basic).unwrap();
+        let ast_basic = ObjectImplements::from_pest(&mut pairs_basic).unwrap();
+
+        assert_eq!(
+            ast_basic,
+            ObjectImplements {
+                types: vec![ElpType {
+                    name: "String".into(),
+                    generics: vec![],
+                }]
+            }
+        );
+
+        let expression_str_multiple = "implements String, Number, Into<JSON>";
+        let mut pairs_multiple =
+            ElpParser::parse(Rule::object_implements, expression_str_multiple).unwrap();
+        let ast_multiple = ObjectImplements::from_pest(&mut pairs_multiple).unwrap();
+
+        assert_eq!(
+            ast_multiple,
+            ObjectImplements {
+                types: vec![
+                    ElpType {
+                        name: "String".into(),
+                        generics: vec![],
+                    },
+                    ElpType {
+                        name: "Number".into(),
+                        generics: vec![],
+                    },
+                    ElpType {
+                        name: "Into".into(),
+                        generics: vec![ElpTypeGeneric {
+                            params: vec![ElpTypeGenericParam {
+                                elp_type: ElpType {
+                                    name: "JSON".into(),
+                                    generics: vec![]
+                                },
+                                type_constraint: None
+                            }]
+                        }]
+                    }
+                ]
+            }
+        );
+    }
 
     #[test]
     fn object_member_visibility() {
@@ -119,7 +176,7 @@ mod tests {
                 },
                 type_annotation: Some(ElpType {
                     name: "String".into(),
-                    type_parameters: vec![]
+                    generics: vec![]
                 }),
                 default_value: None,
                 tags: vec![]
@@ -142,7 +199,7 @@ mod tests {
                 },
                 type_annotation: Some(ElpType {
                     name: "String".into(),
-                    type_parameters: vec![]
+                    generics: vec![]
                 }),
                 default_value: None,
                 tags: vec![]
@@ -165,7 +222,7 @@ mod tests {
                 },
                 type_annotation: Some(ElpType {
                     name: "String".into(),
-                    type_parameters: vec![]
+                    generics: vec![]
                 }),
                 default_value: None,
                 tags: vec![]
@@ -188,7 +245,7 @@ mod tests {
                 },
                 type_annotation: Some(ElpType {
                     name: "String".into(),
-                    type_parameters: vec![]
+                    generics: vec![]
                 }),
                 default_value: None,
                 tags: vec![ObjectMemberTags {
@@ -218,7 +275,7 @@ mod tests {
                 },
                 type_annotation: Some(ElpType {
                     name: "String".into(),
-                    type_parameters: vec![]
+                    generics: vec![]
                 }),
                 default_value: Some(ObjectMemberDefaultValue {
                     value: Expression::String(Box::new(StringValue {
@@ -245,7 +302,7 @@ mod tests {
                 },
                 type_annotation: Some(ElpType {
                     name: "String".into(),
-                    type_parameters: vec![]
+                    generics: vec![]
                 }),
                 default_value: Some(ObjectMemberDefaultValue {
                     value: Expression::String(Box::new(StringValue {
@@ -284,7 +341,7 @@ mod tests {
                     },
                     type_annotation: Some(ElpType {
                         name: "String".into(),
-                        type_parameters: vec![]
+                        generics: vec![]
                     }),
                     default_value: None,
                     tags: vec![]
@@ -308,7 +365,7 @@ mod tests {
                 implements: Some(ObjectImplements {
                     types: vec![ElpType {
                         name: "MyInterface".into(),
-                        type_parameters: vec![]
+                        generics: vec![]
                     }]
                 }),
                 members: vec![ObjectMember {
@@ -318,7 +375,7 @@ mod tests {
                     },
                     type_annotation: Some(ElpType {
                         name: "String".into(),
-                        type_parameters: vec![]
+                        generics: vec![]
                     }),
                     default_value: None,
                     tags: vec![]
@@ -343,11 +400,11 @@ mod tests {
                     types: vec![
                         ElpType {
                             name: "MyInterface".into(),
-                            type_parameters: vec![]
+                            generics: vec![]
                         },
                         ElpType {
                             name: "AnotherInterface".into(),
-                            type_parameters: vec![]
+                            generics: vec![]
                         }
                     ]
                 }),
@@ -358,11 +415,133 @@ mod tests {
                     },
                     type_annotation: Some(ElpType {
                         name: "String".into(),
-                        type_parameters: vec![]
+                        generics: vec![]
                     }),
                     default_value: None,
                     tags: vec![]
                 }],
+            }
+        );
+    }
+
+    #[test]
+    fn complex_object() {
+        let expression_str = "object Test implements Into<JSON> {
+            public     .name String `json:\"name\"`,
+            private    .age Int     `json:\"age\"`,
+            .friends   Vec<Friend>  `json:\"friends\"`,
+            .studentId = 123        `json:\"studentId\"`
+    }";
+        let mut pairs = ElpParser::parse(Rule::object_def, expression_str).unwrap();
+        let ast = Object::from_pest(&mut pairs).unwrap();
+
+        assert_eq!(
+            ast,
+            Object {
+                name: Ident {
+                    value: "Test".into()
+                },
+                implements: Some(ObjectImplements {
+                    types: vec![ElpType {
+                        name: "Into".into(),
+                        generics: vec![ElpTypeGeneric {
+                            params: vec![ElpTypeGenericParam {
+                                elp_type: ElpType {
+                                    name: "JSON".into(),
+                                    generics: vec![]
+                                },
+                                type_constraint: None
+                            }]
+                        }]
+                    }]
+                }),
+                members: vec![
+                    ObjectMember {
+                        visibility: Some(ObjectMemberVisibility::Public(PublicVisibility {})),
+                        name: Ident {
+                            value: "name".into()
+                        },
+                        type_annotation: Some(ElpType {
+                            name: "String".into(),
+                            generics: vec![]
+                        }),
+                        default_value: None,
+                        tags: vec![ObjectMemberTags {
+                            name: Ident {
+                                value: "json".into()
+                            },
+                            contents: StringValue {
+                                value: "name".into()
+                            }
+                        }]
+                    },
+                    ObjectMember {
+                        visibility: Some(ObjectMemberVisibility::Private(PrivateVisibility {})),
+                        name: Ident {
+                            value: "age".into()
+                        },
+                        type_annotation: Some(ElpType {
+                            name: "Int".into(),
+                            generics: vec![]
+                        }),
+                        default_value: None,
+                        tags: vec![ObjectMemberTags {
+                            name: Ident {
+                                value: "json".into()
+                            },
+                            contents: StringValue {
+                                value: "age".into()
+                            }
+                        }],
+                    },
+                    ObjectMember {
+                        visibility: None,
+                        name: Ident {
+                            value: "friends".into()
+                        },
+                        type_annotation: Some(ElpType {
+                            name: "Vec".into(),
+                            generics: vec![ElpTypeGeneric {
+                                params: vec![ElpTypeGenericParam {
+                                    elp_type: ElpType {
+                                        name: "Friend".into(),
+                                        generics: vec![]
+                                    },
+                                    type_constraint: None
+                                }]
+                            }]
+                        }),
+                        default_value: None,
+                        tags: vec![ObjectMemberTags {
+                            name: Ident {
+                                value: "json".into()
+                            },
+                            contents: StringValue {
+                                value: "friends".into()
+                            }
+                        }]
+                    },
+                    ObjectMember {
+                        visibility: None,
+                        name: Ident {
+                            value: "studentId".into()
+                        },
+                        type_annotation: None,
+                        default_value: Some(ObjectMemberDefaultValue {
+                            value: Expression::Number(Box::new(Number {
+                                value: "123".into()
+                            }))
+                        }),
+                        tags: vec![ObjectMemberTags {
+                            name: Ident {
+                                value: "json".into()
+                            },
+                            contents: StringValue {
+                                value: "studentId".into()
+                            }
+                        }]
+                    }
+                ]
             }
         );
     }

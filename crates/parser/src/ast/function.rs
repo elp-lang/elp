@@ -93,7 +93,7 @@ mod tests {
                         },
                         type_annotation: Some(ElpType {
                             name: "String".into(),
-                            type_parameters: vec![],
+                            generics: vec![],
                         }),
                     },
                     FunctionArgument {
@@ -102,7 +102,7 @@ mod tests {
                         },
                         type_annotation: Some(ElpType {
                             name: "String".into(),
-                            type_parameters: vec![],
+                            generics: vec![],
                         }),
                     }
                 ]
@@ -132,7 +132,7 @@ mod tests {
                         },
                         type_annotation: Some(ElpType {
                             name: "String".into(),
-                            type_parameters: vec![],
+                            generics: vec![],
                         }),
                     },
                     FunctionArgument {
@@ -141,7 +141,7 @@ mod tests {
                         },
                         type_annotation: Some(ElpType {
                             name: "String".into(),
-                            type_parameters: vec![],
+                            generics: vec![],
                         }),
                     }
                 ]
@@ -160,7 +160,7 @@ mod tests {
             FunctionReturnType {
                 type_annotations: vec![ElpType {
                     name: "String".into(),
-                    type_parameters: vec![],
+                    generics: vec![],
                 }]
             }
         );
@@ -212,14 +212,14 @@ mod tests {
                         },
                         type_annotation: Some(ElpType {
                             name: "String".into(),
-                            type_parameters: vec![],
+                            generics: vec![],
                         }),
                     }],
                 }),
                 return_type: Some(FunctionReturnType {
                     type_annotations: vec![ElpType {
                         name: "String".into(),
-                        type_parameters: vec![],
+                        generics: vec![],
                     }],
                 }),
                 block: Box::new(Block {
@@ -260,14 +260,14 @@ mod tests {
                         },
                         type_annotation: Some(ElpType {
                             name: "String".into(),
-                            type_parameters: vec![],
+                            generics: vec![],
                         }),
                     }],
                 },
                 return_type: FunctionReturnType {
                     type_annotations: vec![ElpType {
                         name: "String".into(),
-                        type_parameters: vec![],
+                        generics: vec![],
                     }],
                 },
             }
