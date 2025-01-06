@@ -76,7 +76,7 @@ object_implements        = { "implements" ~ elp_type ~ ("," ~ elp_type)* }
 object_member            = { object_member_visibility? ~ "." ~ IDENT ~ elp_type? ~ object_key_default_value? ~ object_key_tags? }
 object_member_visibility = { PUBLIC | PRIVATE }
 object_key_default_value = { "=" ~ expression }
-object_key_tags          = { "`" ~ IDENT ~ ":" ~ string ~ "`" }
+object_key_tags          = { "`" ~ IDENT ~ ":" ~ string ~ ("," ~ IDENT ~ ":" ~ string)? ~ "`" }
 
 // Object instantiation
 object_instantiation        = { IDENT ~ "{" ~ object_instantiation_member ~ ("," ~ object_instantiation_member)* ~ "}" }
@@ -87,9 +87,9 @@ object_value_spread         = { "..." ~ expression }
 component_def = { "component" ~ (IDENT ~ ("." ~ IDENT)*) ~ function_arguments? ~ function_return_type? ~ block }
 
 // If, elseif, else
-if_tree     = { "if" ~ expression ~ block ~ elseif_tree? ~ else_tree? }
+if_tree     = { "if" ~ expression ~ block ~ elseif_tree* ~ else_block? }
 elseif_tree = { "elseif" ~ expression ~ block }
-else_tree   = { "else" ~ block }
+else_block  = { "else" ~ block }
 
 // Matches.
 match_tree        = { "match" ~ (function_call | variable_access | contextual_variable_access) ~ "{" ~ match_arm+ ~ "}" }
