@@ -43,7 +43,7 @@ pub struct FunctionDef {
 }
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
-#[pest_ast(rule(Rule::external_fn_def))]
+#[pest_ast(rule(Rule::fn_header_def))]
 pub struct ExternalFunctionDef {
     pub name: VariableAccess,
     pub generics: Option<ElpTypeGeneric>,
@@ -238,7 +238,7 @@ mod tests {
     #[test]
     fn external_function_def() {
         let expression_str = "fn hello(name String) -> String";
-        let mut pairs = ElpParser::parse(Rule::external_fn_def, expression_str).unwrap();
+        let mut pairs = ElpParser::parse(Rule::fn_header_def, expression_str).unwrap();
         let ast = ExternalFunctionDef::from_pest(&mut pairs).unwrap();
 
         assert_eq!(

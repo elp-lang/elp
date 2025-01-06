@@ -25,6 +25,7 @@ expression = {
   | variable_access
   | contextual_variable_access
   | function_component_call
+  | OPERAND
 }
 
 // Imports and exports in modules.
@@ -56,11 +57,11 @@ enum                        = { "enum" ~ IDENT ~ "{" ~ (enum_member ~ ("," ~ enu
 enum_member                 = { "." ~ IDENT ~ ("(" ~ elp_type ~ ("," ~ elp_type)* ~ ")")? }
 
 // C interop
-external_block  = { "external" ~ "{" ~ (external_fn_def | object_def)* ~ "}" }
-external_symbol = { "external" ~ (external_fn_def | object_def) }
-external_fn_def = { "fn" ~ variable_access ~ elp_type_generic? ~ function_arguments ~ function_return_type }
+external_block  = { "external" ~ "{" ~ (fn_header_def | object_def)* ~ "}" }
+external_symbol = { "external" ~ (fn_header_def | object_def) }
 
 // Functions.
+fn_header_def           = { "fn" ~ variable_access ~ elp_type_generic? ~ function_arguments ~ function_return_type }
 function_def            = { "fn" ~ variable_access ~ elp_type_generic? ~ function_arguments? ~ function_return_type? ~ block }
 function_return_type    = { ARROW ~ elp_type ~ ("," ~ elp_type)* }
 function_arguments      = { "(" ~ (function_argument ~ ("," ~ function_argument)*)? ~ ")" }
@@ -92,11 +93,11 @@ elseif_tree = { "elseif" ~ expression ~ block }
 else_block  = { "else" ~ block }
 
 // Matches.
-match_tree        = { "match" ~ (function_call | variable_access | contextual_variable_access) ~ "{" ~ match_arm+ ~ "}" }
+match_tree        = { "match" ~ expression ~ "{" ~ match_arm+ ~ "}" }
 match_arm_subject = { function_call | variable_access | contextual_variable_access | match_range }
 match_arm         = { match_arm_subject ~ ARROW ~ match_arm_body ~ ","? }
 match_arm_body    = { block | expression }
-match_rangeables  = { (string | number | variable_access) }
+match_rangeables  = { (string | number) }
 match_range       = { (match_rangeables | (".." ~ match_rangeables?) | (match_rangeables ~ ".." ~ match_rangeables?))+ }
 
 // Groups of expressions.

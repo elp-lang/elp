@@ -95,5 +95,3 @@ export fn createBlogPost(content string) -> Either<Content, ApiError> {
 		}
 	}
 }
-
-// vim: ft=kotlin
