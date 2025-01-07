@@ -56,7 +56,7 @@ elp_type                    = { mutability_selector? ~ IDENT ~ elp_type_generic?
 elp_type_generic            = { "<" ~ elp_type_generic_param ~ ("," ~ elp_type_generic_param)* ~ ">" }
 elp_type_generic_param      = { elp_type ~ elp_type_generic_constraint? }
 elp_type_generic_constraint = { ":" ~ elp_type ~ ("+" ~ elp_type)* }
-enum                        = { "enum" ~ IDENT ~ "{" ~ (enum_member ~ ("," ~ enum_member)* ~ ","?)? ~ "}" }
+enum                        = { "enum" ~ IDENT ~ object_implements? ~ "{" ~ (enum_member ~ ("," ~ enum_member)* ~ ","?)? ~ "}" }
 enum_member                 = { "." ~ IDENT ~ ("(" ~ elp_type ~ ("," ~ elp_type)* ~ ")")? }
 
 interface        = { "interface" ~ IDENT ~ "{" ~ (interface_member ~ ("," ~ interface_member)*) ~ "}" }

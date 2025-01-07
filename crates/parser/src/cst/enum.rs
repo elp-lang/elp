@@ -2,7 +2,7 @@ use pest_ast::FromPest;
 
 use crate::parser::Rule;
 
-use super::{elp_type::ElpType, span_into_string};
+use super::{elp_type::ElpType, ident::Ident, object::ObjectImplements, span_into_string};
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::enum_member))]
@@ -15,8 +15,8 @@ pub struct EnumMember {
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::r#enum))]
 pub struct Enum {
-    #[pest_ast(inner(with(span_into_string)))]
-    pub name: String,
+    pub name: Ident,
+    pub implements: Option<ObjectImplements>,
     pub members: Vec<EnumMember>,
 }
 
@@ -72,7 +72,39 @@ mod tests {
         assert_eq!(
             ast,
             Enum {
-                name: "MyEnum".into(),
+                name: Ident {
+                    value: "MyEnum".into()
+                },
+                implements: None,
+                members: vec![EnumMember {
+                    name: "MEMBER".into(),
+                    params: vec![]
+                }]
+            }
+        )
+    }
+
+    #[test]
+    fn enum_implements() {
+        let expression_str = "enum MyEnum implements MyInterface { .MEMBER }";
+        let mut pairs = ElpParser::parse(Rule::r#enum, expression_str).unwrap();
+        let ast = Enum::from_pest(&mut pairs).unwrap();
+
+        assert_eq!(
+            ast,
+            Enum {
+                name: Ident {
+                    value: "MyEnum".into()
+                },
+                implements: Some(ObjectImplements {
+                    types: vec![ElpType {
+                        mutability: None,
+                        name: Ident {
+                            value: "MyInterface".into()
+                        },
+                        generics: vec![]
+                    }]
+                }),
                 members: vec![EnumMember {
                     name: "MEMBER".into(),
                     params: vec![]
