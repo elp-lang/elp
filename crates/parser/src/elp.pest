@@ -9,7 +9,7 @@ expression = {
   | export
   | enum
   | if_tree
-  | interface
+  | interface_def
   | object_def
   | component_def
   | external_symbol
@@ -61,8 +61,9 @@ elp_type_generic_constraint = { ":" ~ elp_type ~ ("+" ~ elp_type)* }
 enum                        = { "enum" ~ IDENT ~ object_implements? ~ "{" ~ (enum_member ~ ("," ~ enum_member)* ~ ","?)? ~ "}" }
 enum_member                 = { "." ~ IDENT ~ ("(" ~ elp_type ~ ("," ~ elp_type)* ~ ")")? }
 
-interface        = { "interface" ~ IDENT ~ "{" ~ (interface_member ~ ("," ~ interface_member)*) ~ "}" }
-interface_member = { ((visibility_selector? ~ "." ~ IDENT ~ elp_type) | fn_header_def) }
+interface_def    = { "interface" ~ IDENT ~ elp_type_generic? ~ "{" ~ (interface_member ~ ("," ~ interface_member)*) ~ "}" }
+interface_member_key_value = {visibility_selector? ~ "." ~ IDENT ~ elp_type}
+interface_member = { (interface_member_key_value | fn_header_def) }
 
 // C interop
 external_block  = { "external" ~ "{" ~ (fn_header_def | object_def)* ~ "}" }

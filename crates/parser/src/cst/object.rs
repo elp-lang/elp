@@ -1,21 +1,9 @@
-use super::{elp_type::ElpType, expression::Expression, ident::Ident, string::StringValue};
+use super::{
+    elp_type::ElpType, expression::Expression, ident::Ident, string::StringValue,
+    VisibilitySelector,
+};
 use crate::parser::Rule;
 use pest_ast::FromPest;
-
-#[derive(Debug, FromPest, PartialEq, Eq)]
-#[pest_ast(rule(Rule::PUBLIC))]
-pub struct PublicVisibility;
-
-#[derive(Debug, FromPest, PartialEq, Eq)]
-#[pest_ast(rule(Rule::PRIVATE))]
-pub struct PrivateVisibility;
-
-#[derive(Debug, FromPest, PartialEq, Eq)]
-#[pest_ast(rule(Rule::visibility_selector))]
-pub enum VisibilitySelector {
-    Public(PublicVisibility),
-    Private(PrivateVisibility),
-}
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::object_implements))]
@@ -61,6 +49,7 @@ mod tests {
         cst::{
             elp_type::{ElpTypeGeneric, ElpTypeGenericParam},
             number_value::Number,
+            PrivateVisibility, PublicVisibility,
         },
         parser::ElpParser,
     };

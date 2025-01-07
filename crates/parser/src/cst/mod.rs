@@ -6,6 +6,7 @@ pub(crate) mod expression;
 pub(crate) mod function;
 pub(crate) mod ident;
 pub(crate) mod import;
+pub(crate) mod interface;
 pub(crate) mod number_value;
 pub(crate) mod object;
 pub(crate) mod string;
@@ -33,6 +34,21 @@ pub struct Const;
 pub enum MutabilitySelector {
     Mutable(Var),
     Immutable(Const),
+}
+
+#[derive(Debug, FromPest, PartialEq, Eq)]
+#[pest_ast(rule(Rule::PUBLIC))]
+pub struct PublicVisibility;
+
+#[derive(Debug, FromPest, PartialEq, Eq)]
+#[pest_ast(rule(Rule::PRIVATE))]
+pub struct PrivateVisibility;
+
+#[derive(Debug, FromPest, PartialEq, Eq)]
+#[pest_ast(rule(Rule::visibility_selector))]
+pub enum VisibilitySelector {
+    Public(PublicVisibility),
+    Private(PrivateVisibility),
 }
 
 fn span_into_string(span: Span) -> String {
