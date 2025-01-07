@@ -14,8 +14,8 @@ mod tests {
     use super::*;
     use crate::{
         cst::{
-            elp_type::ElpType,
-            variable_declaration::{VariableDeclaration, VariableMutability},
+            elp_type::ElpType, ident::Ident, variable_declaration::VariableDeclaration, Const,
+            MutabilitySelector,
         },
         parser::ElpParser,
     };
@@ -35,9 +35,12 @@ mod tests {
                 expressions: vec![Expression::VariableDeclaration(Box::new(
                     VariableDeclaration {
                         name: "hello".into(),
-                        mutability: VariableMutability::Immutable,
+                        mutability: MutabilitySelector::Immutable(Const),
                         type_annotation: Some(Box::new(ElpType {
-                            name: "String".into(),
+                            mutability: None,
+                            name: Ident {
+                                value: "String".into()
+                            },
                             generics: vec![]
                         })),
                     }

@@ -7,7 +7,7 @@ import { FontWeight } from "elp/app/components/Text"
 export fn Home -> Component {
     const NAME = "Dave"
 
-    Column {
+    return Column {
         Row(columns = 2) {
             Column {
                 Text("Current date:")
@@ -31,11 +31,11 @@ Stylesheet {
     }
 
     Text {
-        .fontWeight = FontWeight.SEMIBOLD
+        .fontWeight = .SEMIBOLD
     }
 
     Date {
-        .fontWeight = FontWeight.LIGHT
+        .fontWeight = .LIGHT
     }
 }
 

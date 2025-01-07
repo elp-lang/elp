@@ -13,7 +13,7 @@ mod tests {
     use super::*;
 
     use crate::{
-        cst::variable_declaration::{VariableDeclaration, VariableMutability},
+        cst::{variable_declaration::VariableDeclaration, Const, MutabilitySelector},
         parser::ElpParser,
     };
     use from_pest::FromPest;
@@ -30,7 +30,7 @@ mod tests {
             ast,
             Export {
                 expression: Expression::VariableDeclaration(Box::new(VariableDeclaration {
-                    mutability: VariableMutability::Immutable,
+                    mutability: MutabilitySelector::Immutable(Const),
                     name: "hello".into(),
                     type_annotation: None
                 }))

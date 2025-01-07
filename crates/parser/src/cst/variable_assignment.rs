@@ -27,7 +27,7 @@ mod tests {
             expression::Expression,
             string::StringValue,
             value_assignment::{Equals, Operand},
-            variable_declaration::VariableMutability,
+            Const, MutabilitySelector,
         },
         parser::ElpParser,
     };
@@ -46,7 +46,7 @@ mod tests {
             VariableAssignment {
                 variable_assignment_target: VariableAssignmentTarget::VariableDeclaration(
                     VariableDeclaration {
-                        mutability: VariableMutability::Immutable,
+                        mutability: MutabilitySelector::Immutable(Const),
                         name: "hello".into(),
                         type_annotation: None,
                     }

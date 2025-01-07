@@ -1,12 +1,12 @@
-use super::span_into_string;
+use super::{ident::Ident, MutabilitySelector};
 use crate::parser::Rule;
 use pest_ast::FromPest;
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::elp_type))]
 pub struct ElpType {
-    #[pest_ast(inner(with(span_into_string)))]
-    pub name: String,
+    pub mutability: Option<MutabilitySelector>,
+    pub name: Ident,
     pub generics: Vec<ElpTypeGeneric>,
 }
 
@@ -46,7 +46,10 @@ mod tests {
         assert_eq!(
             ast,
             ElpType {
-                name: "String".into(),
+                mutability: None,
+                name: Ident {
+                    value: "String".into()
+                },
                 generics: vec![]
             }
         )
@@ -61,11 +64,17 @@ mod tests {
         assert_eq!(
             ast,
             ElpType {
-                name: "Into".into(),
+                mutability: None,
+                name: Ident {
+                    value: "Into".into()
+                },
                 generics: vec![ElpTypeGeneric {
                     params: vec![ElpTypeGenericParam {
                         elp_type: ElpType {
-                            name: "String".into(),
+                            mutability: None,
+                            name: Ident {
+                                value: "String".into()
+                            },
                             generics: vec![]
                         },
                         type_constraint: None
@@ -86,12 +95,18 @@ mod tests {
             ElpTypeGeneric {
                 params: vec![ElpTypeGenericParam {
                     elp_type: ElpType {
-                        name: "String".into(),
+                        mutability: None,
+                        name: Ident {
+                            value: "String".into()
+                        },
                         generics: vec![]
                     },
                     type_constraint: Some(ElpTypeGenericConstraint {
                         constraints: vec![ElpType {
-                            name: "Copy".into(),
+                            mutability: None,
+                            name: Ident {
+                                value: "Copy".into()
+                            },
                             generics: vec![]
                         }]
                     })
@@ -111,17 +126,26 @@ mod tests {
             ElpTypeGeneric {
                 params: vec![ElpTypeGenericParam {
                     elp_type: ElpType {
-                        name: "String".into(),
+                        mutability: None,
+                        name: Ident {
+                            value: "String".into()
+                        },
                         generics: vec![]
                     },
                     type_constraint: Some(ElpTypeGenericConstraint {
                         constraints: vec![
                             ElpType {
-                                name: "Copy".into(),
+                                mutability: None,
+                                name: Ident {
+                                    value: "Copy".into()
+                                },
                                 generics: vec![]
                             },
                             ElpType {
-                                name: "Clone".into(),
+                                mutability: None,
+                                name: Ident {
+                                    value: "Clone".into()
+                                },
                                 generics: vec![]
                             }
                         ]

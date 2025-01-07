@@ -17,10 +17,10 @@ export interface LoginProps {
 // This enum has the error macro which implements the Error interface.
 @error
 export enum LoginError {
-	NO_HANDLER
-	BAD_CREDENTIALS
-	BAD_REQUEST(string)
-	SERVER_ERROR(string)
+	.NO_HANDLER
+	.BAD_CREDENTIALS
+	.BAD_REQUEST(string)
+	.SERVER_ERROR(string)
 }
 
 // Components are a visual element that can be presented to the user.
@@ -29,7 +29,7 @@ export enum LoginError {
 export component LoginForm<LoginProps, LoginError> {
 	// Exports in a component are considered the props of the component.
 	// Similarly to the way that React and Svelte have props and SwiftUI has
-	// struct properties.
+	// struct properties. Exporting is the same as marking as "public".
 	export var email Stateful<Optional<string>>
 	export var onSubmit fn(string, Protected<string>) -> nil
 
@@ -53,7 +53,7 @@ export component LoginForm<LoginProps, LoginError> {
 	}
 
 	// A component must return something that implements Component or nil.
-	Form(onSubmit=handleSubmit) {
+	return Form(onSubmit=handleSubmit) {
 		EmailInput(&email, placeholder="Enter your email")
 		SecureTextInput(&password, placeholder="Enter your password")
 
@@ -62,5 +62,3 @@ export component LoginForm<LoginProps, LoginError> {
 		}
 	}
 }
-
-// vim: ft=kotlin

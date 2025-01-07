@@ -79,7 +79,10 @@ mod tests {
             ast_basic,
             ObjectImplements {
                 types: vec![ElpType {
-                    name: "String".into(),
+                    mutability: None,
+                    name: Ident {
+                        value: "String".into()
+                    },
                     generics: vec![],
                 }]
             }
@@ -95,19 +98,31 @@ mod tests {
             ObjectImplements {
                 types: vec![
                     ElpType {
-                        name: "String".into(),
+                        mutability: None,
+                        name: Ident {
+                            value: "String".into()
+                        },
                         generics: vec![],
                     },
                     ElpType {
-                        name: "Number".into(),
+                        mutability: None,
+                        name: Ident {
+                            value: "Number".into()
+                        },
                         generics: vec![],
                     },
                     ElpType {
-                        name: "Into".into(),
+                        mutability: None,
+                        name: Ident {
+                            value: "Into".into()
+                        },
                         generics: vec![ElpTypeGeneric {
                             params: vec![ElpTypeGenericParam {
                                 elp_type: ElpType {
-                                    name: "JSON".into(),
+                                    mutability: None,
+                                    name: Ident {
+                                        value: "JSON".into()
+                                    },
                                     generics: vec![]
                                 },
                                 type_constraint: None
@@ -175,7 +190,10 @@ mod tests {
                     value: "name".into()
                 },
                 type_annotation: Some(ElpType {
-                    name: "String".into(),
+                    mutability: None,
+                    name: Ident {
+                        value: "String".into()
+                    },
                     generics: vec![]
                 }),
                 default_value: None,
@@ -198,7 +216,10 @@ mod tests {
                     value: "name".into()
                 },
                 type_annotation: Some(ElpType {
-                    name: "String".into(),
+                    mutability: None,
+                    name: Ident {
+                        value: "String".into()
+                    },
                     generics: vec![]
                 }),
                 default_value: None,
@@ -221,7 +242,10 @@ mod tests {
                     value: "name".into()
                 },
                 type_annotation: Some(ElpType {
-                    name: "String".into(),
+                    mutability: None,
+                    name: Ident {
+                        value: "String".into()
+                    },
                     generics: vec![]
                 }),
                 default_value: None,
@@ -244,7 +268,10 @@ mod tests {
                     value: "name".into()
                 },
                 type_annotation: Some(ElpType {
-                    name: "String".into(),
+                    mutability: None,
+                    name: Ident {
+                        value: "String".into()
+                    },
                     generics: vec![]
                 }),
                 default_value: None,
@@ -274,7 +301,10 @@ mod tests {
                     value: "name".into()
                 },
                 type_annotation: Some(ElpType {
-                    name: "String".into(),
+                    mutability: None,
+                    name: Ident {
+                        value: "String".into()
+                    },
                     generics: vec![]
                 }),
                 default_value: Some(ObjectMemberDefaultValue {
@@ -301,7 +331,10 @@ mod tests {
                     value: "name".into()
                 },
                 type_annotation: Some(ElpType {
-                    name: "String".into(),
+                    mutability: None,
+                    name: Ident {
+                        value: "String".into()
+                    },
                     generics: vec![]
                 }),
                 default_value: Some(ObjectMemberDefaultValue {
@@ -340,7 +373,10 @@ mod tests {
                         value: "name".into()
                     },
                     type_annotation: Some(ElpType {
-                        name: "String".into(),
+                        mutability: None,
+                        name: Ident {
+                            value: "String".into()
+                        },
                         generics: vec![]
                     }),
                     default_value: None,
@@ -364,7 +400,10 @@ mod tests {
                 },
                 implements: Some(ObjectImplements {
                     types: vec![ElpType {
-                        name: "MyInterface".into(),
+                        mutability: None,
+                        name: Ident {
+                            value: "MyInterface".into()
+                        },
                         generics: vec![]
                     }]
                 }),
@@ -374,7 +413,10 @@ mod tests {
                         value: "name".into()
                     },
                     type_annotation: Some(ElpType {
-                        name: "String".into(),
+                        mutability: None,
+                        name: Ident {
+                            value: "String".into()
+                        },
                         generics: vec![]
                     }),
                     default_value: None,
@@ -399,11 +441,17 @@ mod tests {
                 implements: Some(ObjectImplements {
                     types: vec![
                         ElpType {
-                            name: "MyInterface".into(),
+                            mutability: None,
+                            name: Ident {
+                                value: "MyInterface".into()
+                            },
                             generics: vec![]
                         },
                         ElpType {
-                            name: "AnotherInterface".into(),
+                            mutability: None,
+                            name: Ident {
+                                value: "AnotherInterface".into()
+                            },
                             generics: vec![]
                         }
                     ]
@@ -414,7 +462,10 @@ mod tests {
                         value: "name".into()
                     },
                     type_annotation: Some(ElpType {
-                        name: "String".into(),
+                        mutability: None,
+                        name: Ident {
+                            value: "String".into()
+                        },
                         generics: vec![]
                     }),
                     default_value: None,
@@ -443,11 +494,17 @@ mod tests {
                 },
                 implements: Some(ObjectImplements {
                     types: vec![ElpType {
-                        name: "Into".into(),
+                        mutability: None,
+                        name: Ident {
+                            value: "Into".into()
+                        },
                         generics: vec![ElpTypeGeneric {
                             params: vec![ElpTypeGenericParam {
                                 elp_type: ElpType {
-                                    name: "JSON".into(),
+                                    mutability: None,
+                                    name: Ident {
+                                        value: "JSON".into()
+                                    },
                                     generics: vec![]
                                 },
                                 type_constraint: None
@@ -462,7 +519,10 @@ mod tests {
                             value: "name".into()
                         },
                         type_annotation: Some(ElpType {
-                            name: "String".into(),
+                            mutability: None,
+                            name: Ident {
+                                value: "String".into()
+                            },
                             generics: vec![]
                         }),
                         default_value: None,
@@ -481,7 +541,10 @@ mod tests {
                             value: "age".into()
                         },
                         type_annotation: Some(ElpType {
-                            name: "Int".into(),
+                            mutability: None,
+                            name: Ident {
+                                value: "Int".into()
+                            },
                             generics: vec![]
                         }),
                         default_value: None,
@@ -500,11 +563,17 @@ mod tests {
                             value: "friends".into()
                         },
                         type_annotation: Some(ElpType {
-                            name: "Vec".into(),
+                            mutability: None,
+                            name: Ident {
+                                value: "Vec".into()
+                            },
                             generics: vec![ElpTypeGeneric {
                                 params: vec![ElpTypeGenericParam {
                                     elp_type: ElpType {
-                                        name: "Friend".into(),
+                                        mutability: None,
+                                        name: Ident {
+                                            value: "Friend".into()
+                                        },
                                         generics: vec![]
                                     },
                                     type_constraint: None

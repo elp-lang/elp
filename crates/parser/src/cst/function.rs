@@ -92,7 +92,10 @@ mod tests {
                             value: "name".into()
                         },
                         type_annotation: Some(ElpType {
-                            name: "String".into(),
+                            mutability: None,
+                            name: Ident {
+                                value: "String".into()
+                            },
                             generics: vec![],
                         }),
                     },
@@ -101,7 +104,10 @@ mod tests {
                             value: "hello".into()
                         },
                         type_annotation: Some(ElpType {
-                            name: "String".into(),
+                            mutability: None,
+                            name: Ident {
+                                value: "String".into()
+                            },
                             generics: vec![],
                         }),
                     }
@@ -131,7 +137,10 @@ mod tests {
                             value: "name".into()
                         },
                         type_annotation: Some(ElpType {
-                            name: "String".into(),
+                            mutability: None,
+                            name: Ident {
+                                value: "String".into()
+                            },
                             generics: vec![],
                         }),
                     },
@@ -140,7 +149,10 @@ mod tests {
                             value: "hello".into()
                         },
                         type_annotation: Some(ElpType {
-                            name: "String".into(),
+                            mutability: None,
+                            name: Ident {
+                                value: "String".into()
+                            },
                             generics: vec![],
                         }),
                     }
@@ -159,7 +171,10 @@ mod tests {
             ast,
             FunctionReturnType {
                 type_annotations: vec![ElpType {
-                    name: "String".into(),
+                    mutability: None,
+                    name: Ident {
+                        value: "String".into()
+                    },
                     generics: vec![],
                 }]
             }
@@ -211,14 +226,20 @@ mod tests {
                             value: "name".into()
                         },
                         type_annotation: Some(ElpType {
-                            name: "String".into(),
+                            mutability: None,
+                            name: Ident {
+                                value: "String".into()
+                            },
                             generics: vec![],
                         }),
                     }],
                 }),
                 return_type: Some(FunctionReturnType {
                     type_annotations: vec![ElpType {
-                        name: "String".into(),
+                        mutability: None,
+                        name: Ident {
+                            value: "String".into()
+                        },
                         generics: vec![],
                     }],
                 }),
@@ -259,14 +280,20 @@ mod tests {
                             value: "name".into()
                         },
                         type_annotation: Some(ElpType {
-                            name: "String".into(),
+                            mutability: None,
+                            name: Ident {
+                                value: "String".into()
+                            },
                             generics: vec![],
                         }),
                     }],
                 },
                 return_type: FunctionReturnType {
                     type_annotations: vec![ElpType {
-                        name: "String".into(),
+                        mutability: None,
+                        name: Ident {
+                            value: "String".into()
+                        },
                         generics: vec![],
                     }],
                 },

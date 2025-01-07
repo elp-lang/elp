@@ -22,7 +22,7 @@ pub struct Enum {
 
 #[cfg(test)]
 mod tests {
-    use crate::parser::ElpParser;
+    use crate::{cst::ident::Ident, parser::ElpParser};
 
     use super::*;
     use from_pest::FromPest;
@@ -55,7 +55,8 @@ mod tests {
             EnumMember {
                 name: "Member".into(),
                 params: vec![ElpType {
-                    name: "T".into(),
+                    mutability: None,
+                    name: Ident { value: "T".into() },
                     generics: vec![]
                 }]
             }

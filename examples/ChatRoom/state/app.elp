@@ -1,12 +1,21 @@
 import { Stateful } from "elp/state"
 import { User, Message, Actions } from "$types/chat"
 
-export interface State: Stateful {
-	.usersInRoom: [User]
-	.messages: [Message]
+export interface State {
+	.usersInRoom [User]
+	.messages [Message]
+
+	fn new() -> Self
 }
 
-export fn ChatState(user: User): State {
-	.usersInRoom = [user]
-	.messages = []
+export object ChatState implements State {
+	.usersInRoom [User] = []
+	.messages [Message] = []
+}
+
+fn ChatState.new(user User) -> Self {
+	Self {
+		.usersInRoom = [user],
+		.messages = []
+	}
 }

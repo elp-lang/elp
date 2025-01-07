@@ -20,6 +20,21 @@ use pest_ast::FromPest;
 
 use crate::parser::Rule;
 
+#[derive(Debug, FromPest, PartialEq, Eq)]
+#[pest_ast(rule(Rule::VAR))]
+pub struct Var;
+
+#[derive(Debug, FromPest, PartialEq, Eq)]
+#[pest_ast(rule(Rule::CONST))]
+pub struct Const;
+
+#[derive(Debug, FromPest, PartialEq, Eq)]
+#[pest_ast(rule(Rule::mutability_selector))]
+pub enum MutabilitySelector {
+    Mutable(Var),
+    Immutable(Const),
+}
+
 fn span_into_string(span: Span) -> String {
     span.as_str().into()
 }

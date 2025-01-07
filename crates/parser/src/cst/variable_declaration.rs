@@ -1,27 +1,11 @@
-use super::{elp_type::ElpType, span_into_string};
+use super::{elp_type::ElpType, span_into_string, MutabilitySelector};
 use crate::parser::Rule;
-use pest::Span;
 use pest_ast::FromPest;
-
-#[derive(Debug, PartialEq, Eq)]
-pub enum VariableMutability {
-    Mutable,
-    Immutable,
-}
-
-fn span_into_mutability_selector(span: Span) -> VariableMutability {
-    match span.as_str() {
-        "var" => VariableMutability::Mutable,
-        "const" => VariableMutability::Immutable,
-        _ => panic!("Invalid variable declaration mutability: {}", span.as_str()),
-    }
-}
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::variable_declaration))]
 pub struct VariableDeclaration {
-    #[pest_ast(inner(with(span_into_mutability_selector)))]
-    pub mutability: VariableMutability,
+    pub mutability: MutabilitySelector,
 
     #[pest_ast(inner(with(span_into_string)))]
     pub name: String,
@@ -32,7 +16,10 @@ pub struct VariableDeclaration {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parser::ElpParser;
+    use crate::{
+        cst::{ident::Ident, MutabilitySelector, Var},
+        parser::ElpParser,
+    };
     use from_pest::FromPest;
     use pest::Parser;
     use pretty_assertions::assert_eq;
@@ -46,10 +33,13 @@ mod tests {
         assert_eq!(
             ast,
             VariableDeclaration {
-                mutability: VariableMutability::Mutable,
+                mutability: MutabilitySelector::Mutable(Var),
                 name: "hello".to_string(),
                 type_annotation: Some(Box::new(ElpType {
-                    name: "String".to_string(),
+                    mutability: None,
+                    name: Ident {
+                        value: "String".into()
+                    },
                     generics: vec![],
                 })),
             }
