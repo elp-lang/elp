@@ -3,7 +3,7 @@ use super::variable_access::ContextualVariableAccess;
 use super::{
     block::Block, elp_type::ElpType, expression::Expression, variable_access::VariableAccess,
 };
-use crate::ast::ident::Ident;
+use crate::cst::ident::Ident;
 use crate::parser::Rule;
 use pest_ast::FromPest;
 
@@ -70,7 +70,7 @@ pub struct FunctionCall {
 mod tests {
     use super::*;
     use crate::{
-        ast::{string::StringValue, variable_access::VariableAccessNames},
+        cst::{string::StringValue, variable_access::VariableAccessNames},
         parser::ElpParser,
     };
     use from_pest::FromPest;

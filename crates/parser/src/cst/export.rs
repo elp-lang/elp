@@ -13,7 +13,7 @@ mod tests {
     use super::*;
 
     use crate::{
-        ast::variable_declaration::{VariableDeclaration, VariableMutability},
+        cst::variable_declaration::{VariableDeclaration, VariableMutability},
         parser::ElpParser,
     };
     use from_pest::FromPest;

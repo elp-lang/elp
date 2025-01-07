@@ -44,7 +44,7 @@ mod tests {
     use pest::Parser;
     use string::StringValue;
 
-    use crate::ast::import::{ImportModulePath, ImportName, ImportNameAlias};
+    use crate::cst::import::{ImportModulePath, ImportName, ImportNameAlias};
 
     #[test]
     fn single_expression_ast_generation() {

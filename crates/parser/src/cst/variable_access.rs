@@ -1,4 +1,4 @@
-use crate::ast::ident::Ident;
+use crate::cst::ident::Ident;
 use crate::parser::Rule;
 use pest_ast::FromPest;
 
@@ -41,7 +41,7 @@ pub struct ContextualVariableAccess {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ast::variable_access::VariableAccess;
+    use crate::cst::variable_access::VariableAccess;
     use crate::parser::ElpParser;
     use from_pest::FromPest;
     use pest::Parser;

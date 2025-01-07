@@ -13,7 +13,7 @@ pub struct Block {
 mod tests {
     use super::*;
     use crate::{
-        ast::{
+        cst::{
             elp_type::ElpType,
             variable_declaration::{VariableDeclaration, VariableMutability},
         },

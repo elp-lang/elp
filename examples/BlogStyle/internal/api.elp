@@ -31,7 +31,8 @@ export object Content implements FromTo<JSON> {
 	.calls  = 0,
 }
 
-// Note the use of pointer semantics here which also denotes the lifetime of the variable.Returning a pointer to a value will transfer the ownership of the data to the call site.
+// Note the use of pointer semantics here which also denotes the lifetime of the variable.
+// Returning a pointer to a value will transfer the ownership of the data to the call site.
 fn Content.fromJSON(json JSON) -> Either<Content, JSONError> {
 	var out Content
 

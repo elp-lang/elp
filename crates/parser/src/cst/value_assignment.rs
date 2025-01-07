@@ -103,7 +103,7 @@ mod tests {
     use pest::Parser;
 
     use crate::{
-        ast::{number_value::Number, string::StringValue},
+        cst::{number_value::Number, string::StringValue},
         parser::ElpParser,
     };
 

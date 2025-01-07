@@ -58,7 +58,7 @@ pub struct Object {
 mod tests {
     use super::*;
     use crate::{
-        ast::{
+        cst::{
             elp_type::{ElpTypeGeneric, ElpTypeGenericParam},
             number_value::Number,
         },

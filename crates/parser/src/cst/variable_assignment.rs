@@ -23,7 +23,7 @@ pub struct VariableAssignment {
 mod tests {
     use super::*;
     use crate::{
-        ast::{
+        cst::{
             expression::Expression,
             string::StringValue,
             value_assignment::{Equals, Operand},
