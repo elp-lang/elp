@@ -9,6 +9,7 @@ expression = {
   | export
   | enum
   | if_tree
+  | interface
   | object_def
   | component_def
   | external_symbol
@@ -50,12 +51,16 @@ bitwise_operation = { (variable_access | number) ~ BITWISE_OPERAND ~ (variable_a
 
 // Programming type info.
 mutability_selector         = { VAR | CONST }
+visibility_selector         = { PUBLIC | PRIVATE }
 elp_type                    = { mutability_selector? ~ IDENT ~ elp_type_generic? }
 elp_type_generic            = { "<" ~ elp_type_generic_param ~ ("," ~ elp_type_generic_param)* ~ ">" }
 elp_type_generic_param      = { elp_type ~ elp_type_generic_constraint? }
 elp_type_generic_constraint = { ":" ~ elp_type ~ ("+" ~ elp_type)* }
 enum                        = { "enum" ~ IDENT ~ "{" ~ (enum_member ~ ("," ~ enum_member)* ~ ","?)? ~ "}" }
 enum_member                 = { "." ~ IDENT ~ ("(" ~ elp_type ~ ("," ~ elp_type)* ~ ")")? }
+
+interface        = { "interface" ~ IDENT ~ "{" ~ (interface_member ~ ("," ~ interface_member)*) ~ "}" }
+interface_member = { ((visibility_selector? ~ "." ~ IDENT ~ elp_type) | fn_header_def) }
 
 // C interop
 external_block  = { "external" ~ "{" ~ (fn_header_def | object_def)* ~ "}" }
@@ -75,8 +80,7 @@ function_return_value   = { "return" ~ expression }
 // Objects.
 object_def               = { "object" ~ IDENT ~ object_implements? ~ "{" ~ (object_member ~ ("," ~ object_member)* ~ ","?)? ~ "}" }
 object_implements        = { "implements" ~ elp_type ~ ("," ~ elp_type)* }
-object_member            = { object_member_visibility? ~ "." ~ IDENT ~ elp_type? ~ object_key_default_value? ~ object_key_tags? }
-object_member_visibility = { PUBLIC | PRIVATE }
+object_member            = { visibility_selector? ~ "." ~ IDENT ~ elp_type? ~ object_key_default_value? ~ object_key_tags? }
 object_key_default_value = { "=" ~ expression }
 object_key_tags          = { "`" ~ IDENT ~ ":" ~ string ~ ("," ~ IDENT ~ ":" ~ string)? ~ "`" }
 

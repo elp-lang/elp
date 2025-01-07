@@ -11,7 +11,7 @@ pub struct PublicVisibility;
 pub struct PrivateVisibility;
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
-#[pest_ast(rule(Rule::object_member_visibility))]
+#[pest_ast(rule(Rule::visibility_selector))]
 pub enum ObjectMemberVisibility {
     Public(PublicVisibility),
     Private(PrivateVisibility),
@@ -138,7 +138,7 @@ mod tests {
     fn object_member_visibility() {
         let expression_str_private = "private";
         let mut private_pairs =
-            ElpParser::parse(Rule::object_member_visibility, expression_str_private).unwrap();
+            ElpParser::parse(Rule::visibility_selector, expression_str_private).unwrap();
         let private_ast = ObjectMemberVisibility::from_pest(&mut private_pairs).unwrap();
 
         assert_eq!(
@@ -148,7 +148,7 @@ mod tests {
 
         let expression_str_public = "public";
         let mut public_pairs =
-            ElpParser::parse(Rule::object_member_visibility, expression_str_public).unwrap();
+            ElpParser::parse(Rule::visibility_selector, expression_str_public).unwrap();
         let public_ast = ObjectMemberVisibility::from_pest(&mut public_pairs).unwrap();
 
         assert_eq!(
