@@ -14,6 +14,7 @@ expression = {
   | component_def
   | external_symbol
   | external_block
+  | fn_header_def
   | function_def
   | function_call
   | object_instantiation
@@ -27,6 +28,7 @@ expression = {
   | contextual_variable_access
   | function_component_call
   | OPERAND
+  | UNARY_OPERATOR
 }
 
 // Imports and exports in modules.
@@ -67,7 +69,7 @@ external_block  = { "external" ~ "{" ~ (fn_header_def | object_def)* ~ "}" }
 external_symbol = { "external" ~ (fn_header_def | object_def) }
 
 // Functions.
-fn_header_def           = { "fn" ~ variable_access ~ elp_type_generic? ~ function_arguments ~ function_return_type }
+fn_header_def           = { pointer_semantics? ~ "fn" ~ variable_access? ~ elp_type_generic? ~ function_arguments ~ function_return_type }
 function_def            = { "fn" ~ variable_access ~ elp_type_generic? ~ function_arguments? ~ function_return_type? ~ block }
 function_return_type    = { ARROW ~ elp_type ~ ("," ~ elp_type)* }
 function_arguments      = { "(" ~ (function_argument ~ ("," ~ function_argument)*)? ~ ")" }
@@ -90,7 +92,7 @@ object_instantiation_member = { object_value_spread | ("." ~ IDENT ~ "=" ~ expre
 object_value_spread         = { "..." ~ expression }
 
 // Components
-component_def = { "component" ~ (IDENT ~ ("." ~ IDENT)*) ~ function_arguments? ~ function_return_type? ~ block }
+component_def = { "component" ~ (IDENT ~ ("." ~ IDENT)*) ~ elp_type_generic? ~ function_arguments? ~ function_return_type? ~ block }
 
 // If, elseif, else
 if_tree     = { "if" ~ expression ~ block ~ elseif_tree* ~ else_block? }
@@ -134,6 +136,20 @@ VAR        =  { "var" }
 CONST      =  { "const" }
 PUBLIC     = @{ "public" }
 PRIVATE    = @{ "private" }
+
+// unary operators.
+UNARY_ADD      = { "+" }
+UNARY_SUB      = { "-" }
+UNARY_MULT     = { "*" }
+UNARY_DIV      = { "/" }
+UNARY_POW      = { "^" }
+UNARY_OPERATOR = {
+    UNARY_ADD
+  | UNARY_SUB
+  | UNARY_MULT
+  | UNARY_DIV
+  | UNARY_POW
+}
 
 // operations.
 BITWISE_OPERAND_TILDE       = { "~" }

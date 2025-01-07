@@ -10,32 +10,34 @@ import { Text } from "elp/components"
 import { User, UserMessage } from "$types/chat"
 
 export interface LoginProps {
-	email Optional<string>
-	password Optional<Protected<string>>
+	.email Optional<string>,
+	.password Optional<Protected<string>>
 }
 
 // This enum has the error macro which implements the Error interface.
 @error
 export enum LoginError {
-	.NO_HANDLER
-	.BAD_CREDENTIALS
-	.BAD_REQUEST(string)
-	.SERVER_ERROR(string)
+	.NO_HANDLER,
+	.BAD_CREDENTIALS,
+	.BAD_REQUEST(string),
+	.SERVER_ERROR(string),
 }
 
 // Components are a visual element that can be presented to the user.
 // Behind the scenes though this is just an object that implements the
 // Component and Either interfaces.
-export component LoginForm<LoginProps, LoginError> {
+export component LoginForm {
 	// Exports in a component are considered the props of the component.
 	// Similarly to the way that React and Svelte have props and SwiftUI has
 	// struct properties. Exporting is the same as marking as "public".
-	export var email Stateful<Optional<string>>
-	export var onSubmit fn(string, Protected<string>) -> nil
+	export var email Optional<string>
+	export *fn onSubmit(username string, password Protected<string>) -> None
 
 	// They also have their own private variables as this is a block/lexical scope.
 	// Note that a variable is just that, it's variable in nature so it is mutable.
-	var password Stateful<Protected<string>>
+	// When declaring vars in a component, they are observed for changes by the compiler
+	// and cause reactivity to change in your application.
+	var password Protected<string>
 	var attempts = 0
 
 	// Functions can be declared in a block and are only available here unless returned (moved.)
@@ -57,7 +59,7 @@ export component LoginForm<LoginProps, LoginError> {
 		EmailInput(&email, placeholder="Enter your email")
 		SecureTextInput(&password, placeholder="Enter your password")
 
-		Button {
+		Button(type=.FORM_SUBMIT) {
 			Text("Log in")
 		}
 	}

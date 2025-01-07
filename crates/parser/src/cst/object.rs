@@ -12,7 +12,7 @@ pub struct PrivateVisibility;
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::visibility_selector))]
-pub enum ObjectMemberVisibility {
+pub enum VisibilitySelector {
     Public(PublicVisibility),
     Private(PrivateVisibility),
 }
@@ -39,7 +39,7 @@ pub struct ObjectMemberTags {
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::object_member))]
 pub struct ObjectMember {
-    pub visibility: Option<ObjectMemberVisibility>,
+    pub visibility: Option<VisibilitySelector>,
     pub name: Ident,
     pub type_annotation: Option<ElpType>,
     pub default_value: Option<ObjectMemberDefaultValue>,
@@ -139,22 +139,19 @@ mod tests {
         let expression_str_private = "private";
         let mut private_pairs =
             ElpParser::parse(Rule::visibility_selector, expression_str_private).unwrap();
-        let private_ast = ObjectMemberVisibility::from_pest(&mut private_pairs).unwrap();
+        let private_ast = VisibilitySelector::from_pest(&mut private_pairs).unwrap();
 
         assert_eq!(
             private_ast,
-            ObjectMemberVisibility::Private(PrivateVisibility {})
+            VisibilitySelector::Private(PrivateVisibility {})
         );
 
         let expression_str_public = "public";
         let mut public_pairs =
             ElpParser::parse(Rule::visibility_selector, expression_str_public).unwrap();
-        let public_ast = ObjectMemberVisibility::from_pest(&mut public_pairs).unwrap();
+        let public_ast = VisibilitySelector::from_pest(&mut public_pairs).unwrap();
 
-        assert_eq!(
-            public_ast,
-            ObjectMemberVisibility::Public(PublicVisibility {})
-        );
+        assert_eq!(public_ast, VisibilitySelector::Public(PublicVisibility {}));
     }
 
     #[test]
@@ -211,7 +208,7 @@ mod tests {
         assert_eq!(
             ast,
             ObjectMember {
-                visibility: Some(ObjectMemberVisibility::Private(PrivateVisibility {})),
+                visibility: Some(VisibilitySelector::Private(PrivateVisibility {})),
                 name: Ident {
                     value: "name".into()
                 },
@@ -237,7 +234,7 @@ mod tests {
         assert_eq!(
             ast,
             ObjectMember {
-                visibility: Some(ObjectMemberVisibility::Public(PublicVisibility {})),
+                visibility: Some(VisibilitySelector::Public(PublicVisibility {})),
                 name: Ident {
                     value: "name".into()
                 },
@@ -514,7 +511,7 @@ mod tests {
                 }),
                 members: vec![
                     ObjectMember {
-                        visibility: Some(ObjectMemberVisibility::Public(PublicVisibility {})),
+                        visibility: Some(VisibilitySelector::Public(PublicVisibility {})),
                         name: Ident {
                             value: "name".into()
                         },
@@ -536,7 +533,7 @@ mod tests {
                         }]
                     },
                     ObjectMember {
-                        visibility: Some(ObjectMemberVisibility::Private(PrivateVisibility {})),
+                        visibility: Some(VisibilitySelector::Private(PrivateVisibility {})),
                         name: Ident {
                             value: "age".into()
                         },
