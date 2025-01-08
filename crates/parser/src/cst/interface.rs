@@ -1,6 +1,6 @@
 use super::{
     elp_type::{ElpType, ElpTypeGeneric},
-    function::ExternalFunctionDef,
+    function::FunctionHeaderDef,
     ident::Ident,
 };
 use crate::parser::Rule;
@@ -17,7 +17,7 @@ pub struct InterfaceMemberKeyValue {
 #[pest_ast(rule(Rule::interface_member))]
 pub enum InterfaceMember {
     Field(InterfaceMemberKeyValue),
-    Method(ExternalFunctionDef),
+    Method(FunctionHeaderDef),
 }
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
@@ -141,7 +141,7 @@ mod tests {
                         }
                     ]
                 }),
-                members: vec![InterfaceMember::Method(ExternalFunctionDef {
+                members: vec![InterfaceMember::Method(FunctionHeaderDef {
                     name: VariableAccess {
                         pointer_semantics: vec![],
                         names: VariableAccessNames {
