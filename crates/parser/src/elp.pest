@@ -8,6 +8,7 @@ expression = {
   | macro
   | export
   | enum
+  | array
   | if_tree
   | interface_def
   | object_def
@@ -83,13 +84,13 @@ function_return_value   = { "return" ~ expression }
 // Objects.
 object_def               = { "object" ~ IDENT ~ object_implements? ~ "{" ~ (object_member ~ ("," ~ object_member)* ~ ","?)? ~ "}" }
 object_implements        = { "implements" ~ elp_type ~ ("," ~ elp_type)* }
-object_member            = { visibility_selector? ~ "." ~ IDENT ~ elp_type? ~ object_key_default_value? ~ object_key_tags? }
+object_member            = { visibility_selector? ~ mutability_selector? ~ "." ~ IDENT ~ elp_type? ~ object_key_default_value? ~ object_key_tags? }
 object_key_default_value = { "=" ~ expression }
 object_key_tags          = { "`" ~ IDENT ~ ":" ~ string ~ ("," ~ IDENT ~ ":" ~ string)? ~ "`" }
 
 // Object instantiation
-object_instantiation        = { IDENT ~ "{" ~ object_instantiation_member ~ ("," ~ object_instantiation_member)* ~ "}" }
-object_instantiation_member = { object_value_spread | ("." ~ IDENT ~ "=" ~ expression) }
+object_instantiation        = { IDENT ~ "{" ~ object_instantiation_member ~ ("," ~ object_instantiation_member)* ~ ","? ~ "}" }
+object_instantiation_member = { (object_value_spread | ("." ~ IDENT ~ "=" ~ expression)) }
 object_value_spread         = { "..." ~ expression }
 
 // Components
@@ -106,6 +107,9 @@ match_arm_subject = { match_range | expression }
 match_arm         = { match_arm_subject ~ ARROW ~ match_arm_body ~ ","? }
 match_arm_body    = { block | expression }
 match_range       = { expression? ~ ".." ~ expression? }
+
+// Arrays.
+array = { "[" ~ expression ~ ("," ~ expression)* ~ ","? ~ "]" }
 
 // Groups of expressions.
 block = { "{" ~ expression* ~ "}" }
