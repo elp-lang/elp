@@ -43,6 +43,7 @@ mod tests {
     use super::*;
     use crate::{
         cst::{
+            function::FunctionReturnValue,
             ident::Ident,
             number_value::Number,
             string::StringValue,
@@ -122,7 +123,10 @@ mod tests {
     #[test]
     fn match_tree() {
         let expression_str = "match expr {
-            expr -> \"Hello, World!\"
+            expr -> \"Hello, World!\",
+            _ -> {
+                return \"Default value\"
+            }
         }";
         let mut pairs = ElpParser::parse(Rule::match_tree, expression_str).unwrap();
         let ast = MatchTree::from_pest(&mut pairs).unwrap();
@@ -138,23 +142,44 @@ mod tests {
                         }],
                     }
                 })),
-                match_arms: vec![MatchTreeArm {
-                    subject: MatchArmSubject::Expression(Expression::VariableAccess(Box::new(
-                        VariableAccess {
-                            pointer_semantics: vec![],
-                            names: VariableAccessNames {
-                                names: vec![Ident {
-                                    value: "expr".into()
-                                }],
-                            },
-                        }
-                    ))),
-                    body: MatchBody::Expression(Box::new(Expression::String(Box::new(
-                        StringValue {
-                            value: "Hello, World!".into()
-                        }
-                    ))))
-                }]
+                match_arms: vec![
+                    MatchTreeArm {
+                        subject: MatchArmSubject::Expression(Expression::VariableAccess(Box::new(
+                            VariableAccess {
+                                pointer_semantics: vec![],
+                                names: VariableAccessNames {
+                                    names: vec![Ident {
+                                        value: "expr".into()
+                                    }],
+                                },
+                            }
+                        ))),
+                        body: MatchBody::Expression(Box::new(Expression::String(Box::new(
+                            StringValue {
+                                value: "Hello, World!".into()
+                            }
+                        ))))
+                    },
+                    MatchTreeArm {
+                        subject: MatchArmSubject::Expression(Expression::VariableAccess(Box::new(
+                            VariableAccess {
+                                pointer_semantics: vec![],
+                                names: VariableAccessNames {
+                                    names: vec![Ident { value: "_".into() }],
+                                },
+                            }
+                        ))),
+                        body: MatchBody::Block(Box::new(Block {
+                            expressions: vec![Expression::FunctionReturnValue(Box::new(
+                                FunctionReturnValue {
+                                    value: Box::new(Expression::String(Box::new(StringValue {
+                                        value: "Default value".into()
+                                    })))
+                                }
+                            ))]
+                        }))
+                    }
+                ]
             }
         )
     }
