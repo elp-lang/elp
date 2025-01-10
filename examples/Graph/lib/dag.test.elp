@@ -1,0 +1,29 @@
+import {assert_equal} from "elp/testing"
+import {Graph, NodeIndex} from "$/lib/graph"
+
+fn test_graph {
+	var graph Graph<string, string> = .new()
+
+	const hello = graph.addNode("hello")
+	const world = graph.addNode("world")
+
+	graph.addEdge(hello, world)
+
+	assert_equal(
+		graph.nodes,
+		[
+			"hello",
+			"world",
+		]
+	)
+
+	assert_equal(
+		graph.edges,
+		[
+			NodeIndex {
+				.from = 0,
+				.to   = 1,
+			},
+		],
+	)
+}

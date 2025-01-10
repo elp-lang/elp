@@ -1,0 +1,57 @@
+export enum Direction {
+	Directed,
+	Undirected,
+}
+
+export object NodeIndex {
+	private const .from_node_id uint
+	private const .to_node_id   uint
+	private const .edge_id      uint
+}
+
+export object Graph<N, E> {
+	private const .direction *Direection
+	public  var   .nodes     [N]
+	public  var   .edges     [E]
+}
+
+export fn Graph.new() -> Self {
+	return Self {
+		.nodes = .new(),
+		.edges = .new()
+	}
+}
+
+export fn Graph.new(nodes [N]) -> Self {
+	return Self {
+		.nodes = nodes,
+		.edges = .new()
+	}
+}
+
+export fn Graph.new(edges [E]) -> Self {
+	return Self {
+		.nodes = .new(),
+		.edges = edges
+	}
+}
+
+export fn Graph.new(nodes [N], edges [E]) -> Self {
+	return Self {
+		.nodes = nodes,
+		.edges = edges
+	}
+}
+
+// insert a new node into the DAG.
+export fn Graph.addNode<N>(&self, node N) -> &uint {
+	const node_id = self.values.append(node)
+
+	return node_id
+}
+
+export fn Graph.addEdge<E>(&self, edge E) -> &uint {
+	const edge_id = self.edges.append(edge)
+
+	return edge_id
+}
