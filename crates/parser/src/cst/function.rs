@@ -1,7 +1,7 @@
 use super::elp_type::ElpTypeGeneric;
 use super::variable_access::ContextualVariableAccess;
 use super::{
-    block::Block, elp_type::ElpType, expression::Expression, variable_access::VariableAccess,
+    block::Block, elp_type::ElpType, expression::CSTExpression, variable_access::VariableAccess,
 };
 use crate::cst::ident::Ident;
 use crate::parser::Rule;
@@ -29,7 +29,7 @@ pub struct FunctionReturnType {
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::function_return_value))]
 pub struct FunctionReturnValue {
-    pub value: Box<Expression>,
+    pub value: Box<CSTExpression>,
 }
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
@@ -63,7 +63,7 @@ pub enum FunctionCallName {
 pub struct FunctionCall {
     pub name: FunctionCallName,
     pub generics: Option<ElpTypeGeneric>,
-    pub arguments: Vec<Expression>,
+    pub arguments: Vec<CSTExpression>,
 }
 
 #[cfg(test)]
@@ -190,7 +190,7 @@ mod tests {
         assert_eq!(
             ast,
             FunctionReturnValue {
-                value: Box::new(Expression::String(Box::new(StringValue {
+                value: Box::new(CSTExpression::String(Box::new(StringValue {
                     value: "hello".into()
                 })))
             }
@@ -244,9 +244,9 @@ mod tests {
                     }],
                 }),
                 block: Box::new(Block {
-                    expressions: vec![Expression::FunctionReturnValue(Box::new(
+                    expressions: vec![CSTExpression::FunctionReturnValue(Box::new(
                         FunctionReturnValue {
-                            value: Box::new(Expression::String(Box::new(StringValue {
+                            value: Box::new(CSTExpression::String(Box::new(StringValue {
                                 value: "hello {name}".into()
                             })))
                         }

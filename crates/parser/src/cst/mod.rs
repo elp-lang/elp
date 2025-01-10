@@ -16,7 +16,7 @@ pub(crate) mod variable_access;
 pub(crate) mod variable_assignment;
 pub(crate) mod variable_declaration;
 
-use expression::Expression;
+use expression::CSTExpression;
 use pest::Span;
 use pest_ast::FromPest;
 
@@ -59,7 +59,7 @@ fn span_into_string(span: Span) -> String {
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::module))]
 pub struct Module {
-    pub expressions: Vec<Expression>,
+    pub expressions: Vec<CSTExpression>,
     _eoi: Eoi,
 }
 
@@ -87,7 +87,7 @@ mod tests {
         assert_eq!(
             ast,
             Module {
-                expressions: vec![Expression::Import(Box::new(Import {
+                expressions: vec![CSTExpression::Import(Box::new(Import {
                     names: vec![
                         ImportName {
                             name: "Bar".into(),

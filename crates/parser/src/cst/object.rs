@@ -1,5 +1,5 @@
 use super::{
-    elp_type::ElpType, expression::Expression, ident::Ident, string::StringValue,
+    elp_type::ElpType, expression::CSTExpression, ident::Ident, string::StringValue,
     VisibilitySelector,
 };
 use crate::parser::Rule;
@@ -14,7 +14,7 @@ pub struct ObjectImplements {
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::object_key_default_value))]
 pub struct ObjectMemberDefaultValue {
-    pub value: Expression,
+    pub value: CSTExpression,
 }
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
@@ -294,7 +294,7 @@ mod tests {
                     generics: vec![]
                 }),
                 default_value: Some(ObjectMemberDefaultValue {
-                    value: Expression::String(Box::new(StringValue {
+                    value: CSTExpression::String(Box::new(StringValue {
                         value: "example".into()
                     }))
                 }),
@@ -324,7 +324,7 @@ mod tests {
                     generics: vec![]
                 }),
                 default_value: Some(ObjectMemberDefaultValue {
-                    value: Expression::String(Box::new(StringValue {
+                    value: CSTExpression::String(Box::new(StringValue {
                         value: "example_default".into()
                     }))
                 }),
@@ -583,7 +583,7 @@ mod tests {
                         },
                         type_annotation: None,
                         default_value: Some(ObjectMemberDefaultValue {
-                            value: Expression::Number(Box::new(Number {
+                            value: CSTExpression::Number(Box::new(Number {
                                 value: "123".into()
                             }))
                         }),

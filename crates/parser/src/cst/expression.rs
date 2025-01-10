@@ -21,7 +21,7 @@ use pest_ast::FromPest;
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::expression))]
-pub enum Expression {
+pub enum CSTExpression {
     Block(Box<Block>),
     ElpType(Box<ElpType>),
     Enum(Box<Enum>),

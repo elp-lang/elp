@@ -2,7 +2,7 @@ use pest_ast::FromPest;
 
 use crate::parser::Rule;
 
-use super::{expression::Expression, variable_access::Reference};
+use super::{expression::CSTExpression, variable_access::Reference};
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::BITWISE_OPERAND_TILDE))]
@@ -78,7 +78,7 @@ pub struct BitAnd;
 #[pest_ast(rule(Rule::value_assignment))]
 pub struct ValueAssignment {
     pub operand: Operand,
-    pub value: Box<Expression>,
+    pub value: Box<CSTExpression>,
 }
 
 #[derive(Debug, PartialEq, FromPest, Eq)]
@@ -119,7 +119,7 @@ mod tests {
             ast,
             ValueAssignment {
                 operand: Operand::Equals(Equals {}),
-                value: Box::new(Expression::String(Box::new(StringValue {
+                value: Box::new(CSTExpression::String(Box::new(StringValue {
                     value: "world".into(),
                 }))),
             }
@@ -136,7 +136,9 @@ mod tests {
             ast,
             ValueAssignment {
                 operand: Operand::Plus(Plus {}),
-                value: Box::new(Expression::Number(Box::new(Number { value: "1".into() }))),
+                value: Box::new(CSTExpression::Number(Box::new(Number {
+                    value: "1".into()
+                }))),
             }
         )
     }
@@ -151,7 +153,9 @@ mod tests {
             ast,
             ValueAssignment {
                 operand: Operand::Modulo(Modulo {}),
-                value: Box::new(Expression::Number(Box::new(Number { value: "1".into() }))),
+                value: Box::new(CSTExpression::Number(Box::new(Number {
+                    value: "1".into()
+                }))),
             }
         )
     }
@@ -166,7 +170,9 @@ mod tests {
             ast,
             ValueAssignment {
                 operand: Operand::EqualityEqual(EqualityEqual {}),
-                value: Box::new(Expression::Number(Box::new(Number { value: "2".into() }))),
+                value: Box::new(CSTExpression::Number(Box::new(Number {
+                    value: "2".into()
+                }))),
             }
         )
     }
@@ -181,7 +187,9 @@ mod tests {
             ast,
             ValueAssignment {
                 operand: Operand::EqualityNot(EqualityNot {}),
-                value: Box::new(Expression::Number(Box::new(Number { value: "2".into() }))),
+                value: Box::new(CSTExpression::Number(Box::new(Number {
+                    value: "2".into()
+                }))),
             }
         )
     }
@@ -196,7 +204,9 @@ mod tests {
             ast,
             ValueAssignment {
                 operand: Operand::EqualityBitNot(EqualityBitNot {}),
-                value: Box::new(Expression::Number(Box::new(Number { value: "2".into() }))),
+                value: Box::new(CSTExpression::Number(Box::new(Number {
+                    value: "2".into()
+                }))),
             }
         )
     }
@@ -211,7 +221,9 @@ mod tests {
             ast,
             ValueAssignment {
                 operand: Operand::BitAnd(BitAnd),
-                value: Box::new(Expression::Number(Box::new(Number { value: "2".into() }))),
+                value: Box::new(CSTExpression::Number(Box::new(Number {
+                    value: "2".into()
+                }))),
             }
         )
     }

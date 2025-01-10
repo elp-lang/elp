@@ -24,7 +24,7 @@ mod tests {
     use super::*;
     use crate::{
         cst::{
-            expression::Expression,
+            expression::CSTExpression,
             string::StringValue,
             value_assignment::{Equals, Operand},
             Const, MutabilitySelector,
@@ -53,7 +53,7 @@ mod tests {
                 ),
                 value_assignment: ValueAssignment {
                     operand: Operand::Equals(Equals {}),
-                    value: Box::new(Expression::String(Box::new(StringValue {
+                    value: Box::new(CSTExpression::String(Box::new(StringValue {
                         value: "world".into(),
                     }))),
                 },

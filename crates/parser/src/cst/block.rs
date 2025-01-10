@@ -1,12 +1,12 @@
 use crate::parser::Rule;
 use pest_ast::FromPest;
 
-use super::expression::Expression;
+use super::expression::CSTExpression;
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::block))]
 pub struct Block {
-    pub expressions: Vec<Expression>,
+    pub expressions: Vec<CSTExpression>,
 }
 
 #[cfg(test)]
@@ -32,7 +32,7 @@ mod tests {
         assert_eq!(
             ast,
             Block {
-                expressions: vec![Expression::VariableDeclaration(Box::new(
+                expressions: vec![CSTExpression::VariableDeclaration(Box::new(
                     VariableDeclaration {
                         name: "hello".into(),
                         mutability: MutabilitySelector::Immutable(Const),

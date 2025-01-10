@@ -1,33 +1,33 @@
 use crate::parser::Rule;
 use pest_ast::FromPest;
 
-use super::{block::Block, expression::Expression};
+use super::{block::Block, expression::CSTExpression};
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::match_tree))]
 pub struct MatchTree {
-    pub match_expression: Expression,
+    pub match_expression: CSTExpression,
     pub match_arms: Vec<MatchTreeArm>,
 }
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::match_arm_subject))]
 pub enum MatchArmSubject {
-    Expression(Expression),
+    Expression(CSTExpression),
     MatchRange(MatchRange),
 }
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::match_range))]
 pub struct MatchRange {
-    pub range_start: Option<Box<Expression>>,
-    pub range_end: Option<Box<Expression>>,
+    pub range_start: Option<Box<CSTExpression>>,
+    pub range_end: Option<Box<CSTExpression>>,
 }
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::match_arm_body))]
 pub enum MatchBody {
-    Expression(Box<Expression>),
+    Expression(Box<CSTExpression>),
     Block(Box<Block>),
 }
 
@@ -66,7 +66,7 @@ mod tests {
         assert_eq!(
             ast,
             MatchTreeArm {
-                subject: MatchArmSubject::Expression(Expression::VariableAccess(Box::new(
+                subject: MatchArmSubject::Expression(CSTExpression::VariableAccess(Box::new(
                     VariableAccess {
                         pointer_semantics: vec![],
                         names: VariableAccessNames {
@@ -77,7 +77,7 @@ mod tests {
                     }
                 ))),
                 body: MatchBody::Block(Box::new(Block {
-                    expressions: vec![Expression::String(Box::new(StringValue {
+                    expressions: vec![CSTExpression::String(Box::new(StringValue {
                         value: "Hello, World!".into()
                     }))]
                 }))
@@ -93,7 +93,7 @@ mod tests {
 
         assert_eq!(
             ast,
-            MatchArmSubject::Expression(Expression::VariableAccess(Box::new(VariableAccess {
+            MatchArmSubject::Expression(CSTExpression::VariableAccess(Box::new(VariableAccess {
                 pointer_semantics: vec![],
                 names: VariableAccessNames {
                     names: vec![Ident {
@@ -110,10 +110,10 @@ mod tests {
         assert_eq!(
             ast,
             MatchArmSubject::MatchRange(MatchRange {
-                range_start: Some(Box::new(Expression::Number(Box::new(Number {
+                range_start: Some(Box::new(CSTExpression::Number(Box::new(Number {
                     value: "1".into()
                 })))),
-                range_end: Some(Box::new(Expression::Number(Box::new(Number {
+                range_end: Some(Box::new(CSTExpression::Number(Box::new(Number {
                     value: "10".into()
                 })))),
             })
@@ -134,7 +134,7 @@ mod tests {
         assert_eq!(
             ast,
             MatchTree {
-                match_expression: Expression::VariableAccess(Box::new(VariableAccess {
+                match_expression: CSTExpression::VariableAccess(Box::new(VariableAccess {
                     pointer_semantics: vec![],
                     names: VariableAccessNames {
                         names: vec![Ident {
@@ -144,35 +144,35 @@ mod tests {
                 })),
                 match_arms: vec![
                     MatchTreeArm {
-                        subject: MatchArmSubject::Expression(Expression::VariableAccess(Box::new(
-                            VariableAccess {
+                        subject: MatchArmSubject::Expression(CSTExpression::VariableAccess(
+                            Box::new(VariableAccess {
                                 pointer_semantics: vec![],
                                 names: VariableAccessNames {
                                     names: vec![Ident {
                                         value: "expr".into()
                                     }],
                                 },
-                            }
-                        ))),
-                        body: MatchBody::Expression(Box::new(Expression::String(Box::new(
+                            })
+                        )),
+                        body: MatchBody::Expression(Box::new(CSTExpression::String(Box::new(
                             StringValue {
                                 value: "Hello, World!".into()
                             }
                         ))))
                     },
                     MatchTreeArm {
-                        subject: MatchArmSubject::Expression(Expression::VariableAccess(Box::new(
-                            VariableAccess {
+                        subject: MatchArmSubject::Expression(CSTExpression::VariableAccess(
+                            Box::new(VariableAccess {
                                 pointer_semantics: vec![],
                                 names: VariableAccessNames {
                                     names: vec![Ident { value: "_".into() }],
                                 },
-                            }
-                        ))),
+                            })
+                        )),
                         body: MatchBody::Block(Box::new(Block {
-                            expressions: vec![Expression::FunctionReturnValue(Box::new(
+                            expressions: vec![CSTExpression::FunctionReturnValue(Box::new(
                                 FunctionReturnValue {
-                                    value: Box::new(Expression::String(Box::new(StringValue {
+                                    value: Box::new(CSTExpression::String(Box::new(StringValue {
                                         value: "Default value".into()
                                     })))
                                 }

@@ -1,11 +1,11 @@
-use super::expression::Expression;
+use super::expression::CSTExpression;
 use crate::parser::Rule;
 use pest_ast::FromPest;
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::export))]
 pub struct Export {
-    pub expression: Expression,
+    pub expression: CSTExpression,
 }
 
 #[cfg(test)]
@@ -29,7 +29,7 @@ mod tests {
         assert_eq!(
             ast,
             Export {
-                expression: Expression::VariableDeclaration(Box::new(VariableDeclaration {
+                expression: CSTExpression::VariableDeclaration(Box::new(VariableDeclaration {
                     mutability: MutabilitySelector::Immutable(Const),
                     name: "hello".into(),
                     type_annotation: None
