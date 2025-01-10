@@ -102,7 +102,7 @@ else_block  = { "else" ~ block }
 
 // Matches.
 match_tree        = { "match" ~ expression ~ "{" ~ match_arm+ ~ "}" }
-match_arm_subject = { expression | match_range }
+match_arm_subject = { match_range | expression }
 match_arm         = { match_arm_subject ~ ARROW ~ match_arm_body ~ ","? }
 match_arm_body    = { block | expression }
 match_range       = { expression? ~ ".." ~ expression? }

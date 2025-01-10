@@ -44,6 +44,7 @@ mod tests {
     use crate::{
         cst::{
             ident::Ident,
+            number_value::Number,
             string::StringValue,
             variable_access::{VariableAccess, VariableAccessNames},
         },
@@ -79,6 +80,81 @@ mod tests {
                         value: "Hello, World!".into()
                     }))]
                 }))
+            }
+        )
+    }
+
+    #[test]
+    fn match_arm_subjects() {
+        let expression_ident = "expr";
+        let mut pairs = ElpParser::parse(Rule::match_arm_subject, expression_ident).unwrap();
+        let ast = MatchArmSubject::from_pest(&mut pairs).unwrap();
+
+        assert_eq!(
+            ast,
+            MatchArmSubject::Expression(Expression::VariableAccess(Box::new(VariableAccess {
+                pointer_semantics: vec![],
+                names: VariableAccessNames {
+                    names: vec![Ident {
+                        value: "expr".into()
+                    }],
+                },
+            })))
+        );
+
+        let expression_range = "1..10";
+        let mut pairs = ElpParser::parse(Rule::match_arm_subject, expression_range).unwrap();
+        let ast = MatchArmSubject::from_pest(&mut pairs).unwrap();
+
+        assert_eq!(
+            ast,
+            MatchArmSubject::MatchRange(MatchRange {
+                range_start: Some(Box::new(Expression::Number(Box::new(Number {
+                    value: "1".into()
+                })))),
+                range_end: Some(Box::new(Expression::Number(Box::new(Number {
+                    value: "10".into()
+                })))),
+            })
+        )
+    }
+
+    #[test]
+    fn match_tree() {
+        let expression_str = "match expr {
+            expr -> \"Hello, World!\"
+        }";
+        let mut pairs = ElpParser::parse(Rule::match_tree, expression_str).unwrap();
+        let ast = MatchTree::from_pest(&mut pairs).unwrap();
+
+        assert_eq!(
+            ast,
+            MatchTree {
+                match_expression: Expression::VariableAccess(Box::new(VariableAccess {
+                    pointer_semantics: vec![],
+                    names: VariableAccessNames {
+                        names: vec![Ident {
+                            value: "expr".into()
+                        }],
+                    }
+                })),
+                match_arms: vec![MatchTreeArm {
+                    subject: MatchArmSubject::Expression(Expression::VariableAccess(Box::new(
+                        VariableAccess {
+                            pointer_semantics: vec![],
+                            names: VariableAccessNames {
+                                names: vec![Ident {
+                                    value: "expr".into()
+                                }],
+                            },
+                        }
+                    ))),
+                    body: MatchBody::Expression(Box::new(Expression::String(Box::new(
+                        StringValue {
+                            value: "Hello, World!".into()
+                        }
+                    ))))
+                }]
             }
         )
     }
