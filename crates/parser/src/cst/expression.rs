@@ -11,6 +11,7 @@ use super::{
     r#enum::Enum,
     r#match::MatchTree,
     string::StringValue,
+    unary::UnaryOperator,
     value_assignment::ValueAssignment,
     variable_access::{PointerSemantics, VariableAccess},
     variable_assignment::VariableAssignment,
@@ -41,4 +42,5 @@ pub enum CSTExpression {
     VariableAccess(Box<VariableAccess>),
     VariableAssignment(Box<VariableAssignment>),
     VariableDeclaration(Box<VariableDeclaration>),
+    Unary(Box<UnaryOperator>),
 }

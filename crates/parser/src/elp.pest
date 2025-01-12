@@ -132,14 +132,16 @@ number = @{
 // Lexer tokens
 ARROW      = _{ "->" }
 IDENT      = @{ !number ~ (ASCII_ALPHANUMERIC+ | "_")+ }
-REFERENCE  = @{ "&" }
-POINTER    = @{ "*" }
+REFERENCE  =  { "&" }
+POINTER    =  { "*" }
 COMMENT    = _{ "//" ~ (!"\n" ~ ANY)* }
 WHITESPACE = _{ " " | "\t" | "\r" | "\n" }
 VAR        =  { "var" }
 CONST      =  { "const" }
-PUBLIC     = @{ "public" }
-PRIVATE    = @{ "private" }
+PUBLIC     =  { "public" }
+PRIVATE    =  { "private" }
+
+// Everything below here is a mess and I'm in various states of confusion about what my head was doing but I'll come back round to this nonsense.
 
 // unary operators.
 UNARY_ADD      = { "+" }
@@ -147,12 +149,14 @@ UNARY_SUB      = { "-" }
 UNARY_MULT     = { "*" }
 UNARY_DIV      = { "/" }
 UNARY_POW      = { "^" }
+UNARY_MOD      = { "%" }
 UNARY_OPERATOR = {
     UNARY_ADD
   | UNARY_SUB
   | UNARY_MULT
   | UNARY_DIV
   | UNARY_POW
+  | UNARY_MOD
 }
 
 // operations.
