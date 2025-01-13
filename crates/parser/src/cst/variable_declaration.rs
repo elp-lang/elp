@@ -17,7 +17,11 @@ pub struct VariableDeclaration {
 mod tests {
     use super::*;
     use crate::{
-        cst::{ident::Ident, MutabilitySelector, Var},
+        cst::{
+            elp_type::{ElpTypeParameter, ElpTypeValue},
+            ident::Ident,
+            MutabilitySelector, Var,
+        },
         parser::ElpParser,
     };
     use from_pest::FromPest;
@@ -37,10 +41,13 @@ mod tests {
                 name: "hello".to_string(),
                 type_annotation: Some(Box::new(ElpType {
                     mutability: None,
-                    name: Ident {
-                        value: "String".into()
-                    },
-                    generics: vec![],
+                    pointer_semantics: None,
+                    value: ElpTypeValue::Parameter(ElpTypeParameter {
+                        name: Ident {
+                            value: "String".into()
+                        },
+                        generics: vec![],
+                    })
                 })),
             }
         );

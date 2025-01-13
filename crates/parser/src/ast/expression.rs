@@ -4,6 +4,7 @@ use crate::cst::expression::CSTExpression;
 
 use super::{block::Block, traits::FromCST};
 
+#[derive(Debug, PartialEq, Eq)]
 pub enum ASTExpression {
     Block(Box<Block>),
     //    ElpType(Box<ElpType>),
@@ -26,28 +27,31 @@ pub enum ASTExpression {
     //    VariableDeclaration(Box<VariableDeclaration>),
 }
 
-impl FromCST for ASTExpression {
+impl FromCST<CSTExpression> for ASTExpression {
     fn from_cst(cst: &CSTExpression) -> Self {
         match cst {
             CSTExpression::Block(block) => ASTExpression::Block(Box::new(Block::from_cst(block))),
-            CSTExpression::ElpType(elp_type) => todo!(),
-            CSTExpression::Enum(_) => todo!(),
-            CSTExpression::Export(export) => todo!(),
-            CSTExpression::FunctionDef(function_def) => todo!(),
-            CSTExpression::FunctionHeaderDef(function_header_def) => todo!(),
-            CSTExpression::FunctionReturnValue(function_return_value) => todo!(),
-            CSTExpression::Ident(ident) => todo!(),
-            CSTExpression::Import(import) => todo!(),
-            CSTExpression::Interface(interface) => todo!(),
-            CSTExpression::Match(match_tree) => todo!(),
-            CSTExpression::Number(number) => todo!(),
-            CSTExpression::Object(object) => todo!(),
-            CSTExpression::PointerSemantics(pointer_semantics) => todo!(),
-            CSTExpression::String(string_value) => todo!(),
-            CSTExpression::ValueAssignment(value_assignment) => todo!(),
-            CSTExpression::VariableAccess(variable_access) => todo!(),
-            CSTExpression::VariableAssignment(variable_assignment) => todo!(),
-            CSTExpression::VariableDeclaration(variable_declaration) => todo!(),
+            _ => panic!("Invalid CST expression: {:#?}", cst),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ast_expression_from_cst() {
+        let cst_expression = CSTExpression::Block(Box::new(crate::cst::block::Block {
+            expressions: vec![],
+        }));
+        let ast_expression = ASTExpression::from_cst(&cst_expression);
+
+        assert_eq!(
+            ast_expression,
+            ASTExpression::Block(Box::new(Block {
+                expressions: vec![]
+            }))
+        )
     }
 }

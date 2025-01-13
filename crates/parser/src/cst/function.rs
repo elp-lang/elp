@@ -1,5 +1,5 @@
 use super::elp_type::ElpTypeGeneric;
-use super::variable_access::ContextualVariableAccess;
+use super::variable_access::{ContextualVariableAccess, PointerSemantics};
 use super::{
     block::Block, elp_type::ElpType, expression::CSTExpression, variable_access::VariableAccess,
 };
@@ -10,6 +10,7 @@ use pest_ast::FromPest;
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::function_argument))]
 pub struct FunctionArgument {
+    pub pointer_semantics: Option<PointerSemantics>,
     pub name: Ident,
     pub type_annotation: Option<ElpType>,
 }
@@ -45,6 +46,7 @@ pub struct FunctionDef {
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::fn_header_def))]
 pub struct FunctionHeaderDef {
+    pub pointer_semantics: Option<PointerSemantics>,
     pub name: VariableAccess,
     pub generics: Option<ElpTypeGeneric>,
     pub arguments: FunctionArguments,
@@ -70,7 +72,11 @@ pub struct FunctionCall {
 mod tests {
     use super::*;
     use crate::{
-        cst::{string::StringValue, variable_access::VariableAccessNames},
+        cst::{
+            elp_type::{ElpTypeParameter, ElpTypeValue},
+            string::StringValue,
+            variable_access::VariableAccessNames,
+        },
         parser::ElpParser,
     };
     use from_pest::FromPest;
@@ -91,24 +97,32 @@ mod tests {
                         name: Ident {
                             value: "name".into()
                         },
+                        pointer_semantics: None,
                         type_annotation: Some(ElpType {
                             mutability: None,
-                            name: Ident {
-                                value: "String".into()
-                            },
-                            generics: vec![],
+                            pointer_semantics: None,
+                            value: ElpTypeValue::Parameter(ElpTypeParameter {
+                                name: Ident {
+                                    value: "String".into()
+                                },
+                                generics: vec![],
+                            })
                         }),
                     },
                     FunctionArgument {
                         name: Ident {
                             value: "hello".into()
                         },
+                        pointer_semantics: None,
                         type_annotation: Some(ElpType {
                             mutability: None,
-                            name: Ident {
-                                value: "String".into()
-                            },
-                            generics: vec![],
+                            pointer_semantics: None,
+                            value: ElpTypeValue::Parameter(ElpTypeParameter {
+                                name: Ident {
+                                    value: "String".into()
+                                },
+                                generics: vec![],
+                            })
                         }),
                     }
                 ]
@@ -130,30 +144,39 @@ mod tests {
                         name: Ident {
                             value: "self".into()
                         },
+                        pointer_semantics: None,
                         type_annotation: None,
                     },
                     FunctionArgument {
                         name: Ident {
                             value: "name".into()
                         },
+                        pointer_semantics: None,
                         type_annotation: Some(ElpType {
                             mutability: None,
-                            name: Ident {
-                                value: "String".into()
-                            },
-                            generics: vec![],
+                            pointer_semantics: None,
+                            value: ElpTypeValue::Parameter(ElpTypeParameter {
+                                name: Ident {
+                                    value: "String".into()
+                                },
+                                generics: vec![],
+                            })
                         }),
                     },
                     FunctionArgument {
                         name: Ident {
                             value: "hello".into()
                         },
+                        pointer_semantics: None,
                         type_annotation: Some(ElpType {
                             mutability: None,
-                            name: Ident {
-                                value: "String".into()
-                            },
-                            generics: vec![],
+                            pointer_semantics: None,
+                            value: ElpTypeValue::Parameter(ElpTypeParameter {
+                                name: Ident {
+                                    value: "String".into()
+                                },
+                                generics: vec![],
+                            })
                         }),
                     }
                 ]
@@ -172,10 +195,13 @@ mod tests {
             FunctionReturnType {
                 type_annotations: vec![ElpType {
                     mutability: None,
-                    name: Ident {
-                        value: "String".into()
-                    },
-                    generics: vec![],
+                    pointer_semantics: None,
+                    value: ElpTypeValue::Parameter(ElpTypeParameter {
+                        name: Ident {
+                            value: "String".into()
+                        },
+                        generics: vec![],
+                    })
                 }]
             }
         );
@@ -225,22 +251,29 @@ mod tests {
                         name: Ident {
                             value: "name".into()
                         },
+                        pointer_semantics: None,
                         type_annotation: Some(ElpType {
                             mutability: None,
-                            name: Ident {
-                                value: "String".into()
-                            },
-                            generics: vec![],
+                            pointer_semantics: None,
+                            value: ElpTypeValue::Parameter(ElpTypeParameter {
+                                name: Ident {
+                                    value: "String".into()
+                                },
+                                generics: vec![],
+                            })
                         }),
                     }],
                 }),
                 return_type: Some(FunctionReturnType {
                     type_annotations: vec![ElpType {
                         mutability: None,
-                        name: Ident {
-                            value: "String".into()
-                        },
-                        generics: vec![],
+                        pointer_semantics: None,
+                        value: ElpTypeValue::Parameter(ElpTypeParameter {
+                            name: Ident {
+                                value: "String".into()
+                            },
+                            generics: vec![],
+                        })
                     }],
                 }),
                 block: Box::new(Block {
@@ -265,6 +298,7 @@ mod tests {
         assert_eq!(
             ast,
             FunctionHeaderDef {
+                pointer_semantics: None,
                 name: VariableAccess {
                     names: VariableAccessNames {
                         names: vec![Ident {
@@ -279,22 +313,29 @@ mod tests {
                         name: Ident {
                             value: "name".into()
                         },
+                        pointer_semantics: None,
                         type_annotation: Some(ElpType {
                             mutability: None,
-                            name: Ident {
-                                value: "String".into()
-                            },
-                            generics: vec![],
+                            pointer_semantics: None,
+                            value: ElpTypeValue::Parameter(ElpTypeParameter {
+                                name: Ident {
+                                    value: "String".into()
+                                },
+                                generics: vec![],
+                            })
                         }),
                     }],
                 },
                 return_type: FunctionReturnType {
                     type_annotations: vec![ElpType {
                         mutability: None,
-                        name: Ident {
-                            value: "String".into()
-                        },
-                        generics: vec![],
+                        pointer_semantics: None,
+                        value: ElpTypeValue::Parameter(ElpTypeParameter {
+                            name: Ident {
+                                value: "String".into()
+                            },
+                            generics: vec![],
+                        })
                     }],
                 },
             }

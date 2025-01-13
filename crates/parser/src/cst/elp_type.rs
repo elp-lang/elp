@@ -1,13 +1,33 @@
-use super::{ident::Ident, MutabilitySelector};
+use super::{ident::Ident, variable_access::PointerSemantics, MutabilitySelector};
 use crate::parser::Rule;
 use pest_ast::FromPest;
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::elp_type))]
 pub struct ElpType {
+    pub pointer_semantics: Option<PointerSemantics>,
     pub mutability: Option<MutabilitySelector>,
+    pub value: ElpTypeValue,
+}
+
+#[derive(Debug, FromPest, PartialEq, Eq)]
+#[pest_ast(rule(Rule::elp_type_parameter))]
+pub struct ElpTypeParameter {
     pub name: Ident,
     pub generics: Vec<ElpTypeGeneric>,
+}
+
+#[derive(Debug, FromPest, PartialEq, Eq)]
+#[pest_ast(rule(Rule::elp_type_array))]
+pub struct ElpTypeArray {
+    pub of_elp_type: Vec<ElpTypeParameter>,
+}
+
+#[derive(Debug, FromPest, PartialEq, Eq)]
+#[pest_ast(rule(Rule::elp_type_value))]
+pub enum ElpTypeValue {
+    Array(ElpTypeArray),
+    Parameter(ElpTypeParameter),
 }
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
@@ -47,10 +67,13 @@ mod tests {
             ast,
             ElpType {
                 mutability: None,
-                name: Ident {
-                    value: "String".into()
-                },
-                generics: vec![]
+                pointer_semantics: None,
+                value: ElpTypeValue::Parameter(ElpTypeParameter {
+                    name: Ident {
+                        value: "String".into()
+                    },
+                    generics: vec![]
+                })
             }
         )
     }
@@ -65,21 +88,27 @@ mod tests {
             ast,
             ElpType {
                 mutability: None,
-                name: Ident {
-                    value: "Into".into()
-                },
-                generics: vec![ElpTypeGeneric {
-                    params: vec![ElpTypeGenericParam {
-                        elp_type: ElpType {
-                            mutability: None,
-                            name: Ident {
-                                value: "String".into()
+                pointer_semantics: None,
+                value: ElpTypeValue::Parameter(ElpTypeParameter {
+                    name: Ident {
+                        value: "Into".into()
+                    },
+                    generics: vec![ElpTypeGeneric {
+                        params: vec![ElpTypeGenericParam {
+                            elp_type: ElpType {
+                                mutability: None,
+                                pointer_semantics: None,
+                                value: ElpTypeValue::Parameter(ElpTypeParameter {
+                                    name: Ident {
+                                        value: "String".into()
+                                    },
+                                    generics: vec![]
+                                })
                             },
-                            generics: vec![]
-                        },
-                        type_constraint: None
+                            type_constraint: None
+                        }]
                     }]
-                }]
+                })
             }
         )
     }
@@ -96,18 +125,24 @@ mod tests {
                 params: vec![ElpTypeGenericParam {
                     elp_type: ElpType {
                         mutability: None,
-                        name: Ident {
-                            value: "String".into()
-                        },
-                        generics: vec![]
+                        pointer_semantics: None,
+                        value: ElpTypeValue::Parameter(ElpTypeParameter {
+                            name: Ident {
+                                value: "String".into()
+                            },
+                            generics: vec![]
+                        })
                     },
                     type_constraint: Some(ElpTypeGenericConstraint {
                         constraints: vec![ElpType {
                             mutability: None,
-                            name: Ident {
-                                value: "Copy".into()
-                            },
-                            generics: vec![]
+                            pointer_semantics: None,
+                            value: ElpTypeValue::Parameter(ElpTypeParameter {
+                                name: Ident {
+                                    value: "Copy".into()
+                                },
+                                generics: vec![]
+                            })
                         }]
                     })
                 }]
@@ -127,26 +162,35 @@ mod tests {
                 params: vec![ElpTypeGenericParam {
                     elp_type: ElpType {
                         mutability: None,
-                        name: Ident {
-                            value: "String".into()
-                        },
-                        generics: vec![]
+                        pointer_semantics: None,
+                        value: ElpTypeValue::Parameter(ElpTypeParameter {
+                            name: Ident {
+                                value: "String".into()
+                            },
+                            generics: vec![]
+                        })
                     },
                     type_constraint: Some(ElpTypeGenericConstraint {
                         constraints: vec![
                             ElpType {
                                 mutability: None,
-                                name: Ident {
-                                    value: "Copy".into()
-                                },
-                                generics: vec![]
+                                pointer_semantics: None,
+                                value: ElpTypeValue::Parameter(ElpTypeParameter {
+                                    name: Ident {
+                                        value: "Copy".into()
+                                    },
+                                    generics: vec![]
+                                })
                             },
                             ElpType {
                                 mutability: None,
-                                name: Ident {
-                                    value: "Clone".into()
-                                },
-                                generics: vec![]
+                                pointer_semantics: None,
+                                value: ElpTypeValue::Parameter(ElpTypeParameter {
+                                    name: Ident {
+                                        value: "Clone".into()
+                                    },
+                                    generics: vec![]
+                                })
                             }
                         ]
                     })
@@ -168,36 +212,48 @@ mod tests {
                     ElpTypeGenericParam {
                         elp_type: ElpType {
                             mutability: None,
-                            name: Ident {
-                                value: "Number".into()
-                            },
-                            generics: vec![]
+                            pointer_semantics: None,
+                            value: ElpTypeValue::Parameter(ElpTypeParameter {
+                                name: Ident {
+                                    value: "Number".into()
+                                },
+                                generics: vec![]
+                            })
                         },
                         type_constraint: None
                     },
                     ElpTypeGenericParam {
                         elp_type: ElpType {
                             mutability: None,
-                            name: Ident {
-                                value: "String".into()
-                            },
-                            generics: vec![]
+                            pointer_semantics: None,
+                            value: ElpTypeValue::Parameter(ElpTypeParameter {
+                                name: Ident {
+                                    value: "String".into()
+                                },
+                                generics: vec![]
+                            })
                         },
                         type_constraint: Some(ElpTypeGenericConstraint {
                             constraints: vec![
                                 ElpType {
                                     mutability: None,
-                                    name: Ident {
-                                        value: "Copy".into()
-                                    },
-                                    generics: vec![]
+                                    pointer_semantics: None,
+                                    value: ElpTypeValue::Parameter(ElpTypeParameter {
+                                        name: Ident {
+                                            value: "Copy".into()
+                                        },
+                                        generics: vec![]
+                                    })
                                 },
                                 ElpType {
                                     mutability: None,
-                                    name: Ident {
-                                        value: "Clone".into()
-                                    },
-                                    generics: vec![]
+                                    pointer_semantics: None,
+                                    value: ElpTypeValue::Parameter(ElpTypeParameter {
+                                        name: Ident {
+                                            value: "Clone".into()
+                                        },
+                                        generics: vec![]
+                                    })
                                 }
                             ]
                         })
@@ -220,44 +276,59 @@ mod tests {
                     ElpTypeGenericParam {
                         elp_type: ElpType {
                             mutability: None,
-                            name: Ident {
-                                value: "Number".into()
-                            },
-                            generics: vec![]
+                            pointer_semantics: None,
+                            value: ElpTypeValue::Parameter(ElpTypeParameter {
+                                name: Ident {
+                                    value: "Number".into()
+                                },
+                                generics: vec![]
+                            })
                         },
                         type_constraint: Some(ElpTypeGenericConstraint {
                             constraints: vec![ElpType {
                                 mutability: None,
-                                name: Ident {
-                                    value: "Copy".into()
-                                },
-                                generics: vec![]
+                                pointer_semantics: None,
+                                value: ElpTypeValue::Parameter(ElpTypeParameter {
+                                    name: Ident {
+                                        value: "Copy".into()
+                                    },
+                                    generics: vec![]
+                                })
                             }]
                         })
                     },
                     ElpTypeGenericParam {
                         elp_type: ElpType {
                             mutability: None,
-                            name: Ident {
-                                value: "String".into()
-                            },
-                            generics: vec![]
+                            pointer_semantics: None,
+                            value: ElpTypeValue::Parameter(ElpTypeParameter {
+                                name: Ident {
+                                    value: "String".into()
+                                },
+                                generics: vec![]
+                            })
                         },
                         type_constraint: Some(ElpTypeGenericConstraint {
                             constraints: vec![
                                 ElpType {
                                     mutability: None,
-                                    name: Ident {
-                                        value: "Copy".into()
-                                    },
-                                    generics: vec![]
+                                    pointer_semantics: None,
+                                    value: ElpTypeValue::Parameter(ElpTypeParameter {
+                                        name: Ident {
+                                            value: "Copy".into()
+                                        },
+                                        generics: vec![]
+                                    })
                                 },
                                 ElpType {
                                     mutability: None,
-                                    name: Ident {
-                                        value: "Clone".into()
-                                    },
-                                    generics: vec![]
+                                    pointer_semantics: None,
+                                    value: ElpTypeValue::Parameter(ElpTypeParameter {
+                                        name: Ident {
+                                            value: "Clone".into()
+                                        },
+                                        generics: vec![]
+                                    })
                                 }
                             ]
                         })

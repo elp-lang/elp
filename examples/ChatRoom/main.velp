@@ -3,34 +3,29 @@ import { Form, Label, Input, Button } from "elp/app/elements"
 import { Message, User } from "$types/chat"
 import { Message as MessageView } from "$components/message"
 
-export object ChatAppState is Reactive {
-	.name: string
-	.messages: [Message]
-	.members: [User]
-	.loggedIn: bool = false
+@App
+export object ChatApp {
+	.name     string,
+	.messages [Message],
+	.members  [User],
+	.loggedIn bool = false,
 }
 
-export fn Chat(name *string) -> App {
-    App {
-        Window {
-            if .name not Empty or not .loggedIn {
-                ForEach(.messages) { message in
-                    // We borrow the message to pass down which extends it's lifetime
-                    // and allows for mutation and avoids copying.
-                    MessageView(message = &message)
-                }
-            } else {
-                Form(preventDefault, onSubmit={fn { .loggedIn = true }}) {
-                    Label("Enter your display name") {
-                        Input(name="display-name", type="text", value={.name})
-                        Button {
-                            Text("Log in")
-                        }
-                    }
-                }
-            }
-        }
-    }
+export fn ChatApp.render(&self) -> App {
+	if .name not Empty or not .loggedIn {
+		for message in .messages {
+			// We borrow the message to pass down which extends it's lifetime
+			// and allows for mutation and avoids copying.
+			MessageView(message = &message)
+		}
+	} else {
+		Form(preventDefault, onSubmit={fn { self.loggedIn = true }}) {
+			Label("Enter your display name") {
+				Input(name = "display-name", type = "text", value = .name)
+				Button {
+					Text("Log in")
+				}
+			}
+		}
+	}
 }
-
-// vim: ft=kotlin

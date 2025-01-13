@@ -6,10 +6,13 @@ expression = {
   | block
   | string
   | macro
+  | precomp
   | export
   | enum
   | array
+  | for_loop
   | if_tree
+  | logic_conditionals
   | interface_def
   | object_def
   | component_def
@@ -49,18 +52,19 @@ variable_access_names      = { IDENT ~ ("." ~ IDENT)* }
 pointer_semantics          = { POINTER | REFERENCE }
 contextual_variable_access = { "." ~ IDENT }
 
-// Bitwise
-bitwise_operation = { (variable_access | number) ~ BITWISE_OPERAND ~ (variable_access | number) }
-
 // Programming type info.
 mutability_selector         = { VAR | CONST }
 visibility_selector         = { PUBLIC | PRIVATE }
-elp_type                    = { mutability_selector? ~ IDENT ~ elp_type_generic? }
+elp_type_parameter          = { IDENT ~ elp_type_generic? }
+elp_type_array              = { "[" ~ elp_type_parameter ~ "]" }
+elp_type_value              = { elp_type_parameter | elp_type_array }
+elp_type                    = { pointer_semantics? ~ mutability_selector? ~ elp_type_value }
 elp_type_generic            = { "<" ~ elp_type_generic_param ~ ("," ~ elp_type_generic_param)* ~ ">" }
 elp_type_generic_param      = { elp_type ~ elp_type_generic_constraint? }
 elp_type_generic_constraint = { ":" ~ elp_type ~ ("+" ~ elp_type)* }
-enum                        = { "enum" ~ IDENT ~ object_implements? ~ "{" ~ (enum_member ~ ("," ~ enum_member)* ~ ","?)? ~ "}" }
-enum_member                 = { "." ~ IDENT ~ ("(" ~ elp_type ~ ("," ~ elp_type)* ~ ")")? }
+
+enum        = { "enum" ~ IDENT ~ object_implements? ~ "{" ~ (enum_member ~ ("," ~ enum_member)* ~ ","?)? ~ "}" }
+enum_member = { "." ~ IDENT ~ ("(" ~ elp_type ~ ("," ~ elp_type)* ~ ")")? }
 
 interface_def              = { "interface" ~ IDENT ~ elp_type_generic? ~ "{" ~ (interface_member ~ ("," ~ interface_member)*) ~ "}" }
 interface_member_key_value = { visibility_selector? ~ "." ~ IDENT ~ elp_type }
@@ -71,18 +75,18 @@ external_block  = { "external" ~ "{" ~ (fn_header_def | object_def)* ~ "}" }
 external_symbol = { "external" ~ (fn_header_def | object_def) }
 
 // Functions.
-fn_header_def           = { pointer_semantics? ~ "fn" ~ variable_access? ~ elp_type_generic? ~ function_arguments ~ function_return_type }
+fn_header_def           = { pointer_semantics? ~ "fn" ~ variable_access ~ elp_type_generic? ~ function_arguments ~ function_return_type }
 function_def            = { "fn" ~ variable_access ~ elp_type_generic? ~ function_arguments? ~ function_return_type? ~ block }
 function_return_type    = { ARROW ~ elp_type ~ ("," ~ elp_type)* }
-function_arguments      = { "(" ~ (function_argument ~ ("," ~ function_argument)*)? ~ ")" }
-function_argument       = { IDENT ~ elp_type? }
+function_arguments      = { "(" ~ (function_argument ~ ("," ~ function_argument)*)? ~ ","? ~ ")" }
+function_argument       = { pointer_semantics? ~ IDENT ~ elp_type? }
 function_component_call = { function_call ~ block }
-function_call           = { function_call_name ~ elp_type_generic? ~ "(" ~ (expression ~ ("," ~ expression)*)? ~ ")" }
+function_call           = { function_call_name ~ elp_type_generic? ~ "(" ~ (expression ~ ("," ~ expression)*)? ~ ","? ~ ")" }
 function_call_name      = { (variable_access | contextual_variable_access) }
 function_return_value   = { "return" ~ expression }
 
 // Objects.
-object_def               = { "object" ~ IDENT ~ object_implements? ~ "{" ~ (object_member ~ ("," ~ object_member)* ~ ","?)? ~ "}" }
+object_def               = { "object" ~ IDENT ~ elp_type_generic? ~ object_implements? ~ "{" ~ (object_member ~ ("," ~ object_member)* ~ ","?)? ~ "}" }
 object_implements        = { "implements" ~ elp_type ~ ("," ~ elp_type)* }
 object_member            = { visibility_selector? ~ mutability_selector? ~ "." ~ IDENT ~ elp_type? ~ object_key_default_value? ~ object_key_tags? }
 object_key_default_value = { "=" ~ expression }
@@ -97,9 +101,10 @@ object_value_spread         = { "..." ~ expression }
 component_def = { "component" ~ (IDENT ~ ("." ~ IDENT)*) ~ elp_type_generic? ~ function_arguments? ~ function_return_type? ~ block }
 
 // If, elseif, else
-if_tree     = { "if" ~ expression ~ block ~ elseif_tree* ~ else_block? }
-elseif_tree = { "elseif" ~ expression ~ block }
-else_block  = { "else" ~ block }
+if_tree            = { "if" ~ expression ~ block ~ elseif_tree* ~ else_block? }
+elseif_tree        = { "elseif" ~ expression ~ block }
+else_block         = { "else" ~ block }
+logic_conditionals = { "or" | "not" | "is" }
 
 // Matches.
 match_tree        = { "match" ~ expression ~ "{" ~ match_arm+ ~ "}" }
@@ -111,11 +116,15 @@ match_range       = { expression? ~ ".." ~ expression? }
 // Arrays.
 array = { "[" ~ expression ~ ("," ~ expression)* ~ ","? ~ "]" }
 
+// Loops
+for_loop = { "for" ~ expression ~ "in" ~ expression ~ block }
+
 // Groups of expressions.
 block = { "{" ~ expression* ~ "}" }
 
 // Meta programming tooling.
-macro = { "@" ~ IDENT ~ ("(" ~ elp_type ~ ")")? }
+macro   = { "@" ~ IDENT ~ ("(" ~ elp_type ~ ")")? }
+precomp = { "#" ~ IDENT ~ ("(" ~ elp_type ~ ")")? }
 
 // helpers.
 string = ${ "\"" ~ inner ~ "\"" }
@@ -142,6 +151,9 @@ PUBLIC     =  { "public" }
 PRIVATE    =  { "private" }
 
 // Everything below here is a mess and I'm in various states of confusion about what my head was doing but I'll come back round to this nonsense.
+
+// Bitwise
+bitwise_operation = { (variable_access | number) ~ BITWISE_OPERAND ~ (variable_access | number) }
 
 // unary operators.
 UNARY_ADD      = { "+" }

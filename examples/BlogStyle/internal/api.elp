@@ -22,9 +22,9 @@ export enum ApiErrorType {
 // objects can define their default values and types are inferred
 // or just define their type. Note the assignment and type declarations.
 // Also note the discrete, Go like tagged fields, these optional tokens enable safe metaprogramming and can be of any value.They are a build time feature similar to a @macro
-@mergeable(Content)
+@mergeable
 export object Content implements FromTo<JSON> {
-    .id     = UUID.v4() `json: "id"`,
+    public .id     = UUID.v4() `json: "id"`,
 
     .title  string      `json: "title"`,
     .body   string      `json: "body"`,
@@ -49,8 +49,10 @@ export object ApiError implements Error, From<HttpError> {
 }
 
 // Note this function implementation doesn't take a self making it a static method.
-fn ApiError.new(type ApiErrorType) {
-	.type = type
+fn ApiError.new(type ApiErrorType) -> Self {
+	return Self {
+		.type = type
+	}
 }
 
 // Define methods on the object. self here denotes that it is an instance method,
@@ -62,9 +64,9 @@ fn ApiError.toString(self) -> String {
 // This method is a static method as it doesn't take a self parameter.
 fn ApiError.from(err HttpError) -> ApiError {
 	return match err.responseCode {
-		400..499 -> ApiError.new(.USER(err.toString())),
-		500..599 -> ApiError.new(.SERVER(err.toString())),
-		.. -> ApiError.new(.UNKNOWN),
+		400..499 -> .new(.USER(err.toString())),
+		500..599 -> .new(.SERVER(err.toString())),
+		.. -> .new(.UNKNOWN),
 	}
 }
 
@@ -78,15 +80,15 @@ export fn getBlogPost(id string) -> Either<Content, ApiError> {
 }
 
 export fn createBlogPost(content string) -> Either<Content, ApiError> {
-	const body = Http.body.new()
-	const content = Content.new()
+	const body HttpBody = .new()
+	const content Content = .new()
 
 	content.called += 1
 
     return match Http.post<Content, ApiError>("https://jsonplaceholder.typicode.com/posts/", content) {
 		Error(err) -> ApiError.from(err),
 		Response(postJSON) -> {
-			const created = Content.fromJSON(postJSON)
+			const created Content = .fromJSON(postJSON)
 
 			// The mergeable macro and associated type tells us that we can spread that type safely into a new one.
 			return Content {

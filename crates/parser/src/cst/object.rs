@@ -47,7 +47,7 @@ mod tests {
     use super::*;
     use crate::{
         cst::{
-            elp_type::{ElpTypeGeneric, ElpTypeGenericParam},
+            elp_type::{ElpTypeGeneric, ElpTypeGenericParam, ElpTypeParameter, ElpTypeValue},
             number_value::Number,
             PrivateVisibility, PublicVisibility,
         },
@@ -69,10 +69,13 @@ mod tests {
             ObjectImplements {
                 types: vec![ElpType {
                     mutability: None,
-                    name: Ident {
-                        value: "String".into()
-                    },
-                    generics: vec![],
+                    pointer_semantics: None,
+                    value: ElpTypeValue::Parameter(ElpTypeParameter {
+                        name: Ident {
+                            value: "String".into()
+                        },
+                        generics: vec![],
+                    })
                 }]
             }
         );
@@ -88,35 +91,47 @@ mod tests {
                 types: vec![
                     ElpType {
                         mutability: None,
-                        name: Ident {
-                            value: "String".into()
-                        },
-                        generics: vec![],
+                        pointer_semantics: None,
+                        value: ElpTypeValue::Parameter(ElpTypeParameter {
+                            name: Ident {
+                                value: "String".into()
+                            },
+                            generics: vec![],
+                        })
                     },
                     ElpType {
                         mutability: None,
-                        name: Ident {
-                            value: "Number".into()
-                        },
-                        generics: vec![],
+                        pointer_semantics: None,
+                        value: ElpTypeValue::Parameter(ElpTypeParameter {
+                            name: Ident {
+                                value: "Number".into()
+                            },
+                            generics: vec![],
+                        })
                     },
                     ElpType {
                         mutability: None,
-                        name: Ident {
-                            value: "Into".into()
-                        },
-                        generics: vec![ElpTypeGeneric {
-                            params: vec![ElpTypeGenericParam {
-                                elp_type: ElpType {
-                                    mutability: None,
-                                    name: Ident {
-                                        value: "JSON".into()
+                        pointer_semantics: None,
+                        value: ElpTypeValue::Parameter(ElpTypeParameter {
+                            name: Ident {
+                                value: "Into".into()
+                            },
+                            generics: vec![ElpTypeGeneric {
+                                params: vec![ElpTypeGenericParam {
+                                    elp_type: ElpType {
+                                        mutability: None,
+                                        pointer_semantics: None,
+                                        value: ElpTypeValue::Parameter(ElpTypeParameter {
+                                            name: Ident {
+                                                value: "JSON".into()
+                                            },
+                                            generics: vec![]
+                                        })
                                     },
-                                    generics: vec![]
-                                },
-                                type_constraint: None
+                                    type_constraint: None
+                                }]
                             }]
-                        }]
+                        })
                     }
                 ]
             }
@@ -177,10 +192,13 @@ mod tests {
                 },
                 type_annotation: Some(ElpType {
                     mutability: None,
-                    name: Ident {
-                        value: "String".into()
-                    },
-                    generics: vec![]
+                    pointer_semantics: None,
+                    value: ElpTypeValue::Parameter(ElpTypeParameter {
+                        name: Ident {
+                            value: "String".into()
+                        },
+                        generics: vec![]
+                    })
                 }),
                 default_value: None,
                 tags: vec![]
@@ -203,10 +221,13 @@ mod tests {
                 },
                 type_annotation: Some(ElpType {
                     mutability: None,
-                    name: Ident {
-                        value: "String".into()
-                    },
-                    generics: vec![]
+                    pointer_semantics: None,
+                    value: ElpTypeValue::Parameter(ElpTypeParameter {
+                        name: Ident {
+                            value: "String".into()
+                        },
+                        generics: vec![]
+                    })
                 }),
                 default_value: None,
                 tags: vec![]
@@ -229,10 +250,13 @@ mod tests {
                 },
                 type_annotation: Some(ElpType {
                     mutability: None,
-                    name: Ident {
-                        value: "String".into()
-                    },
-                    generics: vec![]
+                    pointer_semantics: None,
+                    value: ElpTypeValue::Parameter(ElpTypeParameter {
+                        name: Ident {
+                            value: "String".into()
+                        },
+                        generics: vec![]
+                    })
                 }),
                 default_value: None,
                 tags: vec![]
@@ -255,10 +279,13 @@ mod tests {
                 },
                 type_annotation: Some(ElpType {
                     mutability: None,
-                    name: Ident {
-                        value: "String".into()
-                    },
-                    generics: vec![]
+                    pointer_semantics: None,
+                    value: ElpTypeValue::Parameter(ElpTypeParameter {
+                        name: Ident {
+                            value: "String".into()
+                        },
+                        generics: vec![]
+                    })
                 }),
                 default_value: None,
                 tags: vec![ObjectMemberTags {
@@ -288,10 +315,13 @@ mod tests {
                 },
                 type_annotation: Some(ElpType {
                     mutability: None,
-                    name: Ident {
-                        value: "String".into()
-                    },
-                    generics: vec![]
+                    pointer_semantics: None,
+                    value: ElpTypeValue::Parameter(ElpTypeParameter {
+                        name: Ident {
+                            value: "String".into()
+                        },
+                        generics: vec![]
+                    })
                 }),
                 default_value: Some(ObjectMemberDefaultValue {
                     value: CSTExpression::String(Box::new(StringValue {
@@ -318,10 +348,13 @@ mod tests {
                 },
                 type_annotation: Some(ElpType {
                     mutability: None,
-                    name: Ident {
-                        value: "String".into()
-                    },
-                    generics: vec![]
+                    pointer_semantics: None,
+                    value: ElpTypeValue::Parameter(ElpTypeParameter {
+                        name: Ident {
+                            value: "String".into()
+                        },
+                        generics: vec![]
+                    })
                 }),
                 default_value: Some(ObjectMemberDefaultValue {
                     value: CSTExpression::String(Box::new(StringValue {
@@ -360,10 +393,13 @@ mod tests {
                     },
                     type_annotation: Some(ElpType {
                         mutability: None,
-                        name: Ident {
-                            value: "String".into()
-                        },
-                        generics: vec![]
+                        pointer_semantics: None,
+                        value: ElpTypeValue::Parameter(ElpTypeParameter {
+                            name: Ident {
+                                value: "String".into()
+                            },
+                            generics: vec![]
+                        })
                     }),
                     default_value: None,
                     tags: vec![]
@@ -387,10 +423,13 @@ mod tests {
                 implements: Some(ObjectImplements {
                     types: vec![ElpType {
                         mutability: None,
-                        name: Ident {
-                            value: "MyInterface".into()
-                        },
-                        generics: vec![]
+                        pointer_semantics: None,
+                        value: ElpTypeValue::Parameter(ElpTypeParameter {
+                            name: Ident {
+                                value: "MyInterface".into()
+                            },
+                            generics: vec![]
+                        })
                     }]
                 }),
                 members: vec![ObjectMember {
@@ -400,10 +439,13 @@ mod tests {
                     },
                     type_annotation: Some(ElpType {
                         mutability: None,
-                        name: Ident {
-                            value: "String".into()
-                        },
-                        generics: vec![]
+                        pointer_semantics: None,
+                        value: ElpTypeValue::Parameter(ElpTypeParameter {
+                            name: Ident {
+                                value: "String".into()
+                            },
+                            generics: vec![]
+                        })
                     }),
                     default_value: None,
                     tags: vec![]
@@ -428,17 +470,23 @@ mod tests {
                     types: vec![
                         ElpType {
                             mutability: None,
-                            name: Ident {
-                                value: "MyInterface".into()
-                            },
-                            generics: vec![]
+                            pointer_semantics: None,
+                            value: ElpTypeValue::Parameter(ElpTypeParameter {
+                                name: Ident {
+                                    value: "MyInterface".into()
+                                },
+                                generics: vec![]
+                            })
                         },
                         ElpType {
                             mutability: None,
-                            name: Ident {
-                                value: "AnotherInterface".into()
-                            },
-                            generics: vec![]
+                            pointer_semantics: None,
+                            value: ElpTypeValue::Parameter(ElpTypeParameter {
+                                name: Ident {
+                                    value: "AnotherInterface".into()
+                                },
+                                generics: vec![]
+                            })
                         }
                     ]
                 }),
@@ -449,10 +497,13 @@ mod tests {
                     },
                     type_annotation: Some(ElpType {
                         mutability: None,
-                        name: Ident {
-                            value: "String".into()
-                        },
-                        generics: vec![]
+                        pointer_semantics: None,
+                        value: ElpTypeValue::Parameter(ElpTypeParameter {
+                            name: Ident {
+                                value: "String".into()
+                            },
+                            generics: vec![]
+                        })
                     }),
                     default_value: None,
                     tags: vec![]
@@ -481,21 +532,27 @@ mod tests {
                 implements: Some(ObjectImplements {
                     types: vec![ElpType {
                         mutability: None,
-                        name: Ident {
-                            value: "Into".into()
-                        },
-                        generics: vec![ElpTypeGeneric {
-                            params: vec![ElpTypeGenericParam {
-                                elp_type: ElpType {
-                                    mutability: None,
-                                    name: Ident {
-                                        value: "JSON".into()
+                        pointer_semantics: None,
+                        value: ElpTypeValue::Parameter(ElpTypeParameter {
+                            name: Ident {
+                                value: "Into".into()
+                            },
+                            generics: vec![ElpTypeGeneric {
+                                params: vec![ElpTypeGenericParam {
+                                    elp_type: ElpType {
+                                        mutability: None,
+                                        pointer_semantics: None,
+                                        value: ElpTypeValue::Parameter(ElpTypeParameter {
+                                            name: Ident {
+                                                value: "JSON".into()
+                                            },
+                                            generics: vec![]
+                                        })
                                     },
-                                    generics: vec![]
-                                },
-                                type_constraint: None
+                                    type_constraint: None
+                                }]
                             }]
-                        }]
+                        })
                     }]
                 }),
                 members: vec![
@@ -506,10 +563,13 @@ mod tests {
                         },
                         type_annotation: Some(ElpType {
                             mutability: None,
-                            name: Ident {
-                                value: "String".into()
-                            },
-                            generics: vec![]
+                            pointer_semantics: None,
+                            value: ElpTypeValue::Parameter(ElpTypeParameter {
+                                name: Ident {
+                                    value: "String".into()
+                                },
+                                generics: vec![]
+                            })
                         }),
                         default_value: None,
                         tags: vec![ObjectMemberTags {
@@ -528,10 +588,13 @@ mod tests {
                         },
                         type_annotation: Some(ElpType {
                             mutability: None,
-                            name: Ident {
-                                value: "Int".into()
-                            },
-                            generics: vec![]
+                            pointer_semantics: None,
+                            value: ElpTypeValue::Parameter(ElpTypeParameter {
+                                name: Ident {
+                                    value: "Int".into()
+                                },
+                                generics: vec![]
+                            })
                         }),
                         default_value: None,
                         tags: vec![ObjectMemberTags {
@@ -550,21 +613,27 @@ mod tests {
                         },
                         type_annotation: Some(ElpType {
                             mutability: None,
-                            name: Ident {
-                                value: "Vec".into()
-                            },
-                            generics: vec![ElpTypeGeneric {
-                                params: vec![ElpTypeGenericParam {
-                                    elp_type: ElpType {
-                                        mutability: None,
-                                        name: Ident {
-                                            value: "Friend".into()
+                            pointer_semantics: None,
+                            value: ElpTypeValue::Parameter(ElpTypeParameter {
+                                name: Ident {
+                                    value: "Vec".into()
+                                },
+                                generics: vec![ElpTypeGeneric {
+                                    params: vec![ElpTypeGenericParam {
+                                        elp_type: ElpType {
+                                            mutability: None,
+                                            pointer_semantics: None,
+                                            value: ElpTypeValue::Parameter(ElpTypeParameter {
+                                                name: Ident {
+                                                    value: "Friend".into()
+                                                },
+                                                generics: vec![]
+                                            })
                                         },
-                                        generics: vec![]
-                                    },
-                                    type_constraint: None
+                                        type_constraint: None
+                                    }]
                                 }]
-                            }]
+                            })
                         }),
                         default_value: None,
                         tags: vec![ObjectMemberTags {

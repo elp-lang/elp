@@ -3,6 +3,7 @@ pub(crate) mod elp_type;
 pub(crate) mod r#enum;
 pub(crate) mod export;
 pub(crate) mod expression;
+pub(crate) mod for_loop;
 pub(crate) mod function;
 pub(crate) mod ident;
 pub(crate) mod import;

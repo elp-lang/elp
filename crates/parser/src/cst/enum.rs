@@ -22,7 +22,13 @@ pub struct Enum {
 
 #[cfg(test)]
 mod tests {
-    use crate::{cst::ident::Ident, parser::ElpParser};
+    use crate::{
+        cst::{
+            elp_type::{ElpTypeParameter, ElpTypeValue},
+            ident::Ident,
+        },
+        parser::ElpParser,
+    };
 
     use super::*;
     use from_pest::FromPest;
@@ -56,8 +62,11 @@ mod tests {
                 name: "Member".into(),
                 params: vec![ElpType {
                     mutability: None,
-                    name: Ident { value: "T".into() },
-                    generics: vec![]
+                    pointer_semantics: None,
+                    value: ElpTypeValue::Parameter(ElpTypeParameter {
+                        name: Ident { value: "T".into() },
+                        generics: vec![]
+                    })
                 }]
             }
         )
@@ -99,10 +108,13 @@ mod tests {
                 implements: Some(ObjectImplements {
                     types: vec![ElpType {
                         mutability: None,
-                        name: Ident {
-                            value: "MyInterface".into()
-                        },
-                        generics: vec![]
+                        pointer_semantics: None,
+                        value: ElpTypeValue::Parameter(ElpTypeParameter {
+                            name: Ident {
+                                value: "MyInterface".into()
+                            },
+                            generics: vec![]
+                        })
                     }]
                 }),
                 members: vec![EnumMember {

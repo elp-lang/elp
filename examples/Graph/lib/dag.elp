@@ -10,7 +10,7 @@ export object NodeIndex {
 }
 
 export object Graph<N, E> {
-	private const .direction *Direection
+	private const .direction *Direction = .Directed
 	public  var   .nodes     [N]
 	public  var   .edges     [E]
 }

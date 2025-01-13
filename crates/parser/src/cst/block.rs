@@ -14,8 +14,10 @@ mod tests {
     use super::*;
     use crate::{
         cst::{
-            elp_type::ElpType, ident::Ident, variable_declaration::VariableDeclaration, Const,
-            MutabilitySelector,
+            elp_type::{ElpType, ElpTypeParameter},
+            ident::Ident,
+            variable_declaration::VariableDeclaration,
+            Const, MutabilitySelector,
         },
         parser::ElpParser,
     };
@@ -37,11 +39,16 @@ mod tests {
                         name: "hello".into(),
                         mutability: MutabilitySelector::Immutable(Const),
                         type_annotation: Some(Box::new(ElpType {
+                            pointer_semantics: None,
                             mutability: None,
-                            name: Ident {
-                                value: "String".into()
-                            },
-                            generics: vec![]
+                            value: crate::cst::elp_type::ElpTypeValue::Parameter(
+                                ElpTypeParameter {
+                                    name: Ident {
+                                        value: "String".into()
+                                    },
+                                    generics: vec![]
+                                }
+                            )
                         })),
                     }
                 ))]

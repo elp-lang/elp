@@ -33,7 +33,9 @@ mod tests {
     use super::*;
     use crate::{
         cst::{
-            elp_type::{ElpTypeGenericConstraint, ElpTypeGenericParam},
+            elp_type::{
+                ElpTypeGenericConstraint, ElpTypeGenericParam, ElpTypeParameter, ElpTypeValue,
+            },
             function::{FunctionArgument, FunctionArguments, FunctionReturnType},
             variable_access::{VariableAccess, VariableAccessNames},
         },
@@ -57,10 +59,13 @@ mod tests {
                 },
                 type_annotation: Some(ElpType {
                     mutability: None,
-                    name: Ident {
-                        value: "String".into()
-                    },
-                    generics: vec![]
+                    pointer_semantics: None,
+                    value: ElpTypeValue::Parameter(ElpTypeParameter {
+                        name: Ident {
+                            value: "String".into()
+                        },
+                        generics: vec![]
+                    })
                 }),
             })
         );
@@ -85,10 +90,13 @@ mod tests {
                     },
                     type_annotation: Some(ElpType {
                         mutability: None,
-                        name: Ident {
-                            value: "String".into()
-                        },
-                        generics: vec![]
+                        pointer_semantics: None,
+                        value: ElpTypeValue::Parameter(ElpTypeParameter {
+                            name: Ident {
+                                value: "String".into()
+                            },
+                            generics: vec![]
+                        })
                     }),
                 })],
             }
@@ -114,34 +122,44 @@ mod tests {
                         ElpTypeGenericParam {
                             elp_type: ElpType {
                                 mutability: None,
-                                name: Ident {
-                                    value: "Out".into()
-                                },
-                                generics: vec![]
+                                pointer_semantics: None,
+                                value: ElpTypeValue::Parameter(ElpTypeParameter {
+                                    name: Ident {
+                                        value: "Out".into()
+                                    },
+                                    generics: vec![]
+                                })
                             },
                             type_constraint: None
                         },
                         ElpTypeGenericParam {
                             elp_type: ElpType {
                                 mutability: None,
-                                name: Ident {
-                                    value: "ErrorType".into()
-                                },
-                                generics: vec![]
+                                pointer_semantics: None,
+                                value: ElpTypeValue::Parameter(ElpTypeParameter {
+                                    name: Ident {
+                                        value: "ErrorType".into()
+                                    },
+                                    generics: vec![]
+                                })
                             },
                             type_constraint: Some(ElpTypeGenericConstraint {
                                 constraints: vec![ElpType {
                                     mutability: None,
-                                    name: Ident {
-                                        value: "Error".into()
-                                    },
-                                    generics: vec![]
+                                    pointer_semantics: None,
+                                    value: ElpTypeValue::Parameter(ElpTypeParameter {
+                                        name: Ident {
+                                            value: "Error".into()
+                                        },
+                                        generics: vec![]
+                                    })
                                 },]
                             })
                         }
                     ]
                 }),
                 members: vec![InterfaceMember::Method(FunctionHeaderDef {
+                    pointer_semantics: None,
                     name: VariableAccess {
                         pointer_semantics: vec![],
                         names: VariableAccessNames {
@@ -154,8 +172,11 @@ mod tests {
                         params: vec![ElpTypeGenericParam {
                             elp_type: ElpType {
                                 mutability: None,
-                                name: Ident { value: "O".into() },
-                                generics: vec![]
+                                pointer_semantics: None,
+                                value: ElpTypeValue::Parameter(ElpTypeParameter {
+                                    name: Ident { value: "O".into() },
+                                    generics: vec![]
+                                })
                             },
                             type_constraint: None
                         },],
@@ -165,39 +186,49 @@ mod tests {
                             name: Ident {
                                 value: "self".into()
                             },
+                            pointer_semantics: None,
                             type_annotation: None,
                         }]
                     },
                     return_type: FunctionReturnType {
                         type_annotations: vec![ElpType {
                             mutability: None,
-                            name: Ident {
-                                value: "Either".into()
-                            },
-                            generics: vec![ElpTypeGeneric {
-                                params: vec![
-                                    ElpTypeGenericParam {
-                                        elp_type: ElpType {
-                                            mutability: None,
-                                            name: Ident {
-                                                value: "Out".into()
+                            pointer_semantics: None,
+                            value: ElpTypeValue::Parameter(ElpTypeParameter {
+                                name: Ident {
+                                    value: "Either".into()
+                                },
+                                generics: vec![ElpTypeGeneric {
+                                    params: vec![
+                                        ElpTypeGenericParam {
+                                            elp_type: ElpType {
+                                                mutability: None,
+                                                pointer_semantics: None,
+                                                value: ElpTypeValue::Parameter(ElpTypeParameter {
+                                                    name: Ident {
+                                                        value: "Out".into()
+                                                    },
+                                                    generics: vec![]
+                                                })
                                             },
-                                            generics: vec![]
+                                            type_constraint: None
                                         },
-                                        type_constraint: None
-                                    },
-                                    ElpTypeGenericParam {
-                                        elp_type: ElpType {
-                                            mutability: None,
-                                            name: Ident {
-                                                value: "ErrorType".into()
+                                        ElpTypeGenericParam {
+                                            elp_type: ElpType {
+                                                mutability: None,
+                                                pointer_semantics: None,
+                                                value: ElpTypeValue::Parameter(ElpTypeParameter {
+                                                    name: Ident {
+                                                        value: "ErrorType".into()
+                                                    },
+                                                    generics: vec![]
+                                                })
                                             },
-                                            generics: vec![]
-                                        },
-                                        type_constraint: None,
-                                    }
-                                ]
-                            },],
+                                            type_constraint: None,
+                                        }
+                                    ]
+                                },],
+                            })
                         }]
                     }
                 })]

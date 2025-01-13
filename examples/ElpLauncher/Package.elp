@@ -1,0 +1,13 @@
+import { Package, Version } from "elp"
+
+export Package {
+	.name = "elp-launcher",
+	.description = "A games launcher for all desktops that is provider agnostic.",
+	.version = .new(1, 0, 0, 0),
+	.entry = "main.velp",
+	.targets = [
+		.Windows,
+		.MacOS,
+		.Linux,
+	],
+}
