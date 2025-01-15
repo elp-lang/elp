@@ -1,4 +1,4 @@
-use crate::cst::block::Block as CSTBlock;
+use crate::cst::block::CSTBlock;
 
 use super::{expression::ASTExpression, traits::FromCST};
 
@@ -25,7 +25,7 @@ mod tests {
 
     #[test]
     fn block_from_cst() {
-        let cst_block = crate::cst::block::Block {
+        let cst_block = crate::cst::block::CSTBlock {
             expressions: vec![],
         };
         let ast_block = Block::from_cst(&cst_block);

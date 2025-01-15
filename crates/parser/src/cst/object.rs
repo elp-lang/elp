@@ -1,5 +1,5 @@
 use super::{
-    elp_type::ElpType, expression::CSTExpression, ident::Ident, string::StringValue,
+    elp_type::CSTElpType, expression::CSTExpression, ident::CSTIdent, string::CSTString,
     VisibilitySelector,
 };
 use crate::parser::Rule;
@@ -7,39 +7,39 @@ use pest_ast::FromPest;
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::object_implements))]
-pub struct ObjectImplements {
-    pub types: Vec<ElpType>,
+pub struct CSTObjectImplements {
+    pub types: Vec<CSTElpType>,
 }
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::object_key_default_value))]
-pub struct ObjectMemberDefaultValue {
+pub struct CSTObjectMemberDefaultValue {
     pub value: CSTExpression,
 }
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::object_key_tags))]
-pub struct ObjectMemberTags {
-    pub name: Ident,
-    pub contents: StringValue,
+pub struct CSTObjectMemberTags {
+    pub name: CSTIdent,
+    pub contents: CSTString,
 }
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::object_member))]
-pub struct ObjectMember {
+pub struct CSTObjectMember {
     pub visibility: Option<VisibilitySelector>,
-    pub name: Ident,
-    pub type_annotation: Option<ElpType>,
-    pub default_value: Option<ObjectMemberDefaultValue>,
-    pub tags: Vec<ObjectMemberTags>,
+    pub name: CSTIdent,
+    pub type_annotation: Option<CSTElpType>,
+    pub default_value: Option<CSTObjectMemberDefaultValue>,
+    pub tags: Vec<CSTObjectMemberTags>,
 }
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::object_def))]
-pub struct Object {
-    pub name: Ident,
-    pub implements: Option<ObjectImplements>,
-    pub members: Vec<ObjectMember>,
+pub struct CSTObject {
+    pub name: CSTIdent,
+    pub implements: Option<CSTObjectImplements>,
+    pub members: Vec<CSTObjectMember>,
 }
 
 #[cfg(test)]
@@ -47,8 +47,10 @@ mod tests {
     use super::*;
     use crate::{
         cst::{
-            elp_type::{ElpTypeGeneric, ElpTypeGenericParam, ElpTypeParameter, ElpTypeValue},
-            number_value::Number,
+            elp_type::{
+                CSTElpTypeGeneric, CSTElpTypeGenericParam, CSTElpTypeParameter, CSTElpTypeValue,
+            },
+            number_value::CSTNumber,
             PrivateVisibility, PublicVisibility,
         },
         parser::ElpParser,
@@ -62,16 +64,16 @@ mod tests {
         let expression_str_basic = "implements String";
         let mut pairs_basic =
             ElpParser::parse(Rule::object_implements, expression_str_basic).unwrap();
-        let ast_basic = ObjectImplements::from_pest(&mut pairs_basic).unwrap();
+        let ast_basic = CSTObjectImplements::from_pest(&mut pairs_basic).unwrap();
 
         assert_eq!(
             ast_basic,
-            ObjectImplements {
-                types: vec![ElpType {
+            CSTObjectImplements {
+                types: vec![CSTElpType {
                     mutability: None,
                     pointer_semantics: None,
-                    value: ElpTypeValue::Parameter(ElpTypeParameter {
-                        name: Ident {
+                    value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                        name: CSTIdent {
                             value: "String".into()
                         },
                         generics: vec![],
@@ -83,46 +85,46 @@ mod tests {
         let expression_str_multiple = "implements String, Number, Into<JSON>";
         let mut pairs_multiple =
             ElpParser::parse(Rule::object_implements, expression_str_multiple).unwrap();
-        let ast_multiple = ObjectImplements::from_pest(&mut pairs_multiple).unwrap();
+        let ast_multiple = CSTObjectImplements::from_pest(&mut pairs_multiple).unwrap();
 
         assert_eq!(
             ast_multiple,
-            ObjectImplements {
+            CSTObjectImplements {
                 types: vec![
-                    ElpType {
+                    CSTElpType {
                         mutability: None,
                         pointer_semantics: None,
-                        value: ElpTypeValue::Parameter(ElpTypeParameter {
-                            name: Ident {
+                        value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                            name: CSTIdent {
                                 value: "String".into()
                             },
                             generics: vec![],
                         })
                     },
-                    ElpType {
+                    CSTElpType {
                         mutability: None,
                         pointer_semantics: None,
-                        value: ElpTypeValue::Parameter(ElpTypeParameter {
-                            name: Ident {
+                        value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                            name: CSTIdent {
                                 value: "Number".into()
                             },
                             generics: vec![],
                         })
                     },
-                    ElpType {
+                    CSTElpType {
                         mutability: None,
                         pointer_semantics: None,
-                        value: ElpTypeValue::Parameter(ElpTypeParameter {
-                            name: Ident {
+                        value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                            name: CSTIdent {
                                 value: "Into".into()
                             },
-                            generics: vec![ElpTypeGeneric {
-                                params: vec![ElpTypeGenericParam {
-                                    elp_type: ElpType {
+                            generics: vec![CSTElpTypeGeneric {
+                                params: vec![CSTElpTypeGenericParam {
+                                    elp_type: CSTElpType {
                                         mutability: None,
                                         pointer_semantics: None,
-                                        value: ElpTypeValue::Parameter(ElpTypeParameter {
-                                            name: Ident {
+                                        value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                                            name: CSTIdent {
                                                 value: "JSON".into()
                                             },
                                             generics: vec![]
@@ -162,15 +164,15 @@ mod tests {
     fn object_member_tags() {
         let expression_str = "`name: \"example\"`";
         let mut pairs = ElpParser::parse(Rule::object_key_tags, expression_str).unwrap();
-        let ast = ObjectMemberTags::from_pest(&mut pairs).unwrap();
+        let ast = CSTObjectMemberTags::from_pest(&mut pairs).unwrap();
 
         assert_eq!(
             ast,
-            ObjectMemberTags {
-                name: Ident {
+            CSTObjectMemberTags {
+                name: CSTIdent {
                     value: "name".into()
                 },
-                contents: StringValue {
+                contents: CSTString {
                     value: "example".into()
                 }
             }
@@ -181,20 +183,20 @@ mod tests {
     fn basic_object_member() {
         let expression_str = ".name String";
         let mut pairs = ElpParser::parse(Rule::object_member, expression_str).unwrap();
-        let ast = ObjectMember::from_pest(&mut pairs).unwrap();
+        let ast = CSTObjectMember::from_pest(&mut pairs).unwrap();
 
         assert_eq!(
             ast,
-            ObjectMember {
+            CSTObjectMember {
                 visibility: None,
-                name: Ident {
+                name: CSTIdent {
                     value: "name".into()
                 },
-                type_annotation: Some(ElpType {
+                type_annotation: Some(CSTElpType {
                     mutability: None,
                     pointer_semantics: None,
-                    value: ElpTypeValue::Parameter(ElpTypeParameter {
-                        name: Ident {
+                    value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                        name: CSTIdent {
                             value: "String".into()
                         },
                         generics: vec![]
@@ -210,20 +212,20 @@ mod tests {
     fn private_object_member() {
         let expression_str = "private .name String";
         let mut pairs = ElpParser::parse(Rule::object_member, expression_str).unwrap();
-        let ast = ObjectMember::from_pest(&mut pairs).unwrap();
+        let ast = CSTObjectMember::from_pest(&mut pairs).unwrap();
 
         assert_eq!(
             ast,
-            ObjectMember {
+            CSTObjectMember {
                 visibility: Some(VisibilitySelector::Private(PrivateVisibility {})),
-                name: Ident {
+                name: CSTIdent {
                     value: "name".into()
                 },
-                type_annotation: Some(ElpType {
+                type_annotation: Some(CSTElpType {
                     mutability: None,
                     pointer_semantics: None,
-                    value: ElpTypeValue::Parameter(ElpTypeParameter {
-                        name: Ident {
+                    value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                        name: CSTIdent {
                             value: "String".into()
                         },
                         generics: vec![]
@@ -239,20 +241,20 @@ mod tests {
     fn public_object_member() {
         let expression_str = "public .name String";
         let mut pairs = ElpParser::parse(Rule::object_member, expression_str).unwrap();
-        let ast = ObjectMember::from_pest(&mut pairs).unwrap();
+        let ast = CSTObjectMember::from_pest(&mut pairs).unwrap();
 
         assert_eq!(
             ast,
-            ObjectMember {
+            CSTObjectMember {
                 visibility: Some(VisibilitySelector::Public(PublicVisibility {})),
-                name: Ident {
+                name: CSTIdent {
                     value: "name".into()
                 },
-                type_annotation: Some(ElpType {
+                type_annotation: Some(CSTElpType {
                     mutability: None,
                     pointer_semantics: None,
-                    value: ElpTypeValue::Parameter(ElpTypeParameter {
-                        name: Ident {
+                    value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                        name: CSTIdent {
                             value: "String".into()
                         },
                         generics: vec![]
@@ -268,31 +270,31 @@ mod tests {
     fn tagged_object_member() {
         let expression_str = ".name String `name: \"example\"`";
         let mut pairs = ElpParser::parse(Rule::object_member, expression_str).unwrap();
-        let ast = ObjectMember::from_pest(&mut pairs).unwrap();
+        let ast = CSTObjectMember::from_pest(&mut pairs).unwrap();
 
         assert_eq!(
             ast,
-            ObjectMember {
+            CSTObjectMember {
                 visibility: None,
-                name: Ident {
+                name: CSTIdent {
                     value: "name".into()
                 },
-                type_annotation: Some(ElpType {
+                type_annotation: Some(CSTElpType {
                     mutability: None,
                     pointer_semantics: None,
-                    value: ElpTypeValue::Parameter(ElpTypeParameter {
-                        name: Ident {
+                    value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                        name: CSTIdent {
                             value: "String".into()
                         },
                         generics: vec![]
                     })
                 }),
                 default_value: None,
-                tags: vec![ObjectMemberTags {
-                    name: Ident {
+                tags: vec![CSTObjectMemberTags {
+                    name: CSTIdent {
                         value: "name".into()
                     },
-                    contents: StringValue {
+                    contents: CSTString {
                         value: "example".into()
                     }
                 }]
@@ -304,27 +306,27 @@ mod tests {
     fn object_member_default_value() {
         let expression_str = ".name String = \"example\"";
         let mut pairs = ElpParser::parse(Rule::object_member, expression_str).unwrap();
-        let ast = ObjectMember::from_pest(&mut pairs).unwrap();
+        let ast = CSTObjectMember::from_pest(&mut pairs).unwrap();
 
         assert_eq!(
             ast,
-            ObjectMember {
+            CSTObjectMember {
                 visibility: None,
-                name: Ident {
+                name: CSTIdent {
                     value: "name".into()
                 },
-                type_annotation: Some(ElpType {
+                type_annotation: Some(CSTElpType {
                     mutability: None,
                     pointer_semantics: None,
-                    value: ElpTypeValue::Parameter(ElpTypeParameter {
-                        name: Ident {
+                    value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                        name: CSTIdent {
                             value: "String".into()
                         },
                         generics: vec![]
                     })
                 }),
-                default_value: Some(ObjectMemberDefaultValue {
-                    value: CSTExpression::String(Box::new(StringValue {
+                default_value: Some(CSTObjectMemberDefaultValue {
+                    value: CSTExpression::String(Box::new(CSTString {
                         value: "example".into()
                     }))
                 }),
@@ -337,35 +339,35 @@ mod tests {
     fn tagged_object_member_with_default_value() {
         let expression_str = ".name String = \"example_default\" `name: \"example\"`";
         let mut pairs = ElpParser::parse(Rule::object_member, expression_str).unwrap();
-        let ast = ObjectMember::from_pest(&mut pairs).unwrap();
+        let ast = CSTObjectMember::from_pest(&mut pairs).unwrap();
 
         assert_eq!(
             ast,
-            ObjectMember {
+            CSTObjectMember {
                 visibility: None,
-                name: Ident {
+                name: CSTIdent {
                     value: "name".into()
                 },
-                type_annotation: Some(ElpType {
+                type_annotation: Some(CSTElpType {
                     mutability: None,
                     pointer_semantics: None,
-                    value: ElpTypeValue::Parameter(ElpTypeParameter {
-                        name: Ident {
+                    value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                        name: CSTIdent {
                             value: "String".into()
                         },
                         generics: vec![]
                     })
                 }),
-                default_value: Some(ObjectMemberDefaultValue {
-                    value: CSTExpression::String(Box::new(StringValue {
+                default_value: Some(CSTObjectMemberDefaultValue {
+                    value: CSTExpression::String(Box::new(CSTString {
                         value: "example_default".into()
                     }))
                 }),
-                tags: vec![ObjectMemberTags {
-                    name: Ident {
+                tags: vec![CSTObjectMemberTags {
+                    name: CSTIdent {
                         value: "name".into()
                     },
-                    contents: StringValue {
+                    contents: CSTString {
                         value: "example".into()
                     }
                 }]
@@ -377,25 +379,25 @@ mod tests {
     fn basic_object() {
         let expression_str = "object Test {.name String}";
         let mut pairs = ElpParser::parse(Rule::object_def, expression_str).unwrap();
-        let ast = Object::from_pest(&mut pairs).unwrap();
+        let ast = CSTObject::from_pest(&mut pairs).unwrap();
 
         assert_eq!(
             ast,
-            Object {
-                name: Ident {
+            CSTObject {
+                name: CSTIdent {
                     value: "Test".into()
                 },
                 implements: None,
-                members: vec![ObjectMember {
+                members: vec![CSTObjectMember {
                     visibility: None,
-                    name: Ident {
+                    name: CSTIdent {
                         value: "name".into()
                     },
-                    type_annotation: Some(ElpType {
+                    type_annotation: Some(CSTElpType {
                         mutability: None,
                         pointer_semantics: None,
-                        value: ElpTypeValue::Parameter(ElpTypeParameter {
-                            name: Ident {
+                        value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                            name: CSTIdent {
                                 value: "String".into()
                             },
                             generics: vec![]
@@ -412,36 +414,36 @@ mod tests {
     fn object_with_implements() {
         let expression_str = "object Test implements MyInterface {.name String}";
         let mut pairs = ElpParser::parse(Rule::object_def, expression_str).unwrap();
-        let ast = Object::from_pest(&mut pairs).unwrap();
+        let ast = CSTObject::from_pest(&mut pairs).unwrap();
 
         assert_eq!(
             ast,
-            Object {
-                name: Ident {
+            CSTObject {
+                name: CSTIdent {
                     value: "Test".into()
                 },
-                implements: Some(ObjectImplements {
-                    types: vec![ElpType {
+                implements: Some(CSTObjectImplements {
+                    types: vec![CSTElpType {
                         mutability: None,
                         pointer_semantics: None,
-                        value: ElpTypeValue::Parameter(ElpTypeParameter {
-                            name: Ident {
+                        value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                            name: CSTIdent {
                                 value: "MyInterface".into()
                             },
                             generics: vec![]
                         })
                     }]
                 }),
-                members: vec![ObjectMember {
+                members: vec![CSTObjectMember {
                     visibility: None,
-                    name: Ident {
+                    name: CSTIdent {
                         value: "name".into()
                     },
-                    type_annotation: Some(ElpType {
+                    type_annotation: Some(CSTElpType {
                         mutability: None,
                         pointer_semantics: None,
-                        value: ElpTypeValue::Parameter(ElpTypeParameter {
-                            name: Ident {
+                        value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                            name: CSTIdent {
                                 value: "String".into()
                             },
                             generics: vec![]
@@ -458,31 +460,31 @@ mod tests {
     fn object_with_multiple_implements() {
         let expression_str = "object Test implements MyInterface, AnotherInterface {.name String}";
         let mut pairs = ElpParser::parse(Rule::object_def, expression_str).unwrap();
-        let ast = Object::from_pest(&mut pairs).unwrap();
+        let ast = CSTObject::from_pest(&mut pairs).unwrap();
 
         assert_eq!(
             ast,
-            Object {
-                name: Ident {
+            CSTObject {
+                name: CSTIdent {
                     value: "Test".into()
                 },
-                implements: Some(ObjectImplements {
+                implements: Some(CSTObjectImplements {
                     types: vec![
-                        ElpType {
+                        CSTElpType {
                             mutability: None,
                             pointer_semantics: None,
-                            value: ElpTypeValue::Parameter(ElpTypeParameter {
-                                name: Ident {
+                            value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                                name: CSTIdent {
                                     value: "MyInterface".into()
                                 },
                                 generics: vec![]
                             })
                         },
-                        ElpType {
+                        CSTElpType {
                             mutability: None,
                             pointer_semantics: None,
-                            value: ElpTypeValue::Parameter(ElpTypeParameter {
-                                name: Ident {
+                            value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                                name: CSTIdent {
                                     value: "AnotherInterface".into()
                                 },
                                 generics: vec![]
@@ -490,16 +492,16 @@ mod tests {
                         }
                     ]
                 }),
-                members: vec![ObjectMember {
+                members: vec![CSTObjectMember {
                     visibility: None,
-                    name: Ident {
+                    name: CSTIdent {
                         value: "name".into()
                     },
-                    type_annotation: Some(ElpType {
+                    type_annotation: Some(CSTElpType {
                         mutability: None,
                         pointer_semantics: None,
-                        value: ElpTypeValue::Parameter(ElpTypeParameter {
-                            name: Ident {
+                        value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                            name: CSTIdent {
                                 value: "String".into()
                             },
                             generics: vec![]
@@ -521,29 +523,29 @@ mod tests {
             .studentId = 123        `json:\"studentId\"`
     }";
         let mut pairs = ElpParser::parse(Rule::object_def, expression_str).unwrap();
-        let ast = Object::from_pest(&mut pairs).unwrap();
+        let ast = CSTObject::from_pest(&mut pairs).unwrap();
 
         assert_eq!(
             ast,
-            Object {
-                name: Ident {
+            CSTObject {
+                name: CSTIdent {
                     value: "Test".into()
                 },
-                implements: Some(ObjectImplements {
-                    types: vec![ElpType {
+                implements: Some(CSTObjectImplements {
+                    types: vec![CSTElpType {
                         mutability: None,
                         pointer_semantics: None,
-                        value: ElpTypeValue::Parameter(ElpTypeParameter {
-                            name: Ident {
+                        value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                            name: CSTIdent {
                                 value: "Into".into()
                             },
-                            generics: vec![ElpTypeGeneric {
-                                params: vec![ElpTypeGenericParam {
-                                    elp_type: ElpType {
+                            generics: vec![CSTElpTypeGeneric {
+                                params: vec![CSTElpTypeGenericParam {
+                                    elp_type: CSTElpType {
                                         mutability: None,
                                         pointer_semantics: None,
-                                        value: ElpTypeValue::Parameter(ElpTypeParameter {
-                                            name: Ident {
+                                        value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                                            name: CSTIdent {
                                                 value: "JSON".into()
                                             },
                                             generics: vec![]
@@ -556,79 +558,81 @@ mod tests {
                     }]
                 }),
                 members: vec![
-                    ObjectMember {
+                    CSTObjectMember {
                         visibility: Some(VisibilitySelector::Public(PublicVisibility {})),
-                        name: Ident {
+                        name: CSTIdent {
                             value: "name".into()
                         },
-                        type_annotation: Some(ElpType {
+                        type_annotation: Some(CSTElpType {
                             mutability: None,
                             pointer_semantics: None,
-                            value: ElpTypeValue::Parameter(ElpTypeParameter {
-                                name: Ident {
+                            value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                                name: CSTIdent {
                                     value: "String".into()
                                 },
                                 generics: vec![]
                             })
                         }),
                         default_value: None,
-                        tags: vec![ObjectMemberTags {
-                            name: Ident {
+                        tags: vec![CSTObjectMemberTags {
+                            name: CSTIdent {
                                 value: "json".into()
                             },
-                            contents: StringValue {
+                            contents: CSTString {
                                 value: "name".into()
                             }
                         }]
                     },
-                    ObjectMember {
+                    CSTObjectMember {
                         visibility: Some(VisibilitySelector::Private(PrivateVisibility {})),
-                        name: Ident {
+                        name: CSTIdent {
                             value: "age".into()
                         },
-                        type_annotation: Some(ElpType {
+                        type_annotation: Some(CSTElpType {
                             mutability: None,
                             pointer_semantics: None,
-                            value: ElpTypeValue::Parameter(ElpTypeParameter {
-                                name: Ident {
+                            value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                                name: CSTIdent {
                                     value: "Int".into()
                                 },
                                 generics: vec![]
                             })
                         }),
                         default_value: None,
-                        tags: vec![ObjectMemberTags {
-                            name: Ident {
+                        tags: vec![CSTObjectMemberTags {
+                            name: CSTIdent {
                                 value: "json".into()
                             },
-                            contents: StringValue {
+                            contents: CSTString {
                                 value: "age".into()
                             }
                         }],
                     },
-                    ObjectMember {
+                    CSTObjectMember {
                         visibility: None,
-                        name: Ident {
+                        name: CSTIdent {
                             value: "friends".into()
                         },
-                        type_annotation: Some(ElpType {
+                        type_annotation: Some(CSTElpType {
                             mutability: None,
                             pointer_semantics: None,
-                            value: ElpTypeValue::Parameter(ElpTypeParameter {
-                                name: Ident {
+                            value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                                name: CSTIdent {
                                     value: "Vec".into()
                                 },
-                                generics: vec![ElpTypeGeneric {
-                                    params: vec![ElpTypeGenericParam {
-                                        elp_type: ElpType {
+                                generics: vec![CSTElpTypeGeneric {
+                                    params: vec![CSTElpTypeGenericParam {
+                                        elp_type: CSTElpType {
                                             mutability: None,
                                             pointer_semantics: None,
-                                            value: ElpTypeValue::Parameter(ElpTypeParameter {
-                                                name: Ident {
-                                                    value: "Friend".into()
-                                                },
-                                                generics: vec![]
-                                            })
+                                            value: CSTElpTypeValue::Parameter(
+                                                CSTElpTypeParameter {
+                                                    name: CSTIdent {
+                                                        value: "Friend".into()
+                                                    },
+                                                    generics: vec![]
+                                                }
+                                            )
                                         },
                                         type_constraint: None
                                     }]
@@ -636,31 +640,31 @@ mod tests {
                             })
                         }),
                         default_value: None,
-                        tags: vec![ObjectMemberTags {
-                            name: Ident {
+                        tags: vec![CSTObjectMemberTags {
+                            name: CSTIdent {
                                 value: "json".into()
                             },
-                            contents: StringValue {
+                            contents: CSTString {
                                 value: "friends".into()
                             }
                         }]
                     },
-                    ObjectMember {
+                    CSTObjectMember {
                         visibility: None,
-                        name: Ident {
+                        name: CSTIdent {
                             value: "studentId".into()
                         },
                         type_annotation: None,
-                        default_value: Some(ObjectMemberDefaultValue {
-                            value: CSTExpression::Number(Box::new(Number {
+                        default_value: Some(CSTObjectMemberDefaultValue {
+                            value: CSTExpression::Number(Box::new(CSTNumber {
                                 value: "123".into()
                             }))
                         }),
-                        tags: vec![ObjectMemberTags {
-                            name: Ident {
+                        tags: vec![CSTObjectMemberTags {
+                            name: CSTIdent {
                                 value: "json".into()
                             },
-                            contents: StringValue {
+                            contents: CSTString {
                                 value: "studentId".into()
                             }
                         }]

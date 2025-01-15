@@ -2,99 +2,99 @@ use pest_ast::FromPest;
 
 use crate::parser::Rule;
 
-use super::{expression::CSTExpression, variable_access::Reference};
+use super::{expression::CSTExpression, variable_access::CSTReference};
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::BITWISE_OPERAND_TILDE))]
-pub struct Tilde;
+pub struct CSTTilde;
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::BITWISE_OPERAND_LEFT_SHIFT))]
-pub struct LeftShift;
+pub struct CSTLeftShift;
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::BITWISE_OPERAND_RIGHT_SHIFT))]
-pub struct RightShift;
+pub struct CSTRightShift;
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::BITWISE_OPERAND_OR))]
-pub struct Or;
+pub struct CSTOr;
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::BITWISE_OPERAND))]
-pub enum BitwiseOperand {
-    Tilde(Tilde),
-    LeftShift(LeftShift),
-    RightShift(RightShift),
-    BitOr(Or),
-    BitAnd(Reference),
+pub enum CSTBitwiseOperand {
+    Tilde(CSTTilde),
+    LeftShift(CSTLeftShift),
+    RightShift(CSTRightShift),
+    BitOr(CSTOr),
+    BitAnd(CSTReference),
 }
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::OPERAND_PLUS))]
-pub struct Plus;
+pub struct CSTPlus;
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::OPERAND_MINUS))]
-pub struct Minus;
+pub struct CSTMinus;
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::OPERAND_MUL))]
-pub struct Multiply;
+pub struct CSTMultiply;
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::OPERAND_DIV))]
-pub struct Divide;
+pub struct CSTDivide;
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::OPERAND_MOD))]
-pub struct Modulo;
+pub struct CSTModulo;
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::OPERAND_POW))]
-pub struct Power;
+pub struct CSTPower;
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::OPERAND_NOT_EQUAL))]
-pub struct EqualityNot;
+pub struct CSTEqualityNot;
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::OPERAND_BIT_NOT_EQUAL))]
-pub struct EqualityBitNot;
+pub struct CSTEqualityBitNot;
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::OPERAND_EQUALS))]
-pub struct Equals;
+pub struct CSTEquals;
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::OPERAND_EQUAL))]
-pub struct EqualityEqual;
+pub struct CSTEqualityEqual;
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::OPERAND_BITAND))]
-pub struct BitAnd;
+pub struct CSTBitAnd;
 
 #[derive(Debug, PartialEq, Eq, FromPest)]
 #[pest_ast(rule(Rule::value_assignment))]
-pub struct ValueAssignment {
-    pub operand: Operand,
+pub struct CSTValueAssignment {
+    pub operand: CSTOperand,
     pub value: Box<CSTExpression>,
 }
 
 #[derive(Debug, PartialEq, FromPest, Eq)]
 #[pest_ast(rule(Rule::OPERAND))]
-pub enum Operand {
-    Plus(Plus),
-    Minus(Minus),
-    Multiply(Multiply),
-    Divide(Divide),
-    Modulo(Modulo),
-    Power(Power),
-    EqualityNot(EqualityNot),
-    EqualityBitNot(EqualityBitNot),
-    Equals(Equals),
-    EqualityEqual(EqualityEqual),
-    BitAnd(BitAnd),
+pub enum CSTOperand {
+    Plus(CSTPlus),
+    Minus(CSTMinus),
+    Multiply(CSTMultiply),
+    Divide(CSTDivide),
+    Modulo(CSTModulo),
+    Power(CSTPower),
+    EqualityNot(CSTEqualityNot),
+    EqualityBitNot(CSTEqualityBitNot),
+    Equals(CSTEquals),
+    EqualityEqual(CSTEqualityEqual),
+    BitAnd(CSTBitAnd),
 }
 
 #[cfg(test)]
@@ -103,7 +103,7 @@ mod tests {
     use pest::Parser;
 
     use crate::{
-        cst::{number_value::Number, string::StringValue},
+        cst::{number_value::CSTNumber, string::CSTString},
         parser::ElpParser,
     };
 
@@ -113,13 +113,13 @@ mod tests {
     fn test_value_assignment_equals() {
         let expression_str = "= \"world\"";
         let mut pairs = ElpParser::parse(Rule::value_assignment, expression_str).unwrap();
-        let ast = ValueAssignment::from_pest(&mut pairs).unwrap();
+        let ast = CSTValueAssignment::from_pest(&mut pairs).unwrap();
 
         assert_eq!(
             ast,
-            ValueAssignment {
-                operand: Operand::Equals(Equals {}),
-                value: Box::new(CSTExpression::String(Box::new(StringValue {
+            CSTValueAssignment {
+                operand: CSTOperand::Equals(CSTEquals {}),
+                value: Box::new(CSTExpression::String(Box::new(CSTString {
                     value: "world".into(),
                 }))),
             }
@@ -130,13 +130,13 @@ mod tests {
     fn test_value_assignment_plus() {
         let expression_str = "+= 1";
         let mut pairs = ElpParser::parse(Rule::value_assignment, expression_str).unwrap();
-        let ast = ValueAssignment::from_pest(&mut pairs).unwrap();
+        let ast = CSTValueAssignment::from_pest(&mut pairs).unwrap();
 
         assert_eq!(
             ast,
-            ValueAssignment {
-                operand: Operand::Plus(Plus {}),
-                value: Box::new(CSTExpression::Number(Box::new(Number {
+            CSTValueAssignment {
+                operand: CSTOperand::Plus(CSTPlus {}),
+                value: Box::new(CSTExpression::Number(Box::new(CSTNumber {
                     value: "1".into()
                 }))),
             }
@@ -147,13 +147,13 @@ mod tests {
     fn test_value_assignment_modulo() {
         let expression_str = "%= 1";
         let mut pairs = ElpParser::parse(Rule::value_assignment, expression_str).unwrap();
-        let ast = ValueAssignment::from_pest(&mut pairs).unwrap();
+        let ast = CSTValueAssignment::from_pest(&mut pairs).unwrap();
 
         assert_eq!(
             ast,
-            ValueAssignment {
-                operand: Operand::Modulo(Modulo {}),
-                value: Box::new(CSTExpression::Number(Box::new(Number {
+            CSTValueAssignment {
+                operand: CSTOperand::Modulo(CSTModulo {}),
+                value: Box::new(CSTExpression::Number(Box::new(CSTNumber {
                     value: "1".into()
                 }))),
             }
@@ -164,13 +164,13 @@ mod tests {
     fn test_value_assignment_equality_equal() {
         let expression_str = "== 2";
         let mut pairs = ElpParser::parse(Rule::value_assignment, expression_str).unwrap();
-        let ast = ValueAssignment::from_pest(&mut pairs).unwrap();
+        let ast = CSTValueAssignment::from_pest(&mut pairs).unwrap();
 
         assert_eq!(
             ast,
-            ValueAssignment {
-                operand: Operand::EqualityEqual(EqualityEqual {}),
-                value: Box::new(CSTExpression::Number(Box::new(Number {
+            CSTValueAssignment {
+                operand: CSTOperand::EqualityEqual(CSTEqualityEqual {}),
+                value: Box::new(CSTExpression::Number(Box::new(CSTNumber {
                     value: "2".into()
                 }))),
             }
@@ -181,13 +181,13 @@ mod tests {
     fn test_value_assignment_equality_not() {
         let expression_str = "!= 2";
         let mut pairs = ElpParser::parse(Rule::value_assignment, expression_str).unwrap();
-        let ast = ValueAssignment::from_pest(&mut pairs).unwrap();
+        let ast = CSTValueAssignment::from_pest(&mut pairs).unwrap();
 
         assert_eq!(
             ast,
-            ValueAssignment {
-                operand: Operand::EqualityNot(EqualityNot {}),
-                value: Box::new(CSTExpression::Number(Box::new(Number {
+            CSTValueAssignment {
+                operand: CSTOperand::EqualityNot(CSTEqualityNot {}),
+                value: Box::new(CSTExpression::Number(Box::new(CSTNumber {
                     value: "2".into()
                 }))),
             }
@@ -198,13 +198,13 @@ mod tests {
     fn test_value_assignment_equality_bit_not() {
         let expression_str = "~= 2";
         let mut pairs = ElpParser::parse(Rule::value_assignment, expression_str).unwrap();
-        let ast = ValueAssignment::from_pest(&mut pairs).unwrap();
+        let ast = CSTValueAssignment::from_pest(&mut pairs).unwrap();
 
         assert_eq!(
             ast,
-            ValueAssignment {
-                operand: Operand::EqualityBitNot(EqualityBitNot {}),
-                value: Box::new(CSTExpression::Number(Box::new(Number {
+            CSTValueAssignment {
+                operand: CSTOperand::EqualityBitNot(CSTEqualityBitNot {}),
+                value: Box::new(CSTExpression::Number(Box::new(CSTNumber {
                     value: "2".into()
                 }))),
             }
@@ -215,13 +215,13 @@ mod tests {
     fn test_value_assignment_bitwise_and() {
         let expression_str = "&= 2";
         let mut pairs = ElpParser::parse(Rule::value_assignment, expression_str).unwrap();
-        let ast = ValueAssignment::from_pest(&mut pairs).unwrap();
+        let ast = CSTValueAssignment::from_pest(&mut pairs).unwrap();
 
         assert_eq!(
             ast,
-            ValueAssignment {
-                operand: Operand::BitAnd(BitAnd),
-                value: Box::new(CSTExpression::Number(Box::new(Number {
+            CSTValueAssignment {
+                operand: CSTOperand::BitAnd(CSTBitAnd),
+                value: Box::new(CSTExpression::Number(Box::new(CSTNumber {
                     value: "2".into()
                 }))),
             }

@@ -6,7 +6,7 @@ use super::span_into_string;
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::number))]
-pub struct Number {
+pub struct CSTNumber {
     // Numbers in elp are similar to numbers in JavaScript where they can appear in multiple forms.
     // For example, -1, 10, 10.5, 1e3, etc.
     #[pest_ast(outer(with(span_into_string)))]
@@ -24,20 +24,20 @@ mod tests {
     fn single_number_ast_generation() {
         let number_str = "10";
         let mut pairs = ElpParser::parse(Rule::number, number_str).unwrap();
-        let ast = Number::from_pest(&mut pairs).unwrap();
+        let ast = CSTNumber::from_pest(&mut pairs).unwrap();
 
-        assert_eq!(ast, Number { value: "10".into() })
+        assert_eq!(ast, CSTNumber { value: "10".into() })
     }
 
     #[test]
     fn number_with_decimal_part_ast_generation() {
         let number_str = "10.5";
         let mut pairs = ElpParser::parse(Rule::number, number_str).unwrap();
-        let ast = Number::from_pest(&mut pairs).unwrap();
+        let ast = CSTNumber::from_pest(&mut pairs).unwrap();
 
         assert_eq!(
             ast,
-            Number {
+            CSTNumber {
                 value: "10.5".into()
             }
         )
@@ -47,11 +47,11 @@ mod tests {
     fn number_with_exponent_ast_generation() {
         let number_str = "1e3";
         let mut pairs = ElpParser::parse(Rule::number, number_str).unwrap();
-        let ast = Number::from_pest(&mut pairs).unwrap();
+        let ast = CSTNumber::from_pest(&mut pairs).unwrap();
 
         assert_eq!(
             ast,
-            Number {
+            CSTNumber {
                 value: "1e3".into()
             }
         )

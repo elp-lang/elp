@@ -1,31 +1,31 @@
 use super::{
-    elp_type::{ElpType, ElpTypeGeneric},
-    function::FunctionHeaderDef,
-    ident::Ident,
+    elp_type::{CSTElpType, CSTElpTypeGeneric},
+    function::CSTFunctionHeaderDef,
+    ident::CSTIdent,
 };
 use crate::parser::Rule;
 use pest_ast::FromPest;
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::interface_member_key_value))]
-pub struct InterfaceMemberKeyValue {
-    pub name: Ident,
-    pub type_annotation: Option<ElpType>,
+pub struct CSTInterfaceMemberKeyValue {
+    pub name: CSTIdent,
+    pub type_annotation: Option<CSTElpType>,
 }
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::interface_member))]
-pub enum InterfaceMember {
-    Field(InterfaceMemberKeyValue),
-    Method(FunctionHeaderDef),
+pub enum CSTInterfaceMember {
+    Field(CSTInterfaceMemberKeyValue),
+    Method(CSTFunctionHeaderDef),
 }
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::interface_def))]
-pub struct Interface {
-    pub name: Ident,
-    pub generics: Option<ElpTypeGeneric>,
-    pub members: Vec<InterfaceMember>,
+pub struct CSTInterface {
+    pub name: CSTIdent,
+    pub generics: Option<CSTElpTypeGeneric>,
+    pub members: Vec<CSTInterfaceMember>,
 }
 
 #[cfg(test)]
@@ -34,10 +34,11 @@ mod tests {
     use crate::{
         cst::{
             elp_type::{
-                ElpTypeGenericConstraint, ElpTypeGenericParam, ElpTypeParameter, ElpTypeValue,
+                CSTElpTypeGenericConstraint, CSTElpTypeGenericParam, CSTElpTypeParameter,
+                CSTElpTypeValue,
             },
-            function::{FunctionArgument, FunctionArguments, FunctionReturnType},
-            variable_access::{VariableAccess, VariableAccessNames},
+            function::{CSTFunctionArgument, CSTFunctionArguments, CSTFunctionReturnType},
+            variable_access::{CSTVariableAccess, CSTVariableAccessNames},
         },
         parser::ElpParser,
     };
@@ -49,19 +50,19 @@ mod tests {
     fn basic_interface_member() {
         let expression_str = ".name String";
         let mut pairs = ElpParser::parse(Rule::interface_member, expression_str).unwrap();
-        let ast = InterfaceMember::from_pest(&mut pairs).unwrap();
+        let ast = CSTInterfaceMember::from_pest(&mut pairs).unwrap();
 
         assert_eq!(
             ast,
-            InterfaceMember::Field(InterfaceMemberKeyValue {
-                name: Ident {
+            CSTInterfaceMember::Field(CSTInterfaceMemberKeyValue {
+                name: CSTIdent {
                     value: "name".into()
                 },
-                type_annotation: Some(ElpType {
+                type_annotation: Some(CSTElpType {
                     mutability: None,
                     pointer_semantics: None,
-                    value: ElpTypeValue::Parameter(ElpTypeParameter {
-                        name: Ident {
+                    value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                        name: CSTIdent {
                             value: "String".into()
                         },
                         generics: vec![]
@@ -75,24 +76,24 @@ mod tests {
     fn basic_interface() {
         let expression_str = "interface Test {.name String}";
         let mut pairs = ElpParser::parse(Rule::interface_def, expression_str).unwrap();
-        let ast = Interface::from_pest(&mut pairs).unwrap();
+        let ast = CSTInterface::from_pest(&mut pairs).unwrap();
 
         assert_eq!(
             ast,
-            Interface {
-                name: Ident {
+            CSTInterface {
+                name: CSTIdent {
                     value: "Test".into()
                 },
                 generics: None,
-                members: vec![InterfaceMember::Field(InterfaceMemberKeyValue {
-                    name: Ident {
+                members: vec![CSTInterfaceMember::Field(CSTInterfaceMemberKeyValue {
+                    name: CSTIdent {
                         value: "name".into()
                     },
-                    type_annotation: Some(ElpType {
+                    type_annotation: Some(CSTElpType {
                         mutability: None,
                         pointer_semantics: None,
-                        value: ElpTypeValue::Parameter(ElpTypeParameter {
-                            name: Ident {
+                        value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                            name: CSTIdent {
                                 value: "String".into()
                             },
                             generics: vec![]
@@ -109,22 +110,22 @@ mod tests {
             fn into<O>(self) -> Either<Out, ErrorType>
         }";
         let mut pairs = ElpParser::parse(Rule::interface_def, expression_str).unwrap();
-        let ast = Interface::from_pest(&mut pairs).unwrap();
+        let ast = CSTInterface::from_pest(&mut pairs).unwrap();
 
         assert_eq!(
             ast,
-            Interface {
-                name: Ident {
+            CSTInterface {
+                name: CSTIdent {
                     value: "Into".into()
                 },
-                generics: Some(ElpTypeGeneric {
+                generics: Some(CSTElpTypeGeneric {
                     params: vec![
-                        ElpTypeGenericParam {
-                            elp_type: ElpType {
+                        CSTElpTypeGenericParam {
+                            elp_type: CSTElpType {
                                 mutability: None,
                                 pointer_semantics: None,
-                                value: ElpTypeValue::Parameter(ElpTypeParameter {
-                                    name: Ident {
+                                value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                                    name: CSTIdent {
                                         value: "Out".into()
                                     },
                                     generics: vec![]
@@ -132,23 +133,23 @@ mod tests {
                             },
                             type_constraint: None
                         },
-                        ElpTypeGenericParam {
-                            elp_type: ElpType {
+                        CSTElpTypeGenericParam {
+                            elp_type: CSTElpType {
                                 mutability: None,
                                 pointer_semantics: None,
-                                value: ElpTypeValue::Parameter(ElpTypeParameter {
-                                    name: Ident {
+                                value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                                    name: CSTIdent {
                                         value: "ErrorType".into()
                                     },
                                     generics: vec![]
                                 })
                             },
-                            type_constraint: Some(ElpTypeGenericConstraint {
-                                constraints: vec![ElpType {
+                            type_constraint: Some(CSTElpTypeGenericConstraint {
+                                constraints: vec![CSTElpType {
                                     mutability: None,
                                     pointer_semantics: None,
-                                    value: ElpTypeValue::Parameter(ElpTypeParameter {
-                                        name: Ident {
+                                    value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                                        name: CSTIdent {
                                             value: "Error".into()
                                         },
                                         generics: vec![]
@@ -158,71 +159,75 @@ mod tests {
                         }
                     ]
                 }),
-                members: vec![InterfaceMember::Method(FunctionHeaderDef {
+                members: vec![CSTInterfaceMember::Method(CSTFunctionHeaderDef {
                     pointer_semantics: None,
-                    name: VariableAccess {
+                    name: CSTVariableAccess {
                         pointer_semantics: vec![],
-                        names: VariableAccessNames {
-                            names: vec![Ident {
+                        names: CSTVariableAccessNames {
+                            names: vec![CSTIdent {
                                 value: "into".into()
                             }],
                         },
                     },
-                    generics: Some(ElpTypeGeneric {
-                        params: vec![ElpTypeGenericParam {
-                            elp_type: ElpType {
+                    generics: Some(CSTElpTypeGeneric {
+                        params: vec![CSTElpTypeGenericParam {
+                            elp_type: CSTElpType {
                                 mutability: None,
                                 pointer_semantics: None,
-                                value: ElpTypeValue::Parameter(ElpTypeParameter {
-                                    name: Ident { value: "O".into() },
+                                value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                                    name: CSTIdent { value: "O".into() },
                                     generics: vec![]
                                 })
                             },
                             type_constraint: None
                         },],
                     }),
-                    arguments: FunctionArguments {
-                        arguments: vec![FunctionArgument {
-                            name: Ident {
+                    arguments: CSTFunctionArguments {
+                        arguments: vec![CSTFunctionArgument {
+                            name: CSTIdent {
                                 value: "self".into()
                             },
                             pointer_semantics: None,
                             type_annotation: None,
                         }]
                     },
-                    return_type: FunctionReturnType {
-                        type_annotations: vec![ElpType {
+                    return_type: CSTFunctionReturnType {
+                        type_annotations: vec![CSTElpType {
                             mutability: None,
                             pointer_semantics: None,
-                            value: ElpTypeValue::Parameter(ElpTypeParameter {
-                                name: Ident {
+                            value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                                name: CSTIdent {
                                     value: "Either".into()
                                 },
-                                generics: vec![ElpTypeGeneric {
+                                generics: vec![CSTElpTypeGeneric {
                                     params: vec![
-                                        ElpTypeGenericParam {
-                                            elp_type: ElpType {
+                                        CSTElpTypeGenericParam {
+                                            elp_type: CSTElpType {
                                                 mutability: None,
                                                 pointer_semantics: None,
-                                                value: ElpTypeValue::Parameter(ElpTypeParameter {
-                                                    name: Ident {
-                                                        value: "Out".into()
-                                                    },
-                                                    generics: vec![]
-                                                })
+                                                value: CSTElpTypeValue::Parameter(
+                                                    CSTElpTypeParameter {
+                                                        name: CSTIdent {
+                                                            value: "Out".into()
+                                                        },
+                                                        generics: vec![]
+                                                    }
+                                                )
                                             },
                                             type_constraint: None
                                         },
-                                        ElpTypeGenericParam {
-                                            elp_type: ElpType {
+                                        CSTElpTypeGenericParam {
+                                            elp_type: CSTElpType {
                                                 mutability: None,
                                                 pointer_semantics: None,
-                                                value: ElpTypeValue::Parameter(ElpTypeParameter {
-                                                    name: Ident {
-                                                        value: "ErrorType".into()
-                                                    },
-                                                    generics: vec![]
-                                                })
+                                                value: CSTElpTypeValue::Parameter(
+                                                    CSTElpTypeParameter {
+                                                        name: CSTIdent {
+                                                            value: "ErrorType".into()
+                                                        },
+                                                        generics: vec![]
+                                                    }
+                                                )
                                             },
                                             type_constraint: None,
                                         }

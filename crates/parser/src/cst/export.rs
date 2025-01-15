@@ -4,7 +4,7 @@ use pest_ast::FromPest;
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::export))]
-pub struct Export {
+pub struct CSTExport {
     pub expression: CSTExpression,
 }
 
@@ -13,7 +13,7 @@ mod tests {
     use super::*;
 
     use crate::{
-        cst::{variable_declaration::VariableDeclaration, Const, MutabilitySelector},
+        cst::{variable_declaration::CSTVariableDeclaration, CSTMutabilitySelector, Const},
         parser::ElpParser,
     };
     use from_pest::FromPest;
@@ -24,13 +24,13 @@ mod tests {
     fn parse_export_expression() {
         let expression_str = "export const hello";
         let mut pairs = ElpParser::parse(Rule::export, expression_str).unwrap();
-        let ast = Export::from_pest(&mut pairs).unwrap();
+        let ast = CSTExport::from_pest(&mut pairs).unwrap();
 
         assert_eq!(
             ast,
-            Export {
-                expression: CSTExpression::VariableDeclaration(Box::new(VariableDeclaration {
-                    mutability: MutabilitySelector::Immutable(Const),
+            CSTExport {
+                expression: CSTExpression::VariableDeclaration(Box::new(CSTVariableDeclaration {
+                    mutability: CSTMutabilitySelector::Immutable(Const),
                     name: "hello".into(),
                     type_annotation: None
                 }))

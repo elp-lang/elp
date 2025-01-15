@@ -1,4 +1,4 @@
-use crate::cst::ident::Ident;
+use crate::cst::ident::CSTIdent;
 use crate::parser::Rule;
 use pest_ast::FromPest;
 
@@ -6,42 +6,42 @@ use pest_ast::FromPest;
 // but it is what it is.
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::POINTER))]
-pub struct Pointer;
+pub struct CSTPointer;
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::REFERENCE))]
-pub struct Reference;
+pub struct CSTReference;
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::pointer_semantics))]
-pub enum PointerSemantics {
-    Pointer(Pointer),
-    Reference(Reference),
+pub enum CSTPointerSemantics {
+    Pointer(CSTPointer),
+    Reference(CSTReference),
 }
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::variable_access))]
-pub struct VariableAccess {
-    pub pointer_semantics: Vec<PointerSemantics>,
-    pub names: VariableAccessNames,
+pub struct CSTVariableAccess {
+    pub pointer_semantics: Vec<CSTPointerSemantics>,
+    pub names: CSTVariableAccessNames,
 }
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::variable_access_names))]
-pub struct VariableAccessNames {
-    pub names: Vec<Ident>,
+pub struct CSTVariableAccessNames {
+    pub names: Vec<CSTIdent>,
 }
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::contextual_variable_access))]
-pub struct ContextualVariableAccess {
-    pub name: Ident,
+pub struct CSTContextualVariableAccess {
+    pub name: CSTIdent,
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cst::variable_access::VariableAccess;
+    use crate::cst::variable_access::CSTVariableAccess;
     use crate::parser::ElpParser;
     use from_pest::FromPest;
     use pest::Parser;
@@ -51,41 +51,41 @@ mod tests {
     fn test_pointer_semantics() {
         let ref_expression_str = "&";
         let mut ref_pairs = ElpParser::parse(Rule::pointer_semantics, ref_expression_str).unwrap();
-        let ref_ast = PointerSemantics::from_pest(&mut ref_pairs).unwrap();
+        let ref_ast = CSTPointerSemantics::from_pest(&mut ref_pairs).unwrap();
 
-        assert_eq!(ref_ast, PointerSemantics::Reference(Reference {}));
+        assert_eq!(ref_ast, CSTPointerSemantics::Reference(CSTReference {}));
 
         let ptr_expression_str = "*";
         let mut ptr_pairs = ElpParser::parse(Rule::pointer_semantics, ptr_expression_str).unwrap();
-        let ptr_ast = PointerSemantics::from_pest(&mut ptr_pairs).unwrap();
+        let ptr_ast = CSTPointerSemantics::from_pest(&mut ptr_pairs).unwrap();
 
-        assert_eq!(ptr_ast, PointerSemantics::Pointer(Pointer {}));
+        assert_eq!(ptr_ast, CSTPointerSemantics::Pointer(CSTPointer {}));
     }
 
     #[test]
     fn variable_access() {
         let expression_str = "hello.world.my.name.is.dave";
         let mut pairs = ElpParser::parse(Rule::variable_access, expression_str).unwrap();
-        let ast = VariableAccess::from_pest(&mut pairs).unwrap();
+        let ast = CSTVariableAccess::from_pest(&mut pairs).unwrap();
 
         assert_eq!(
             ast,
-            VariableAccess {
+            CSTVariableAccess {
                 pointer_semantics: vec![],
-                names: VariableAccessNames {
+                names: CSTVariableAccessNames {
                     names: vec![
-                        Ident {
+                        CSTIdent {
                             value: "hello".into()
                         },
-                        Ident {
+                        CSTIdent {
                             value: "world".into()
                         },
-                        Ident { value: "my".into() },
-                        Ident {
+                        CSTIdent { value: "my".into() },
+                        CSTIdent {
                             value: "name".into()
                         },
-                        Ident { value: "is".into() },
-                        Ident {
+                        CSTIdent { value: "is".into() },
+                        CSTIdent {
                             value: "dave".into()
                         },
                     ],
@@ -99,26 +99,26 @@ mod tests {
         let expression_str_reference = "&hello.world.my.name.is.dave";
         let mut pairs_reference =
             ElpParser::parse(Rule::variable_access, expression_str_reference).unwrap();
-        let reference_ast = VariableAccess::from_pest(&mut pairs_reference).unwrap();
+        let reference_ast = CSTVariableAccess::from_pest(&mut pairs_reference).unwrap();
 
         assert_eq!(
             reference_ast,
-            VariableAccess {
-                pointer_semantics: vec![PointerSemantics::Reference(Reference {})],
-                names: VariableAccessNames {
+            CSTVariableAccess {
+                pointer_semantics: vec![CSTPointerSemantics::Reference(CSTReference {})],
+                names: CSTVariableAccessNames {
                     names: vec![
-                        Ident {
+                        CSTIdent {
                             value: "hello".into()
                         },
-                        Ident {
+                        CSTIdent {
                             value: "world".into()
                         },
-                        Ident { value: "my".into() },
-                        Ident {
+                        CSTIdent { value: "my".into() },
+                        CSTIdent {
                             value: "name".into()
                         },
-                        Ident { value: "is".into() },
-                        Ident {
+                        CSTIdent { value: "is".into() },
+                        CSTIdent {
                             value: "dave".into()
                         },
                     ],
@@ -129,26 +129,26 @@ mod tests {
         let expression_str_pointer = "*hello.world.my.name.is.dave";
         let mut pairs_pointer =
             ElpParser::parse(Rule::variable_access, expression_str_pointer).unwrap();
-        let pointer_ast = VariableAccess::from_pest(&mut pairs_pointer).unwrap();
+        let pointer_ast = CSTVariableAccess::from_pest(&mut pairs_pointer).unwrap();
 
         assert_eq!(
             pointer_ast,
-            VariableAccess {
-                pointer_semantics: vec![PointerSemantics::Pointer(Pointer {})],
-                names: VariableAccessNames {
+            CSTVariableAccess {
+                pointer_semantics: vec![CSTPointerSemantics::Pointer(CSTPointer {})],
+                names: CSTVariableAccessNames {
                     names: vec![
-                        Ident {
+                        CSTIdent {
                             value: "hello".into()
                         },
-                        Ident {
+                        CSTIdent {
                             value: "world".into()
                         },
-                        Ident { value: "my".into() },
-                        Ident {
+                        CSTIdent { value: "my".into() },
+                        CSTIdent {
                             value: "name".into()
                         },
-                        Ident { value: "is".into() },
-                        Ident {
+                        CSTIdent { value: "is".into() },
+                        CSTIdent {
                             value: "dave".into()
                         },
                     ],
@@ -162,12 +162,12 @@ mod tests {
         let expression_str_pointer = ".CONTEXTUAL";
         let mut pairs_pointer =
             ElpParser::parse(Rule::contextual_variable_access, expression_str_pointer).unwrap();
-        let pointer_ast = ContextualVariableAccess::from_pest(&mut pairs_pointer).unwrap();
+        let pointer_ast = CSTContextualVariableAccess::from_pest(&mut pairs_pointer).unwrap();
 
         assert_eq!(
             pointer_ast,
-            ContextualVariableAccess {
-                name: Ident {
+            CSTContextualVariableAccess {
+                name: CSTIdent {
                     value: "CONTEXTUAL".into()
                 },
             }

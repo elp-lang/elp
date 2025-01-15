@@ -5,7 +5,7 @@ use super::expression::CSTExpression;
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::block))]
-pub struct Block {
+pub struct CSTBlock {
     pub expressions: Vec<CSTExpression>,
 }
 
@@ -14,10 +14,10 @@ mod tests {
     use super::*;
     use crate::{
         cst::{
-            elp_type::{ElpType, ElpTypeParameter},
-            ident::Ident,
-            variable_declaration::VariableDeclaration,
-            Const, MutabilitySelector,
+            elp_type::{CSTElpType, CSTElpTypeParameter},
+            ident::CSTIdent,
+            variable_declaration::CSTVariableDeclaration,
+            CSTMutabilitySelector, Const,
         },
         parser::ElpParser,
     };
@@ -29,21 +29,21 @@ mod tests {
     fn blocks() {
         let expression_str = "{ const hello String }";
         let mut pairs = ElpParser::parse(Rule::block, expression_str).unwrap();
-        let ast = Block::from_pest(&mut pairs).unwrap();
+        let ast = CSTBlock::from_pest(&mut pairs).unwrap();
 
         assert_eq!(
             ast,
-            Block {
+            CSTBlock {
                 expressions: vec![CSTExpression::VariableDeclaration(Box::new(
-                    VariableDeclaration {
+                    CSTVariableDeclaration {
                         name: "hello".into(),
-                        mutability: MutabilitySelector::Immutable(Const),
-                        type_annotation: Some(Box::new(ElpType {
+                        mutability: CSTMutabilitySelector::Immutable(Const),
+                        type_annotation: Some(Box::new(CSTElpType {
                             pointer_semantics: None,
                             mutability: None,
-                            value: crate::cst::elp_type::ElpTypeValue::Parameter(
-                                ElpTypeParameter {
-                                    name: Ident {
+                            value: crate::cst::elp_type::CSTElpTypeValue::Parameter(
+                                CSTElpTypeParameter {
+                                    name: CSTIdent {
                                         value: "String".into()
                                     },
                                     generics: vec![]

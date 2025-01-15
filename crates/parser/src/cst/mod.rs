@@ -34,7 +34,7 @@ pub struct Const;
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::mutability_selector))]
-pub enum MutabilitySelector {
+pub enum CSTMutabilitySelector {
     Mutable(Var),
     Immutable(Const),
 }
@@ -74,11 +74,11 @@ mod tests {
     use super::*;
     use crate::parser::ElpParser;
     use from_pest::FromPest;
-    use import::Import;
+    use import::CSTImport;
     use pest::Parser;
-    use string::StringValue;
+    use string::CSTString;
 
-    use crate::cst::import::{ImportModulePath, ImportName, ImportNameAlias};
+    use crate::cst::import::{CSTImportModulePath, CSTImportName, CSTImportNameAlias};
 
     #[test]
     fn single_expression_ast_generation() {
@@ -89,21 +89,21 @@ mod tests {
         assert_eq!(
             ast,
             Module {
-                expressions: vec![CSTExpression::Import(Box::new(Import {
+                expressions: vec![CSTExpression::Import(Box::new(CSTImport {
                     names: vec![
-                        ImportName {
+                        CSTImportName {
                             name: "Bar".into(),
                             alias: None,
                         },
-                        ImportName {
+                        CSTImportName {
                             name: "Baz".to_string(),
-                            alias: Some(ImportNameAlias {
+                            alias: Some(CSTImportNameAlias {
                                 alias: "BazAlias".into()
                             }),
                         }
                     ],
-                    module_path: ImportModulePath {
-                        module_path: StringValue {
+                    module_path: CSTImportModulePath {
+                        module_path: CSTString {
                             value: "foo".into()
                         }
                     }

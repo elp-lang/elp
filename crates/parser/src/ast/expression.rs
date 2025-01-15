@@ -42,7 +42,7 @@ mod tests {
 
     #[test]
     fn ast_expression_from_cst() {
-        let cst_expression = CSTExpression::Block(Box::new(crate::cst::block::Block {
+        let cst_expression = CSTExpression::Block(Box::new(crate::cst::block::CSTBlock {
             expressions: vec![],
         }));
         let ast_expression = ASTExpression::from_cst(&cst_expression);

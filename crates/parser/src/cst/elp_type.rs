@@ -1,52 +1,52 @@
-use super::{ident::Ident, variable_access::PointerSemantics, MutabilitySelector};
+use super::{ident::CSTIdent, variable_access::CSTPointerSemantics, CSTMutabilitySelector};
 use crate::parser::Rule;
 use pest_ast::FromPest;
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::elp_type))]
-pub struct ElpType {
-    pub pointer_semantics: Option<PointerSemantics>,
-    pub mutability: Option<MutabilitySelector>,
-    pub value: ElpTypeValue,
+pub struct CSTElpType {
+    pub pointer_semantics: Option<CSTPointerSemantics>,
+    pub mutability: Option<CSTMutabilitySelector>,
+    pub value: CSTElpTypeValue,
 }
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::elp_type_parameter))]
-pub struct ElpTypeParameter {
-    pub name: Ident,
-    pub generics: Vec<ElpTypeGeneric>,
+pub struct CSTElpTypeParameter {
+    pub name: CSTIdent,
+    pub generics: Vec<CSTElpTypeGeneric>,
 }
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::elp_type_array))]
-pub struct ElpTypeArray {
-    pub of_elp_type: Vec<ElpTypeParameter>,
+pub struct CSTElpTypeArray {
+    pub of_elp_type: Vec<CSTElpTypeParameter>,
 }
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::elp_type_value))]
-pub enum ElpTypeValue {
-    Array(ElpTypeArray),
-    Parameter(ElpTypeParameter),
+pub enum CSTElpTypeValue {
+    Array(CSTElpTypeArray),
+    Parameter(CSTElpTypeParameter),
 }
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::elp_type_generic_param))]
-pub struct ElpTypeGenericParam {
-    pub elp_type: ElpType,
-    pub type_constraint: Option<ElpTypeGenericConstraint>,
+pub struct CSTElpTypeGenericParam {
+    pub elp_type: CSTElpType,
+    pub type_constraint: Option<CSTElpTypeGenericConstraint>,
 }
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::elp_type_generic))]
-pub struct ElpTypeGeneric {
-    pub params: Vec<ElpTypeGenericParam>,
+pub struct CSTElpTypeGeneric {
+    pub params: Vec<CSTElpTypeGenericParam>,
 }
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::elp_type_generic_constraint))]
-pub struct ElpTypeGenericConstraint {
-    pub constraints: Vec<ElpType>,
+pub struct CSTElpTypeGenericConstraint {
+    pub constraints: Vec<CSTElpType>,
 }
 
 #[cfg(test)]
@@ -61,15 +61,15 @@ mod tests {
     fn elp_type() {
         let expression_str = "String";
         let mut pairs = ElpParser::parse(Rule::elp_type, expression_str).unwrap();
-        let ast = ElpType::from_pest(&mut pairs).unwrap();
+        let ast = CSTElpType::from_pest(&mut pairs).unwrap();
 
         assert_eq!(
             ast,
-            ElpType {
+            CSTElpType {
                 mutability: None,
                 pointer_semantics: None,
-                value: ElpTypeValue::Parameter(ElpTypeParameter {
-                    name: Ident {
+                value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                    name: CSTIdent {
                         value: "String".into()
                     },
                     generics: vec![]
@@ -82,24 +82,24 @@ mod tests {
     fn elp_type_with_generic() {
         let expression_str = "Into<String>";
         let mut pairs = ElpParser::parse(Rule::elp_type, expression_str).unwrap();
-        let ast = ElpType::from_pest(&mut pairs).unwrap();
+        let ast = CSTElpType::from_pest(&mut pairs).unwrap();
 
         assert_eq!(
             ast,
-            ElpType {
+            CSTElpType {
                 mutability: None,
                 pointer_semantics: None,
-                value: ElpTypeValue::Parameter(ElpTypeParameter {
-                    name: Ident {
+                value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                    name: CSTIdent {
                         value: "Into".into()
                     },
-                    generics: vec![ElpTypeGeneric {
-                        params: vec![ElpTypeGenericParam {
-                            elp_type: ElpType {
+                    generics: vec![CSTElpTypeGeneric {
+                        params: vec![CSTElpTypeGenericParam {
+                            elp_type: CSTElpType {
                                 mutability: None,
                                 pointer_semantics: None,
-                                value: ElpTypeValue::Parameter(ElpTypeParameter {
-                                    name: Ident {
+                                value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                                    name: CSTIdent {
                                         value: "String".into()
                                     },
                                     generics: vec![]
@@ -117,28 +117,28 @@ mod tests {
     fn elp_generic() {
         let expression_str = "<String: Copy>";
         let mut pairs = ElpParser::parse(Rule::elp_type_generic, expression_str).unwrap();
-        let ast = ElpTypeGeneric::from_pest(&mut pairs).unwrap();
+        let ast = CSTElpTypeGeneric::from_pest(&mut pairs).unwrap();
 
         assert_eq!(
             ast,
-            ElpTypeGeneric {
-                params: vec![ElpTypeGenericParam {
-                    elp_type: ElpType {
+            CSTElpTypeGeneric {
+                params: vec![CSTElpTypeGenericParam {
+                    elp_type: CSTElpType {
                         mutability: None,
                         pointer_semantics: None,
-                        value: ElpTypeValue::Parameter(ElpTypeParameter {
-                            name: Ident {
+                        value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                            name: CSTIdent {
                                 value: "String".into()
                             },
                             generics: vec![]
                         })
                     },
-                    type_constraint: Some(ElpTypeGenericConstraint {
-                        constraints: vec![ElpType {
+                    type_constraint: Some(CSTElpTypeGenericConstraint {
+                        constraints: vec![CSTElpType {
                             mutability: None,
                             pointer_semantics: None,
-                            value: ElpTypeValue::Parameter(ElpTypeParameter {
-                                name: Ident {
+                            value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                                name: CSTIdent {
                                     value: "Copy".into()
                                 },
                                 generics: vec![]
@@ -154,39 +154,39 @@ mod tests {
     fn elp_single_generic_constraint() {
         let expression_str = "<String: Copy + Clone>";
         let mut pairs = ElpParser::parse(Rule::elp_type_generic, expression_str).unwrap();
-        let ast = ElpTypeGeneric::from_pest(&mut pairs).unwrap();
+        let ast = CSTElpTypeGeneric::from_pest(&mut pairs).unwrap();
 
         assert_eq!(
             ast,
-            ElpTypeGeneric {
-                params: vec![ElpTypeGenericParam {
-                    elp_type: ElpType {
+            CSTElpTypeGeneric {
+                params: vec![CSTElpTypeGenericParam {
+                    elp_type: CSTElpType {
                         mutability: None,
                         pointer_semantics: None,
-                        value: ElpTypeValue::Parameter(ElpTypeParameter {
-                            name: Ident {
+                        value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                            name: CSTIdent {
                                 value: "String".into()
                             },
                             generics: vec![]
                         })
                     },
-                    type_constraint: Some(ElpTypeGenericConstraint {
+                    type_constraint: Some(CSTElpTypeGenericConstraint {
                         constraints: vec![
-                            ElpType {
+                            CSTElpType {
                                 mutability: None,
                                 pointer_semantics: None,
-                                value: ElpTypeValue::Parameter(ElpTypeParameter {
-                                    name: Ident {
+                                value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                                    name: CSTIdent {
                                         value: "Copy".into()
                                     },
                                     generics: vec![]
                                 })
                             },
-                            ElpType {
+                            CSTElpType {
                                 mutability: None,
                                 pointer_semantics: None,
-                                value: ElpTypeValue::Parameter(ElpTypeParameter {
-                                    name: Ident {
+                                value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                                    name: CSTIdent {
                                         value: "Clone".into()
                                     },
                                     generics: vec![]
@@ -203,18 +203,18 @@ mod tests {
     fn elp_mixed_generic_constraints() {
         let expression_str = "<Number, String: Copy + Clone>";
         let mut pairs = ElpParser::parse(Rule::elp_type_generic, expression_str).unwrap();
-        let ast = ElpTypeGeneric::from_pest(&mut pairs).unwrap();
+        let ast = CSTElpTypeGeneric::from_pest(&mut pairs).unwrap();
 
         assert_eq!(
             ast,
-            ElpTypeGeneric {
+            CSTElpTypeGeneric {
                 params: vec![
-                    ElpTypeGenericParam {
-                        elp_type: ElpType {
+                    CSTElpTypeGenericParam {
+                        elp_type: CSTElpType {
                             mutability: None,
                             pointer_semantics: None,
-                            value: ElpTypeValue::Parameter(ElpTypeParameter {
-                                name: Ident {
+                            value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                                name: CSTIdent {
                                     value: "Number".into()
                                 },
                                 generics: vec![]
@@ -222,34 +222,34 @@ mod tests {
                         },
                         type_constraint: None
                     },
-                    ElpTypeGenericParam {
-                        elp_type: ElpType {
+                    CSTElpTypeGenericParam {
+                        elp_type: CSTElpType {
                             mutability: None,
                             pointer_semantics: None,
-                            value: ElpTypeValue::Parameter(ElpTypeParameter {
-                                name: Ident {
+                            value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                                name: CSTIdent {
                                     value: "String".into()
                                 },
                                 generics: vec![]
                             })
                         },
-                        type_constraint: Some(ElpTypeGenericConstraint {
+                        type_constraint: Some(CSTElpTypeGenericConstraint {
                             constraints: vec![
-                                ElpType {
+                                CSTElpType {
                                     mutability: None,
                                     pointer_semantics: None,
-                                    value: ElpTypeValue::Parameter(ElpTypeParameter {
-                                        name: Ident {
+                                    value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                                        name: CSTIdent {
                                             value: "Copy".into()
                                         },
                                         generics: vec![]
                                     })
                                 },
-                                ElpType {
+                                CSTElpType {
                                     mutability: None,
                                     pointer_semantics: None,
-                                    value: ElpTypeValue::Parameter(ElpTypeParameter {
-                                        name: Ident {
+                                    value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                                        name: CSTIdent {
                                             value: "Clone".into()
                                         },
                                         generics: vec![]
@@ -267,29 +267,29 @@ mod tests {
     fn elp_multiple_generic_constraints() {
         let expression_str = "<Number: Copy, String: Copy + Clone>";
         let mut pairs = ElpParser::parse(Rule::elp_type_generic, expression_str).unwrap();
-        let ast = ElpTypeGeneric::from_pest(&mut pairs).unwrap();
+        let ast = CSTElpTypeGeneric::from_pest(&mut pairs).unwrap();
 
         assert_eq!(
             ast,
-            ElpTypeGeneric {
+            CSTElpTypeGeneric {
                 params: vec![
-                    ElpTypeGenericParam {
-                        elp_type: ElpType {
+                    CSTElpTypeGenericParam {
+                        elp_type: CSTElpType {
                             mutability: None,
                             pointer_semantics: None,
-                            value: ElpTypeValue::Parameter(ElpTypeParameter {
-                                name: Ident {
+                            value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                                name: CSTIdent {
                                     value: "Number".into()
                                 },
                                 generics: vec![]
                             })
                         },
-                        type_constraint: Some(ElpTypeGenericConstraint {
-                            constraints: vec![ElpType {
+                        type_constraint: Some(CSTElpTypeGenericConstraint {
+                            constraints: vec![CSTElpType {
                                 mutability: None,
                                 pointer_semantics: None,
-                                value: ElpTypeValue::Parameter(ElpTypeParameter {
-                                    name: Ident {
+                                value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                                    name: CSTIdent {
                                         value: "Copy".into()
                                     },
                                     generics: vec![]
@@ -297,34 +297,34 @@ mod tests {
                             }]
                         })
                     },
-                    ElpTypeGenericParam {
-                        elp_type: ElpType {
+                    CSTElpTypeGenericParam {
+                        elp_type: CSTElpType {
                             mutability: None,
                             pointer_semantics: None,
-                            value: ElpTypeValue::Parameter(ElpTypeParameter {
-                                name: Ident {
+                            value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                                name: CSTIdent {
                                     value: "String".into()
                                 },
                                 generics: vec![]
                             })
                         },
-                        type_constraint: Some(ElpTypeGenericConstraint {
+                        type_constraint: Some(CSTElpTypeGenericConstraint {
                             constraints: vec![
-                                ElpType {
+                                CSTElpType {
                                     mutability: None,
                                     pointer_semantics: None,
-                                    value: ElpTypeValue::Parameter(ElpTypeParameter {
-                                        name: Ident {
+                                    value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                                        name: CSTIdent {
                                             value: "Copy".into()
                                         },
                                         generics: vec![]
                                     })
                                 },
-                                ElpType {
+                                CSTElpType {
                                     mutability: None,
                                     pointer_semantics: None,
-                                    value: ElpTypeValue::Parameter(ElpTypeParameter {
-                                        name: Ident {
+                                    value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                                        name: CSTIdent {
                                             value: "Clone".into()
                                         },
                                         generics: vec![]

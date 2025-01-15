@@ -4,7 +4,7 @@ use pest_ast::FromPest;
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::IDENT))]
-pub struct Ident {
+pub struct CSTIdent {
     #[pest_ast(outer(with(span_into_string)))]
     pub value: String,
 }
@@ -20,11 +20,11 @@ mod tests {
     fn test_ident() {
         let expression_str = "hello";
         let mut pairs = ElpParser::parse(Rule::IDENT, expression_str).unwrap();
-        let ast = Ident::from_pest(&mut pairs).unwrap();
+        let ast = CSTIdent::from_pest(&mut pairs).unwrap();
 
         assert_eq!(
             ast,
-            Ident {
+            CSTIdent {
                 value: "hello".into(),
             }
         )

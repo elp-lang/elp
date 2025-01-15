@@ -1,70 +1,71 @@
-use super::elp_type::ElpTypeGeneric;
-use super::variable_access::{ContextualVariableAccess, PointerSemantics};
+use super::elp_type::CSTElpTypeGeneric;
+use super::variable_access::{CSTContextualVariableAccess, CSTPointerSemantics};
 use super::{
-    block::Block, elp_type::ElpType, expression::CSTExpression, variable_access::VariableAccess,
+    block::CSTBlock, elp_type::CSTElpType, expression::CSTExpression,
+    variable_access::CSTVariableAccess,
 };
-use crate::cst::ident::Ident;
+use crate::cst::ident::CSTIdent;
 use crate::parser::Rule;
 use pest_ast::FromPest;
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::function_argument))]
-pub struct FunctionArgument {
-    pub pointer_semantics: Option<PointerSemantics>,
-    pub name: Ident,
-    pub type_annotation: Option<ElpType>,
+pub struct CSTFunctionArgument {
+    pub pointer_semantics: Option<CSTPointerSemantics>,
+    pub name: CSTIdent,
+    pub type_annotation: Option<CSTElpType>,
 }
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::function_arguments))]
-pub struct FunctionArguments {
-    pub arguments: Vec<FunctionArgument>,
+pub struct CSTFunctionArguments {
+    pub arguments: Vec<CSTFunctionArgument>,
 }
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::function_return_type))]
-pub struct FunctionReturnType {
-    pub type_annotations: Vec<ElpType>,
+pub struct CSTFunctionReturnType {
+    pub type_annotations: Vec<CSTElpType>,
 }
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::function_return_value))]
-pub struct FunctionReturnValue {
+pub struct CSTFunctionReturnValue {
     pub value: Box<CSTExpression>,
 }
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::function_def))]
-pub struct FunctionDef {
-    pub name: VariableAccess,
-    pub generics: Option<ElpTypeGeneric>,
-    pub arguments: Option<FunctionArguments>,
-    pub return_type: Option<FunctionReturnType>,
-    pub block: Box<Block>,
+pub struct CSTFunctionDef {
+    pub name: CSTVariableAccess,
+    pub generics: Option<CSTElpTypeGeneric>,
+    pub arguments: Option<CSTFunctionArguments>,
+    pub return_type: Option<CSTFunctionReturnType>,
+    pub block: Box<CSTBlock>,
 }
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::fn_header_def))]
-pub struct FunctionHeaderDef {
-    pub pointer_semantics: Option<PointerSemantics>,
-    pub name: VariableAccess,
-    pub generics: Option<ElpTypeGeneric>,
-    pub arguments: FunctionArguments,
-    pub return_type: FunctionReturnType,
+pub struct CSTFunctionHeaderDef {
+    pub pointer_semantics: Option<CSTPointerSemantics>,
+    pub name: CSTVariableAccess,
+    pub generics: Option<CSTElpTypeGeneric>,
+    pub arguments: CSTFunctionArguments,
+    pub return_type: CSTFunctionReturnType,
 }
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::function_call_name))]
-pub enum FunctionCallName {
-    VariableAccess(VariableAccess),
-    ContextualVariableAccess(ContextualVariableAccess),
+pub enum CSTFunctionCallName {
+    VariableAccess(CSTVariableAccess),
+    ContextualVariableAccess(CSTContextualVariableAccess),
 }
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::function_call))]
-pub struct FunctionCall {
-    pub name: FunctionCallName,
-    pub generics: Option<ElpTypeGeneric>,
+pub struct CSTFunctionCall {
+    pub name: CSTFunctionCallName,
+    pub generics: Option<CSTElpTypeGeneric>,
     pub arguments: Vec<CSTExpression>,
 }
 
@@ -73,9 +74,9 @@ mod tests {
     use super::*;
     use crate::{
         cst::{
-            elp_type::{ElpTypeParameter, ElpTypeValue},
-            string::StringValue,
-            variable_access::VariableAccessNames,
+            elp_type::{CSTElpTypeParameter, CSTElpTypeValue},
+            string::CSTString,
+            variable_access::CSTVariableAccessNames,
         },
         parser::ElpParser,
     };
@@ -87,38 +88,38 @@ mod tests {
     fn function_arguments_no_self() {
         let expression_str = "(name String, hello String)";
         let mut pairs = ElpParser::parse(Rule::function_arguments, expression_str).unwrap();
-        let ast = FunctionArguments::from_pest(&mut pairs).unwrap();
+        let ast = CSTFunctionArguments::from_pest(&mut pairs).unwrap();
 
         assert_eq!(
             ast,
-            FunctionArguments {
+            CSTFunctionArguments {
                 arguments: vec![
-                    FunctionArgument {
-                        name: Ident {
+                    CSTFunctionArgument {
+                        name: CSTIdent {
                             value: "name".into()
                         },
                         pointer_semantics: None,
-                        type_annotation: Some(ElpType {
+                        type_annotation: Some(CSTElpType {
                             mutability: None,
                             pointer_semantics: None,
-                            value: ElpTypeValue::Parameter(ElpTypeParameter {
-                                name: Ident {
+                            value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                                name: CSTIdent {
                                     value: "String".into()
                                 },
                                 generics: vec![],
                             })
                         }),
                     },
-                    FunctionArgument {
-                        name: Ident {
+                    CSTFunctionArgument {
+                        name: CSTIdent {
                             value: "hello".into()
                         },
                         pointer_semantics: None,
-                        type_annotation: Some(ElpType {
+                        type_annotation: Some(CSTElpType {
                             mutability: None,
                             pointer_semantics: None,
-                            value: ElpTypeValue::Parameter(ElpTypeParameter {
-                                name: Ident {
+                            value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                                name: CSTIdent {
                                     value: "String".into()
                                 },
                                 generics: vec![],
@@ -134,45 +135,45 @@ mod tests {
     fn function_arguments_with_self() {
         let expression_str = "(self, name String, hello String)";
         let mut pairs = ElpParser::parse(Rule::function_arguments, expression_str).unwrap();
-        let ast = FunctionArguments::from_pest(&mut pairs).unwrap();
+        let ast = CSTFunctionArguments::from_pest(&mut pairs).unwrap();
 
         assert_eq!(
             ast,
-            FunctionArguments {
+            CSTFunctionArguments {
                 arguments: vec![
-                    FunctionArgument {
-                        name: Ident {
+                    CSTFunctionArgument {
+                        name: CSTIdent {
                             value: "self".into()
                         },
                         pointer_semantics: None,
                         type_annotation: None,
                     },
-                    FunctionArgument {
-                        name: Ident {
+                    CSTFunctionArgument {
+                        name: CSTIdent {
                             value: "name".into()
                         },
                         pointer_semantics: None,
-                        type_annotation: Some(ElpType {
+                        type_annotation: Some(CSTElpType {
                             mutability: None,
                             pointer_semantics: None,
-                            value: ElpTypeValue::Parameter(ElpTypeParameter {
-                                name: Ident {
+                            value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                                name: CSTIdent {
                                     value: "String".into()
                                 },
                                 generics: vec![],
                             })
                         }),
                     },
-                    FunctionArgument {
-                        name: Ident {
+                    CSTFunctionArgument {
+                        name: CSTIdent {
                             value: "hello".into()
                         },
                         pointer_semantics: None,
-                        type_annotation: Some(ElpType {
+                        type_annotation: Some(CSTElpType {
                             mutability: None,
                             pointer_semantics: None,
-                            value: ElpTypeValue::Parameter(ElpTypeParameter {
-                                name: Ident {
+                            value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                                name: CSTIdent {
                                     value: "String".into()
                                 },
                                 generics: vec![],
@@ -188,16 +189,16 @@ mod tests {
     fn function_return_type() {
         let expression_str = "-> String";
         let mut pairs = ElpParser::parse(Rule::function_return_type, expression_str).unwrap();
-        let ast = FunctionReturnType::from_pest(&mut pairs).unwrap();
+        let ast = CSTFunctionReturnType::from_pest(&mut pairs).unwrap();
 
         assert_eq!(
             ast,
-            FunctionReturnType {
-                type_annotations: vec![ElpType {
+            CSTFunctionReturnType {
+                type_annotations: vec![CSTElpType {
                     mutability: None,
                     pointer_semantics: None,
-                    value: ElpTypeValue::Parameter(ElpTypeParameter {
-                        name: Ident {
+                    value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                        name: CSTIdent {
                             value: "String".into()
                         },
                         generics: vec![],
@@ -211,12 +212,12 @@ mod tests {
     fn function_return_value() {
         let expression_str = "return \"hello\"";
         let mut pairs = ElpParser::parse(Rule::function_return_value, expression_str).unwrap();
-        let ast = FunctionReturnValue::from_pest(&mut pairs).unwrap();
+        let ast = CSTFunctionReturnValue::from_pest(&mut pairs).unwrap();
 
         assert_eq!(
             ast,
-            FunctionReturnValue {
-                value: Box::new(CSTExpression::String(Box::new(StringValue {
+            CSTFunctionReturnValue {
+                value: Box::new(CSTExpression::String(Box::new(CSTString {
                     value: "hello".into()
                 })))
             }
@@ -227,18 +228,18 @@ mod tests {
     fn simple_function_def() {
         let expression_str = "fn hello.name(name String) -> String { return \"hello {name}\" }";
         let mut pairs = ElpParser::parse(Rule::function_def, expression_str).unwrap();
-        let ast = FunctionDef::from_pest(&mut pairs).unwrap();
+        let ast = CSTFunctionDef::from_pest(&mut pairs).unwrap();
 
         assert_eq!(
             ast,
-            FunctionDef {
-                name: VariableAccess {
-                    names: VariableAccessNames {
+            CSTFunctionDef {
+                name: CSTVariableAccess {
+                    names: CSTVariableAccessNames {
                         names: vec![
-                            Ident {
+                            CSTIdent {
                                 value: "hello".into()
                             },
-                            Ident {
+                            CSTIdent {
                                 value: "name".into()
                             }
                         ],
@@ -246,17 +247,17 @@ mod tests {
                     pointer_semantics: vec![],
                 },
                 generics: None,
-                arguments: Some(FunctionArguments {
-                    arguments: vec![FunctionArgument {
-                        name: Ident {
+                arguments: Some(CSTFunctionArguments {
+                    arguments: vec![CSTFunctionArgument {
+                        name: CSTIdent {
                             value: "name".into()
                         },
                         pointer_semantics: None,
-                        type_annotation: Some(ElpType {
+                        type_annotation: Some(CSTElpType {
                             mutability: None,
                             pointer_semantics: None,
-                            value: ElpTypeValue::Parameter(ElpTypeParameter {
-                                name: Ident {
+                            value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                                name: CSTIdent {
                                     value: "String".into()
                                 },
                                 generics: vec![],
@@ -264,22 +265,22 @@ mod tests {
                         }),
                     }],
                 }),
-                return_type: Some(FunctionReturnType {
-                    type_annotations: vec![ElpType {
+                return_type: Some(CSTFunctionReturnType {
+                    type_annotations: vec![CSTElpType {
                         mutability: None,
                         pointer_semantics: None,
-                        value: ElpTypeValue::Parameter(ElpTypeParameter {
-                            name: Ident {
+                        value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                            name: CSTIdent {
                                 value: "String".into()
                             },
                             generics: vec![],
                         })
                     }],
                 }),
-                block: Box::new(Block {
+                block: Box::new(CSTBlock {
                     expressions: vec![CSTExpression::FunctionReturnValue(Box::new(
-                        FunctionReturnValue {
-                            value: Box::new(CSTExpression::String(Box::new(StringValue {
+                        CSTFunctionReturnValue {
+                            value: Box::new(CSTExpression::String(Box::new(CSTString {
                                 value: "hello {name}".into()
                             })))
                         }
@@ -293,32 +294,32 @@ mod tests {
     fn external_function_def() {
         let expression_str = "fn hello(name String) -> String";
         let mut pairs = ElpParser::parse(Rule::fn_header_def, expression_str).unwrap();
-        let ast = FunctionHeaderDef::from_pest(&mut pairs).unwrap();
+        let ast = CSTFunctionHeaderDef::from_pest(&mut pairs).unwrap();
 
         assert_eq!(
             ast,
-            FunctionHeaderDef {
+            CSTFunctionHeaderDef {
                 pointer_semantics: None,
-                name: VariableAccess {
-                    names: VariableAccessNames {
-                        names: vec![Ident {
+                name: CSTVariableAccess {
+                    names: CSTVariableAccessNames {
+                        names: vec![CSTIdent {
                             value: "hello".into()
                         },],
                     },
                     pointer_semantics: vec![],
                 },
                 generics: None,
-                arguments: FunctionArguments {
-                    arguments: vec![FunctionArgument {
-                        name: Ident {
+                arguments: CSTFunctionArguments {
+                    arguments: vec![CSTFunctionArgument {
+                        name: CSTIdent {
                             value: "name".into()
                         },
                         pointer_semantics: None,
-                        type_annotation: Some(ElpType {
+                        type_annotation: Some(CSTElpType {
                             mutability: None,
                             pointer_semantics: None,
-                            value: ElpTypeValue::Parameter(ElpTypeParameter {
-                                name: Ident {
+                            value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                                name: CSTIdent {
                                     value: "String".into()
                                 },
                                 generics: vec![],
@@ -326,12 +327,12 @@ mod tests {
                         }),
                     }],
                 },
-                return_type: FunctionReturnType {
-                    type_annotations: vec![ElpType {
+                return_type: CSTFunctionReturnType {
+                    type_annotations: vec![CSTElpType {
                         mutability: None,
                         pointer_semantics: None,
-                        value: ElpTypeValue::Parameter(ElpTypeParameter {
-                            name: Ident {
+                        value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                            name: CSTIdent {
                                 value: "String".into()
                             },
                             generics: vec![],
@@ -346,18 +347,18 @@ mod tests {
     fn function_call() {
         let expression_str = "hello.name()";
         let mut pairs = ElpParser::parse(Rule::function_call, expression_str).unwrap();
-        let ast = FunctionCall::from_pest(&mut pairs).unwrap();
+        let ast = CSTFunctionCall::from_pest(&mut pairs).unwrap();
 
         assert_eq!(
             ast,
-            FunctionCall {
-                name: FunctionCallName::VariableAccess(VariableAccess {
-                    names: VariableAccessNames {
+            CSTFunctionCall {
+                name: CSTFunctionCallName::VariableAccess(CSTVariableAccess {
+                    names: CSTVariableAccessNames {
                         names: vec![
-                            Ident {
+                            CSTIdent {
                                 value: "hello".into()
                             },
-                            Ident {
+                            CSTIdent {
                                 value: "name".into()
                             },
                         ],
