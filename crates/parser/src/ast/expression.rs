@@ -2,12 +2,12 @@
 
 use crate::cst::expression::CSTExpression;
 
-use super::{block::Block, traits::FromCST};
+use super::{block::ASTBlock, elp_type::ASTElpType, traits::FromCST};
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, PartialOrd)]
 pub enum ASTExpression {
-    Block(Box<Block>),
-    //    ElpType(Box<ElpType>),
+    Block(Box<ASTBlock>),
+    ElpType(Box<ASTElpType>),
     //    Enum(Box<Enum>),
     //    Export(Box<Export>),
     //    FunctionDef(Box<FunctionDef>),
@@ -30,7 +30,12 @@ pub enum ASTExpression {
 impl FromCST<CSTExpression> for ASTExpression {
     fn from_cst(cst: &CSTExpression) -> Self {
         match cst {
-            CSTExpression::Block(block) => ASTExpression::Block(Box::new(Block::from_cst(block))),
+            CSTExpression::Block(block) => {
+                ASTExpression::Block(Box::new(ASTBlock::from_cst(block)))
+            }
+            CSTExpression::ElpType(elp_type) => {
+                ASTExpression::ElpType(Box::new(ASTElpType::from_cst(elp_type)))
+            }
             _ => panic!("Invalid CST expression: {:#?}", cst),
         }
     }
@@ -49,7 +54,7 @@ mod tests {
 
         assert_eq!(
             ast_expression,
-            ASTExpression::Block(Box::new(Block {
+            ASTExpression::Block(Box::new(ASTBlock {
                 expressions: vec![]
             }))
         )

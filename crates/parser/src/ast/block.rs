@@ -2,14 +2,14 @@ use crate::cst::block::CSTBlock;
 
 use super::{expression::ASTExpression, traits::FromCST};
 
-#[derive(Debug, PartialEq, Eq)]
-pub struct Block {
+#[derive(Debug, PartialEq, PartialOrd)]
+pub struct ASTBlock {
     pub expressions: Vec<ASTExpression>,
 }
 
-impl FromCST<CSTBlock> for Block {
+impl FromCST<CSTBlock> for ASTBlock {
     fn from_cst(cst: &CSTBlock) -> Self {
-        Block {
+        ASTBlock {
             expressions: cst
                 .expressions
                 .iter()
@@ -28,11 +28,11 @@ mod tests {
         let cst_block = crate::cst::block::CSTBlock {
             expressions: vec![],
         };
-        let ast_block = Block::from_cst(&cst_block);
+        let ast_block = ASTBlock::from_cst(&cst_block);
 
         assert_eq!(
             ast_block,
-            Block {
+            ASTBlock {
                 expressions: vec![]
             }
         )
