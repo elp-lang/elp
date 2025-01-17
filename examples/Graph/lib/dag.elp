@@ -7,6 +7,7 @@ export object NodeIndex {
 	private const .from_node_id uint
 	private const .to_node_id   uint
 	private const .edge_id      uint
+	public const .id            uuid
 }
 
 export object Graph<N, E> {
