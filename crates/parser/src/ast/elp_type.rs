@@ -1,42 +1,49 @@
-use crate::cst::{elp_type::CSTElpType, object::CSTObjectMember};
+use crate::cst::elp_type::{CSTElpType, CSTElpTypeValue};
 
 use super::traits::FromCST;
+
+fn intrinsic_cst_type(cst: CSTElpType) -> bool {
+    match cst.value {
+        CSTElpTypeValue::Array(arr) => intrinsic_cst_type(*arr.of_elp_type),
+        CSTElpTypeValue::Parameter(param) => match param.name.value.as_str() {
+            "int32" | "uint32" | "int64" | "uint64" => true,
+            _ => false,
+        },
+    }
+}
 
 #[derive(Debug, PartialEq, PartialOrd)]
 pub enum BuiltInTypes {
     Void,
-    Int32(i32),
-    Int64(i64),
-    Float32(f32),
-    Float64(f64),
-    Float(f64),
-    Bool(bool),
-    String(String),
 }
 
 #[derive(Debug, PartialEq, PartialOrd)]
-pub struct ASTObject {
+pub struct TypeReference {
+    pub as_array: bool,
     pub name: String,
-    pub members: Vec<ASTObjectMember>,
 }
-
-#[derive(Debug, PartialEq, PartialOrd)]
-pub struct ASTObjectMember {}
 
 #[derive(Debug, PartialEq, PartialOrd)]
 pub enum ASTElpType {
     BuiltIn(BuiltInTypes),
-    Object(ASTObject),
+    Reference(TypeReference),
 }
 
 impl FromCST<CSTElpType> for ASTElpType {
-    fn from_cst(_cst: &CSTElpType) -> Self {
-        ASTElpType::BuiltIn(BuiltInTypes::Void)
-    }
-}
-
-impl FromCST<CSTObjectMember> for ASTObjectMember {
-    fn from_cst(_cst: &CSTObjectMember) -> Self {
-        ASTObjectMember {}
+    fn from_cst(cst: &CSTElpType) -> Self {
+        if intrinsic_cst_type(*cst) {
+            ASTElpType::BuiltIn(BuiltInTypes::Void)
+        } else {
+            match cst.value {
+                CSTElpTypeValue::Parameter(param) => ASTElpType::Reference(TypeReference {
+                    as_array: false,
+                    name: param.name.value,
+                }),
+                CSTElpTypeValue::Array(arr) => ASTElpType::Reference(TypeReference {
+                    as_array: true,
+                    name: arr.of_elp_type.value,
+                }),
+            }
+        }
     }
 }

@@ -20,7 +20,7 @@ pub struct CSTElpTypeParameter {
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::elp_type_array))]
 pub struct CSTElpTypeArray {
-    pub of_elp_type: Vec<CSTElpTypeParameter>,
+    pub of_elp_type: Box<CSTElpType>,
 }
 
 #[derive(Debug, FromPest, PartialEq, Eq)]

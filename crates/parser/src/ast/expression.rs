@@ -2,7 +2,7 @@
 
 use crate::cst::expression::CSTExpression;
 
-use super::{block::ASTBlock, elp_type::ASTElpType, traits::FromCST};
+use super::{block::ASTBlock, elp_type::ASTElpType, object::ASTObject, traits::FromCST};
 
 #[derive(Debug, PartialEq, PartialOrd)]
 pub enum ASTExpression {
@@ -18,7 +18,7 @@ pub enum ASTExpression {
     //    Interface(Box<Interface>),
     //    Match(Box<MatchTree>),
     //    Number(Box<Number>),
-    //    Object(Box<Object>),
+    Object(Box<ASTObject>),
     //    PointerSemantics(Box<PointerSemantics>),
     //    String(Box<StringValue>),
     //    ValueAssignment(Box<ValueAssignment>),
@@ -35,6 +35,9 @@ impl FromCST<CSTExpression> for ASTExpression {
             }
             CSTExpression::ElpType(elp_type) => {
                 ASTExpression::ElpType(Box::new(ASTElpType::from_cst(elp_type)))
+            }
+            CSTExpression::Object(object) => {
+                ASTExpression::Object(Box::new(ASTObject::from_cst(object)))
             }
             _ => panic!("Invalid CST expression: {:#?}", cst),
         }
