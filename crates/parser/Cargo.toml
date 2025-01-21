@@ -11,7 +11,7 @@ pest = { version = "2" }
 pest_derive = { version = "2" }
 pest-ast = { version = "0.3.5", features = ["trace"] }
 from-pest = "0.3.2"
-llvm-sys = "191.0.0"
+llvm-sys = "180"
 
 [dev-dependencies]
 pretty_assertions = "1.4.1"
