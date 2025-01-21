@@ -2,7 +2,7 @@ use crate::cst::span_into_string;
 use crate::parser::Rule;
 use pest_ast::FromPest;
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Copy)]
 #[pest_ast(rule(Rule::IDENT))]
 pub struct CSTIdent {
     #[pest_ast(outer(with(span_into_string)))]

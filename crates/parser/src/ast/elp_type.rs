@@ -1,49 +1,93 @@
-use crate::cst::elp_type::{CSTElpType, CSTElpTypeValue};
+use crate::cst::{
+    elp_type::{
+        CSTElpType, CSTElpTypeGeneric, CSTElpTypeGenericParam, CSTElpTypeParameter, CSTElpTypeValue,
+    },
+    ident::CSTIdent,
+};
 
-use super::traits::FromCST;
+use super::{expression::ASTExpression, traits::FromCST};
 
-fn intrinsic_cst_type(cst: CSTElpType) -> bool {
-    match cst.value {
-        CSTElpTypeValue::Array(arr) => intrinsic_cst_type(*arr.of_elp_type),
-        CSTElpTypeValue::Parameter(param) => match param.name.value.as_str() {
-            "int32" | "uint32" | "int64" | "uint64" => true,
-            _ => false,
-        },
-    }
+#[derive(Debug, PartialEq, PartialOrd)]
+pub enum NumericType {
+    Int32,
+    UInt32,
+    Int64,
+    UInt64,
 }
 
 #[derive(Debug, PartialEq, PartialOrd)]
-pub enum BuiltInTypes {
+pub enum BuiltInType {
+    Array(ASTExpression),
+    Numeric(NumericType),
     Void,
 }
 
 #[derive(Debug, PartialEq, PartialOrd)]
+pub enum ASTMutability {
+    Immutable,
+    Mutable,
+}
+
+#[derive(Debug, PartialEq, PartialOrd)]
+pub enum ASTPointerSemantics {
+    Pointer,
+    Reference,
+}
+
+#[derive(Debug, PartialEq, PartialOrd)]
 pub struct TypeReference {
-    pub as_array: bool,
     pub name: String,
+    pub mutability: ASTMutability,
+    pub pointer_semantics: Option<ASTPointerSemantics>,
+    pub generics: Vec<ASTElpType>,
 }
 
 #[derive(Debug, PartialEq, PartialOrd)]
 pub enum ASTElpType {
-    BuiltIn(BuiltInTypes),
+    Intrinsic(BuiltInType),
     Reference(TypeReference),
+}
+
+// we need to resolve this type to its corresponding AST type,
+// since the cst only understands literals we narrow the types
+// to their ASTElpType.
+fn resolve_to_ast_type(cst: CSTElpType) -> ASTElpType {
+    match cst.value {
+        CSTElpTypeValue::Array(arr) => resolve_to_ast_type(CSTElpType {
+            mutability: cst.mutability,
+            pointer_semantics: cst.pointer_semantics,
+            value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                name: CSTIdent {
+                    value: "Array".into(),
+                },
+                generics: vec![CSTElpTypeGeneric {
+                    params: vec![CSTElpTypeGenericParam {
+                        elp_type: *arr.of_elp_type,
+                        type_constraint: None,
+                    }],
+                }],
+            }),
+        }),
+        CSTElpTypeValue::Parameter(param) => match param.name.value.as_str() {
+            "int32" => ASTElpType::Intrinsic(BuiltInType::Numeric(NumericType::Int32)),
+            "uint32" => ASTElpType::Intrinsic(BuiltInType::Numeric(NumericType::UInt32)),
+            "int64" => ASTElpType::Intrinsic(BuiltInType::Numeric(NumericType::Int64)),
+            "uint64" => ASTElpType::Intrinsic(BuiltInType::Numeric(NumericType::UInt64)),
+            "Array" => ASTElpType::Intrinsic(BuiltInType::Array(ASTExpression::ElpType(Box::new(
+                ASTElpType::Reference(TypeReference {
+                    name: "ASTExpression".into(),
+                    mutability: ASTMutability::Immutable,
+                    pointer_semantics: None,
+                    generics: Some(Box::new(resolve_to_ast_type(CSTElpType {}))),
+                }),
+            )))),
+        },
+    }
 }
 
 impl FromCST<CSTElpType> for ASTElpType {
     fn from_cst(cst: &CSTElpType) -> Self {
-        if intrinsic_cst_type(*cst) {
-            ASTElpType::BuiltIn(BuiltInTypes::Void)
-        } else {
-            match cst.value {
-                CSTElpTypeValue::Parameter(param) => ASTElpType::Reference(TypeReference {
-                    as_array: false,
-                    name: param.name.value,
-                }),
-                CSTElpTypeValue::Array(arr) => ASTElpType::Reference(TypeReference {
-                    as_array: true,
-                    name: arr.of_elp_type.value,
-                }),
-            }
-        }
+        let deref_cst: CSTElpType = *cst;
+        resolve_to_ast_type(deref_cst)
     }
 }
