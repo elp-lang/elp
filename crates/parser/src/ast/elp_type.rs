@@ -73,14 +73,27 @@ fn resolve_to_ast_type(cst: CSTElpType) -> ASTElpType {
             "uint32" => ASTElpType::Intrinsic(BuiltInType::Numeric(NumericType::UInt32)),
             "int64" => ASTElpType::Intrinsic(BuiltInType::Numeric(NumericType::Int64)),
             "uint64" => ASTElpType::Intrinsic(BuiltInType::Numeric(NumericType::UInt64)),
-            "Array" => ASTElpType::Intrinsic(BuiltInType::Array(ASTExpression::ElpType(Box::new(
-                ASTElpType::Reference(TypeReference {
-                    name: "ASTExpression".into(),
-                    mutability: ASTMutability::Immutable,
-                    pointer_semantics: None,
-                    generics: Some(Box::new(resolve_to_ast_type(CSTElpType {}))),
-                }),
-            )))),
+            "Array" => {
+                let generics: Vec<ASTElpType> = param
+                    .generics
+                    .iter()
+                    .map(|g| {
+                        g.params
+                            .iter()
+                            .map(|p| ASTElpType::from_cst(&p.elp_type))
+                            .collect()
+                    })
+                    .collect();
+
+                ASTElpType::Intrinsic(BuiltInType::Array(ASTExpression::ElpType(Box::new(
+                    ASTElpType::Reference(TypeReference {
+                        name: param.name.value,
+                        mutability: ASTMutability::Immutable,
+                        pointer_semantics: None,
+                        generics,
+                    }),
+                ))))
+            }
         },
     }
 }
