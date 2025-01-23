@@ -2,7 +2,7 @@ use super::{ident::CSTIdent, variable_access::CSTPointerSemantics, CSTMutability
 use crate::parser::Rule;
 use pest_ast::FromPest;
 
-#[derive(Debug, FromPest, PartialEq, Eq, Copy)]
+#[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::elp_type))]
 pub struct CSTElpType {
     pub pointer_semantics: Option<CSTPointerSemantics>,
