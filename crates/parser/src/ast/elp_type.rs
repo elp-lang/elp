@@ -95,18 +95,22 @@ impl FromCST<CSTElpType> for ASTElpType {
                         .generics
                         .iter()
                         .map(|g| {
-                            let params = g
+                            let params: Vec<ASTElpType> = g
                                 .params
                                 .iter()
                                 .map(|p| ASTElpType::from_cst(&p.elp_type))
                                 .collect();
 
-                            ASTElpType::Reference(TypeReference {
-                                name: param.name.value.clone(),
-                                mutability: ASTMutability::Immutable,
-                                pointer_semantics: None,
-                                generic_parameters: params,
-                            })
+                            if params.is_empty() {
+                                // TODO: Need to go back to the CST and add the span info.
+                                panic!("Missing the type for Array.");
+                            }
+
+                            ASTElpType::Intrinsic(BuiltInType::Array(ASTExpression::ElpType(
+                                Box::new(ASTElpType::Intrinsic(BuiltInType::Numeric(
+                                    NumericType::Int32,
+                                ))),
+                            )))
                         })
                         .collect();
 
