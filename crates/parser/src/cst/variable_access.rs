@@ -4,15 +4,15 @@ use pest_ast::FromPest;
 
 // Not a fan of having anonymous structs for these rules to fit into the enum
 // but it is what it is.
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::POINTER))]
 pub struct CSTPointer;
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::REFERENCE))]
 pub struct CSTReference;
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::pointer_semantics))]
 pub enum CSTPointerSemantics {
     Pointer(CSTPointer),

@@ -2,7 +2,7 @@ use super::{ident::CSTIdent, variable_access::CSTPointerSemantics, CSTMutability
 use crate::parser::Rule;
 use pest_ast::FromPest;
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::elp_type))]
 pub struct CSTElpType {
     pub pointer_semantics: Option<CSTPointerSemantics>,
@@ -10,40 +10,40 @@ pub struct CSTElpType {
     pub value: CSTElpTypeValue,
 }
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::elp_type_parameter))]
 pub struct CSTElpTypeParameter {
     pub name: CSTIdent,
     pub generics: Vec<CSTElpTypeGeneric>,
 }
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::elp_type_array))]
 pub struct CSTElpTypeArray {
     pub of_elp_type: Box<CSTElpType>,
 }
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::elp_type_value))]
 pub enum CSTElpTypeValue {
     Array(CSTElpTypeArray),
     Parameter(CSTElpTypeParameter),
 }
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::elp_type_generic_param))]
 pub struct CSTElpTypeGenericParam {
     pub elp_type: CSTElpType,
     pub type_constraint: Option<CSTElpTypeGenericConstraint>,
 }
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::elp_type_generic))]
 pub struct CSTElpTypeGeneric {
     pub params: Vec<CSTElpTypeGenericParam>,
 }
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::elp_type_generic_constraint))]
 pub struct CSTElpTypeGenericConstraint {
     pub constraints: Vec<CSTElpType>,

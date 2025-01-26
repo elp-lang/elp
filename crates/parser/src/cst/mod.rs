@@ -24,15 +24,15 @@ use pest_ast::FromPest;
 
 use crate::parser::Rule;
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::VAR))]
 pub struct Var;
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::CONST))]
 pub struct Const;
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::mutability_selector))]
 pub enum CSTMutabilitySelector {
     Mutable(Var),

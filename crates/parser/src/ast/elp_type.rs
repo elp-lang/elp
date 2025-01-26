@@ -3,6 +3,8 @@ use crate::cst::{
         CSTElpType, CSTElpTypeGeneric, CSTElpTypeGenericParam, CSTElpTypeParameter, CSTElpTypeValue,
     },
     ident::CSTIdent,
+    variable_access::CSTPointerSemantics,
+    CSTMutabilitySelector,
 };
 
 use super::{expression::ASTExpression, traits::FromCST};
@@ -19,7 +21,6 @@ pub enum NumericType {
 pub enum BuiltInType {
     Array(ASTExpression),
     Numeric(NumericType),
-    Void,
 }
 
 #[derive(Debug, PartialEq, PartialOrd)]
@@ -28,10 +29,28 @@ pub enum ASTMutability {
     Mutable,
 }
 
+impl FromCST<CSTMutabilitySelector> for ASTMutability {
+    fn from_cst(cst: &CSTMutabilitySelector) -> Self {
+        match cst {
+            CSTMutabilitySelector::Mutable(_) => ASTMutability::Mutable,
+            CSTMutabilitySelector::Immutable(_) => ASTMutability::Immutable,
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, PartialOrd)]
 pub enum ASTPointerSemantics {
     Pointer,
     Reference,
+}
+
+impl FromCST<CSTPointerSemantics> for ASTPointerSemantics {
+    fn from_cst(cst: &CSTPointerSemantics) -> Self {
+        match cst {
+            CSTPointerSemantics::Pointer(_) => ASTPointerSemantics::Pointer,
+            CSTPointerSemantics::Reference(_) => ASTPointerSemantics::Reference,
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, PartialOrd)]
@@ -52,15 +71,15 @@ impl FromCST<CSTElpType> for ASTElpType {
     fn from_cst(cst: &CSTElpType) -> Self {
         match &cst.value {
             CSTElpTypeValue::Array(arr) => ASTElpType::from_cst(&CSTElpType {
-                mutability: cst.mutability,
-                pointer_semantics: cst.pointer_semantics,
+                mutability: cst.mutability.clone(),
+                pointer_semantics: cst.pointer_semantics.clone(),
                 value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
                     name: CSTIdent {
                         value: "Array".into(),
                     },
                     generics: vec![CSTElpTypeGeneric {
                         params: vec![CSTElpTypeGenericParam {
-                            elp_type: *arr.of_elp_type,
+                            elp_type: *arr.of_elp_type.clone(),
                             type_constraint: None,
                         }],
                     }],
@@ -93,7 +112,7 @@ impl FromCST<CSTElpType> for ASTElpType {
 
                     ASTElpType::Intrinsic(BuiltInType::Array(ASTExpression::ElpType(Box::new(
                         ASTElpType::Reference(TypeReference {
-                            name: param.name.value,
+                            name: param.name.value.clone(),
                             mutability: ASTMutability::Immutable,
                             pointer_semantics: None,
                             generic_parameters: generics,
@@ -101,12 +120,66 @@ impl FromCST<CSTElpType> for ASTElpType {
                     ))))
                 }
                 &_ => ASTElpType::Reference(TypeReference {
-                    name: param.name.value,
+                    name: param.name.value.clone(),
                     mutability: ASTMutability::Immutable,
                     pointer_semantics: None,
                     generic_parameters: vec![],
                 }),
             },
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::cst::elp_type::CSTElpTypeArray;
+
+    use super::*;
+
+    #[test]
+    fn elp_type_from_cst() {
+        // int32
+        let cst_type_intrinsic = crate::cst::elp_type::CSTElpType {
+            mutability: None,
+            pointer_semantics: None,
+            value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                name: CSTIdent {
+                    value: "int32".into(),
+                },
+                generics: vec![],
+            }),
+        };
+        let ast_type_intrinsic = ASTElpType::from_cst(&cst_type_intrinsic);
+
+        assert_eq!(
+            ast_type_intrinsic,
+            ASTElpType::Intrinsic(BuiltInType::Numeric(NumericType::Int32))
+        );
+
+        // [int32]
+        let cst_type_array = crate::cst::elp_type::CSTElpType {
+            mutability: None,
+            pointer_semantics: None,
+            value: CSTElpTypeValue::Array(CSTElpTypeArray {
+                of_elp_type: Box::new(CSTElpType {
+                    mutability: None,
+                    pointer_semantics: None,
+                    value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                        name: CSTIdent {
+                            value: "int32".into(),
+                        },
+                        generics: vec![],
+                    }),
+                }),
+            }),
+        };
+        let ast_type_array = ASTElpType::from_cst(&cst_type_array);
+
+        assert_eq!(
+            ast_type_array,
+            ASTElpType::Intrinsic(BuiltInType::Array(ASTExpression::ElpType(Box::new(
+                ASTElpType::Intrinsic(BuiltInType::Numeric(NumericType::Int32))
+            ))))
+        )
     }
 }
