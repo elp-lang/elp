@@ -18,7 +18,13 @@ use super::{
     variable_declaration::CSTVariableDeclaration,
 };
 use crate::parser::Rule;
+use from_pest::FromPest;
 use pest_ast::FromPest;
+
+pub struct Spanned<'pest, T: FromPest<'pest>> {
+    pub value: T,
+    pub span: pest::Span<'pest>,
+}
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::expression))]

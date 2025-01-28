@@ -19,7 +19,7 @@ pub(crate) mod variable_assignment;
 pub(crate) mod variable_declaration;
 
 use expression::CSTExpression;
-use pest::Span;
+use pest::{LinesSpan, Span};
 use pest_ast::FromPest;
 
 use crate::parser::Rule;
