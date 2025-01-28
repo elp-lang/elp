@@ -1,3 +1,4 @@
+use pest::Span;
 use pest_ast::FromPest;
 
 use crate::parser::Rule;
@@ -6,7 +7,9 @@ use super::{block::CSTBlock, expression::CSTExpression};
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::for_loop))]
-pub struct CSTForLoop {
+pub struct CSTForLoop<'a> {
+    #[pest_ast(outer())]
+    pub span: Span<'a>,
     pub declaration_expression: CSTExpression,
     pub in_expression: CSTExpression,
     pub body: CSTBlock,
@@ -37,6 +40,7 @@ mod tests {
         assert_eq!(
             ast,
             CSTForLoop {
+                span: pest::Span::new(expression_str, 0, 38).unwrap(),
                 declaration_expression: CSTExpression::VariableAccess(Box::new(
                     CSTVariableAccess {
                         names: CSTVariableAccessNames {

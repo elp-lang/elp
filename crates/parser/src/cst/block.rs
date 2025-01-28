@@ -6,9 +6,9 @@ use super::expression::CSTExpression;
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::block))]
-pub struct CSTBlock {
+pub struct CSTBlock<'a> {
     #[pest_ast(outer())]
-    pub span: Span<'_>,
+    pub span: Span<'a>,
     pub expressions: Vec<CSTExpression>,
 }
 
@@ -37,6 +37,7 @@ mod tests {
         assert_eq!(
             ast,
             CSTBlock {
+                span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                 expressions: vec![CSTExpression::VariableDeclaration(Box::new(
                     CSTVariableDeclaration {
                         name: "hello".into(),

@@ -1,52 +1,65 @@
 use super::{ident::CSTIdent, variable_access::CSTPointerSemantics, CSTMutabilitySelector};
 use crate::parser::Rule;
+use pest::Span;
 use pest_ast::FromPest;
 
 #[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::elp_type))]
-pub struct CSTElpType {
+pub struct CSTElpType<'a> {
+    #[pest_ast(outer())]
+    pub span: Span<'a>,
     pub pointer_semantics: Option<CSTPointerSemantics>,
     pub mutability: Option<CSTMutabilitySelector>,
-    pub value: CSTElpTypeValue,
+    pub value: CSTElpTypeValue<'a>,
 }
 
 #[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::elp_type_parameter))]
-pub struct CSTElpTypeParameter {
+pub struct CSTElpTypeParameter<'a> {
+    #[pest_ast(outer())]
+    pub span: Span<'a>,
     pub name: CSTIdent,
-    pub generics: Vec<CSTElpTypeGeneric>,
+    pub generics: Vec<CSTElpTypeGeneric<'a>>,
 }
 
 #[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::elp_type_array))]
-pub struct CSTElpTypeArray {
-    pub of_elp_type: Box<CSTElpType>,
+pub struct CSTElpTypeArray<'a> {
+    #[pest_ast(outer())]
+    pub span: Span<'a>,
+    pub of_elp_type: Box<CSTElpType<'a>>,
 }
 
 #[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::elp_type_value))]
-pub enum CSTElpTypeValue {
-    Array(CSTElpTypeArray),
-    Parameter(CSTElpTypeParameter),
+pub enum CSTElpTypeValue<'a> {
+    Array(CSTElpTypeArray<'a>),
+    Parameter(CSTElpTypeParameter<'a>),
 }
 
 #[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::elp_type_generic_param))]
-pub struct CSTElpTypeGenericParam {
-    pub elp_type: CSTElpType,
-    pub type_constraint: Option<CSTElpTypeGenericConstraint>,
+pub struct CSTElpTypeGenericParam<'a> {
+    #[pest_ast(outer())]
+    pub span: Span<'a>,
+    pub elp_type: CSTElpType<'a>,
+    pub type_constraint: Option<CSTElpTypeGenericConstraint<'a>>,
 }
 
 #[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::elp_type_generic))]
-pub struct CSTElpTypeGeneric {
-    pub params: Vec<CSTElpTypeGenericParam>,
+pub struct CSTElpTypeGeneric<'a> {
+    #[pest_ast(outer())]
+    pub span: Span<'a>,
+    pub params: Vec<CSTElpTypeGenericParam<'a>>,
 }
 
 #[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::elp_type_generic_constraint))]
-pub struct CSTElpTypeGenericConstraint {
-    pub constraints: Vec<CSTElpType>,
+pub struct CSTElpTypeGenericConstraint<'a> {
+    #[pest_ast(outer())]
+    pub span: Span<'a>,
+    pub constraints: Vec<CSTElpType<'a>>,
 }
 
 #[cfg(test)]
@@ -66,6 +79,7 @@ mod tests {
         assert_eq!(
             ast,
             CSTElpType {
+                span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                 mutability: None,
                 pointer_semantics: None,
                 value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
@@ -87,18 +101,26 @@ mod tests {
         assert_eq!(
             ast,
             CSTElpType {
+                span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                 mutability: None,
                 pointer_semantics: None,
                 value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                    span: pest::Span::new(expression_str, 0, 4).unwrap(),
                     name: CSTIdent {
                         value: "Into".into()
                     },
                     generics: vec![CSTElpTypeGeneric {
+                        span: pest::Span::new(expression_str, 4, expression_str.len()).unwrap(),
                         params: vec![CSTElpTypeGenericParam {
+                            span: pest::Span::new(expression_str, 4, expression_str.len()).unwrap(),
                             elp_type: CSTElpType {
+                                span: pest::Span::new(expression_str, 4, expression_str.len())
+                                    .unwrap(),
                                 mutability: None,
                                 pointer_semantics: None,
                                 value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                                    span: pest::Span::new(expression_str, 4, expression_str.len())
+                                        .unwrap(),
                                     name: CSTIdent {
                                         value: "String".into()
                                     },
@@ -122,11 +144,15 @@ mod tests {
         assert_eq!(
             ast,
             CSTElpTypeGeneric {
+                span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                 params: vec![CSTElpTypeGenericParam {
+                    span: pest::Span::new(expression_str, 0, 7).unwrap(),
                     elp_type: CSTElpType {
+                        span: pest::Span::new(expression_str, 1, 6).unwrap(),
                         mutability: None,
                         pointer_semantics: None,
                         value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                            span: pest::Span::new(expression_str, 1, 6).unwrap(),
                             name: CSTIdent {
                                 value: "String".into()
                             },
