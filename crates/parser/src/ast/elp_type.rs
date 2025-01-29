@@ -44,7 +44,7 @@ pub enum ASTPointerSemantics {
     Reference,
 }
 
-impl FromCST<CSTPointerSemantics> for ASTPointerSemantics {
+impl FromCST<CSTPointerSemantics<'_>> for ASTPointerSemantics {
     fn from_cst(cst: &CSTPointerSemantics) -> Self {
         match cst {
             CSTPointerSemantics::Pointer(_) => ASTPointerSemantics::Pointer,
@@ -67,18 +67,23 @@ pub enum ASTElpType {
     Reference(TypeReference),
 }
 
-impl FromCST<CSTElpType> for ASTElpType {
+impl FromCST<CSTElpType<'_>> for ASTElpType {
     fn from_cst(cst: &CSTElpType) -> Self {
         match &cst.value {
             CSTElpTypeValue::Array(arr) => ASTElpType::from_cst(&CSTElpType {
+                span: cst.span,
                 mutability: cst.mutability.clone(),
                 pointer_semantics: cst.pointer_semantics.clone(),
                 value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                    span: pest::Span::new("Arrau", 0, 5).unwrap(),
                     name: CSTIdent {
+                        span: pest::Span::new("Arrau", 0, 5).unwrap(),
                         value: "Array".into(),
                     },
                     generics: vec![CSTElpTypeGeneric {
+                        span: pest::Span::new("Arrau", 0, 5).unwrap(),
                         params: vec![CSTElpTypeGenericParam {
+                            span: pest::Span::new("Arrau", 0, 5).unwrap(),
                             elp_type: *arr.of_elp_type.clone(),
                             type_constraint: None,
                         }],
@@ -144,10 +149,13 @@ mod tests {
     fn elp_type_from_cst() {
         // int32
         let cst_type_intrinsic = crate::cst::elp_type::CSTElpType {
+            span: pest::Span::new("int32", 0, 5).unwrap(),
             mutability: None,
             pointer_semantics: None,
             value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                span: pest::Span::new("int32", 0, 5).unwrap(),
                 name: CSTIdent {
+                    span: pest::Span::new("int32", 0, 5).unwrap(),
                     value: "int32".into(),
                 },
                 generics: vec![],
@@ -162,14 +170,19 @@ mod tests {
 
         // [int32]
         let cst_type_array = crate::cst::elp_type::CSTElpType {
+            span: pest::Span::new("int32", 0, 5).unwrap(),
             mutability: None,
             pointer_semantics: None,
             value: CSTElpTypeValue::Array(CSTElpTypeArray {
+                span: pest::Span::new("int32", 0, 5).unwrap(),
                 of_elp_type: Box::new(CSTElpType {
+                    span: pest::Span::new("int32", 0, 5).unwrap(),
                     mutability: None,
                     pointer_semantics: None,
                     value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                        span: pest::Span::new("int32", 0, 5).unwrap(),
                         name: CSTIdent {
+                            span: pest::Span::new("int32", 0, 5).unwrap(),
                             value: "int32".into(),
                         },
                         generics: vec![],

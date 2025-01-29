@@ -27,7 +27,7 @@ pub enum ASTExpression {
     //    VariableDeclaration(Box<VariableDeclaration>),
 }
 
-impl FromCST<CSTExpression> for ASTExpression {
+impl FromCST<CSTExpression<'_>> for ASTExpression {
     fn from_cst(cst: &CSTExpression) -> Self {
         match cst {
             CSTExpression::Block(block) => {
@@ -51,6 +51,7 @@ mod tests {
     #[test]
     fn ast_expression_from_cst() {
         let cst_expression = CSTExpression::Block(Box::new(crate::cst::block::CSTBlock {
+            span: pest::Span::new("", 0, 1).unwrap(),
             expressions: vec![],
         }));
         let ast_expression = ASTExpression::from_cst(&cst_expression);

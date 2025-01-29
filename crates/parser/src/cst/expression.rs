@@ -18,36 +18,30 @@ use super::{
     variable_declaration::CSTVariableDeclaration,
 };
 use crate::parser::Rule;
-use from_pest::FromPest;
 use pest_ast::FromPest;
-
-pub struct Spanned<'pest, T: FromPest<'pest>> {
-    pub value: T,
-    pub span: pest::Span<'pest>,
-}
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::expression))]
-pub enum CSTExpression {
-    Block(Box<CSTBlock>),
-    ElpType(Box<CSTElpType>),
-    Enum(Box<CSTEnum>),
-    Export(Box<CSTExport>),
-    FunctionDef(Box<CSTFunctionDef>),
-    FunctionCall(Box<CSTFunctionCall>),
-    FunctionHeaderDef(Box<CSTFunctionHeaderDef>),
-    FunctionReturnValue(Box<CSTFunctionReturnValue>),
-    Ident(Box<CSTIdent>),
-    Import(Box<CSTImport>),
-    Interface(Box<CSTInterface>),
-    Match(Box<CSTMatchTree>),
-    Number(Box<CSTNumber>),
-    Object(Box<CSTObject>),
-    PointerSemantics(Box<CSTPointerSemantics>),
-    String(Box<CSTString>),
-    ValueAssignment(Box<CSTValueAssignment>),
-    VariableAccess(Box<CSTVariableAccess>),
-    VariableAssignment(Box<CSTVariableAssignment>),
-    VariableDeclaration(Box<CSTVariableDeclaration>),
-    Unary(Box<CSTUnaryOperator>),
+pub enum CSTExpression<'a> {
+    Block(Box<CSTBlock<'a>>),
+    ElpType(Box<CSTElpType<'a>>),
+    Enum(Box<CSTEnum<'a>>),
+    Export(Box<CSTExport<'a>>),
+    FunctionDef(Box<CSTFunctionDef<'a>>),
+    FunctionCall(Box<CSTFunctionCall<'a>>),
+    FunctionHeaderDef(Box<CSTFunctionHeaderDef<'a>>),
+    FunctionReturnValue(Box<CSTFunctionReturnValue<'a>>),
+    Ident(Box<CSTIdent<'a>>),
+    Import(Box<CSTImport<'a>>),
+    Interface(Box<CSTInterface<'a>>),
+    Match(Box<CSTMatchTree<'a>>),
+    Number(Box<CSTNumber<'a>>),
+    Object(Box<CSTObject<'a>>),
+    PointerSemantics(Box<CSTPointerSemantics<'a>>),
+    String(Box<CSTString<'a>>),
+    ValueAssignment(Box<CSTValueAssignment<'a>>),
+    VariableAccess(Box<CSTVariableAccess<'a>>),
+    VariableAssignment(Box<CSTVariableAssignment<'a>>),
+    VariableDeclaration(Box<CSTVariableDeclaration<'a>>),
+    Unary(Box<CSTUnaryOperator<'a>>),
 }

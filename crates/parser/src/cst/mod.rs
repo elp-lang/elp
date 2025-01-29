@@ -19,7 +19,7 @@ pub(crate) mod variable_assignment;
 pub(crate) mod variable_declaration;
 
 use expression::CSTExpression;
-use pest::{LinesSpan, Span};
+use pest::Span;
 use pest_ast::FromPest;
 
 use crate::parser::Rule;
@@ -60,8 +60,8 @@ fn span_into_string(span: Span) -> String {
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::module))]
-pub struct Module {
-    pub expressions: Vec<CSTExpression>,
+pub struct Module<'a> {
+    pub expressions: Vec<CSTExpression<'a>>,
     _eoi: Eoi,
 }
 
@@ -74,6 +74,7 @@ mod tests {
     use super::*;
     use crate::parser::ElpParser;
     use from_pest::FromPest;
+    use ident::CSTIdent;
     use import::CSTImport;
     use pest::Parser;
     use string::CSTString;
@@ -90,20 +91,39 @@ mod tests {
             ast,
             Module {
                 expressions: vec![CSTExpression::Import(Box::new(CSTImport {
+                    span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                     names: vec![
                         CSTImportName {
-                            name: "Bar".into(),
+                            span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                            name: CSTIdent {
+                                span: pest::Span::new(expression_str, 0, expression_str.len())
+                                    .unwrap(),
+                                value: "Bar".into()
+                            },
                             alias: None,
                         },
                         CSTImportName {
-                            name: "Baz".to_string(),
+                            span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                            name: CSTIdent {
+                                span: pest::Span::new(expression_str, 0, expression_str.len())
+                                    .unwrap(),
+                                value: "Baz".to_string()
+                            },
                             alias: Some(CSTImportNameAlias {
-                                alias: "BazAlias".into()
+                                span: pest::Span::new(expression_str, 0, expression_str.len())
+                                    .unwrap(),
+                                alias: CSTIdent {
+                                    span: pest::Span::new(expression_str, 0, expression_str.len())
+                                        .unwrap(),
+                                    value: "BazAlias".into(),
+                                }
                             }),
                         }
                     ],
                     module_path: CSTImportModulePath {
+                        span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                         module_path: CSTString {
+                            span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                             value: "foo".into()
                         }
                     }

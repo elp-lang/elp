@@ -3,43 +3,54 @@ use super::{
     VisibilitySelector,
 };
 use crate::parser::Rule;
+use pest::Span;
 use pest_ast::FromPest;
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::object_implements))]
-pub struct CSTObjectImplements {
-    pub types: Vec<CSTElpType>,
+pub struct CSTObjectImplements<'a> {
+    #[pest_ast(outer())]
+    pub span: Span<'a>,
+    pub types: Vec<CSTElpType<'a>>,
 }
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::object_key_default_value))]
-pub struct CSTObjectMemberDefaultValue {
-    pub value: CSTExpression,
+pub struct CSTObjectMemberDefaultValue<'a> {
+    #[pest_ast(outer())]
+    pub span: Span<'a>,
+    pub value: CSTExpression<'a>,
 }
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::object_key_tags))]
-pub struct CSTObjectMemberTags {
-    pub name: CSTIdent,
-    pub contents: CSTString,
+pub struct CSTObjectMemberTags<'a> {
+    #[pest_ast(outer())]
+    pub span: Span<'a>,
+    pub name: CSTIdent<'a>,
+    pub contents: CSTString<'a>,
 }
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::object_member))]
-pub struct CSTObjectMember {
+pub struct CSTObjectMember<'a> {
+    #[pest_ast(outer())]
+    pub span: Span<'a>,
     pub visibility: Option<VisibilitySelector>,
-    pub name: CSTIdent,
-    pub type_annotation: Option<CSTElpType>,
-    pub default_value: Option<CSTObjectMemberDefaultValue>,
-    pub tags: Vec<CSTObjectMemberTags>,
+    pub name: CSTIdent<'a>,
+    pub type_annotation: Option<CSTElpType<'a>>,
+    pub default_value: Option<CSTObjectMemberDefaultValue<'a>>,
+    pub tags: Vec<CSTObjectMemberTags<'a>>,
 }
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::object_def))]
-pub struct CSTObject {
-    pub name: CSTIdent,
-    pub implements: Option<CSTObjectImplements>,
-    pub members: Vec<CSTObjectMember>,
+pub struct CSTObject<'a> {
+    #[pest_ast(outer())]
+    pub span: Span<'a>,
+    pub name: CSTIdent<'a>,
+    pub implements: Option<CSTObjectImplements<'a>>,
+    pub members: Vec<CSTObjectMember<'a>>,
 }
 
 #[cfg(test)]
@@ -69,11 +80,22 @@ mod tests {
         assert_eq!(
             ast_basic,
             CSTObjectImplements {
+                span: pest::Span::new(expression_str_basic, 0, expression_str_basic.len()).unwrap(),
                 types: vec![CSTElpType {
+                    span: pest::Span::new(expression_str_basic, 0, expression_str_basic.len())
+                        .unwrap(),
                     mutability: None,
                     pointer_semantics: None,
                     value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                        span: pest::Span::new(expression_str_basic, 0, expression_str_basic.len())
+                            .unwrap(),
                         name: CSTIdent {
+                            span: pest::Span::new(
+                                expression_str_basic,
+                                0,
+                                expression_str_basic.len()
+                            )
+                            .unwrap(),
                             value: "String".into()
                         },
                         generics: vec![],
@@ -90,41 +112,114 @@ mod tests {
         assert_eq!(
             ast_multiple,
             CSTObjectImplements {
+                span: pest::Span::new(expression_str_basic, 0, expression_str_basic.len()).unwrap(),
                 types: vec![
                     CSTElpType {
+                        span: pest::Span::new(expression_str_basic, 0, expression_str_basic.len())
+                            .unwrap(),
                         mutability: None,
                         pointer_semantics: None,
                         value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                            span: pest::Span::new(
+                                expression_str_basic,
+                                0,
+                                expression_str_basic.len()
+                            )
+                            .unwrap(),
                             name: CSTIdent {
+                                span: pest::Span::new(
+                                    expression_str_basic,
+                                    0,
+                                    expression_str_basic.len()
+                                )
+                                .unwrap(),
                                 value: "String".into()
                             },
                             generics: vec![],
                         })
                     },
                     CSTElpType {
+                        span: pest::Span::new(expression_str_basic, 0, expression_str_basic.len())
+                            .unwrap(),
                         mutability: None,
                         pointer_semantics: None,
                         value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                            span: pest::Span::new(
+                                expression_str_basic,
+                                0,
+                                expression_str_basic.len()
+                            )
+                            .unwrap(),
                             name: CSTIdent {
+                                span: pest::Span::new(
+                                    expression_str_basic,
+                                    0,
+                                    expression_str_basic.len()
+                                )
+                                .unwrap(),
                                 value: "Number".into()
                             },
                             generics: vec![],
                         })
                     },
                     CSTElpType {
+                        span: pest::Span::new(expression_str_basic, 0, expression_str_basic.len())
+                            .unwrap(),
                         mutability: None,
                         pointer_semantics: None,
                         value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                            span: pest::Span::new(
+                                expression_str_basic,
+                                0,
+                                expression_str_basic.len()
+                            )
+                            .unwrap(),
                             name: CSTIdent {
+                                span: pest::Span::new(
+                                    expression_str_basic,
+                                    0,
+                                    expression_str_basic.len()
+                                )
+                                .unwrap(),
                                 value: "Into".into()
                             },
                             generics: vec![CSTElpTypeGeneric {
+                                span: pest::Span::new(
+                                    expression_str_basic,
+                                    0,
+                                    expression_str_basic.len()
+                                )
+                                .unwrap(),
                                 params: vec![CSTElpTypeGenericParam {
+                                    span: pest::Span::new(
+                                        expression_str_basic,
+                                        0,
+                                        expression_str_basic.len()
+                                    )
+                                    .unwrap(),
                                     elp_type: CSTElpType {
+                                        span: pest::Span::new(
+                                            expression_str_basic,
+                                            0,
+                                            expression_str_basic.len()
+                                        )
+                                        .unwrap(),
                                         mutability: None,
                                         pointer_semantics: None,
                                         value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                                            span: pest::Span::new(
+                                                expression_str_basic,
+                                                0,
+                                                expression_str_basic.len()
+                                            )
+                                            .unwrap(),
                                             name: CSTIdent {
+                                                span: pest::Span::new(
+                                                    expression_str_basic,
+                                                    0,
+                                                    expression_str_basic.len()
+                                                )
+                                                .unwrap(),
                                                 value: "JSON".into()
                                             },
                                             generics: vec![]
@@ -169,10 +264,13 @@ mod tests {
         assert_eq!(
             ast,
             CSTObjectMemberTags {
+                span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                 name: CSTIdent {
+                    span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                     value: "name".into()
                 },
                 contents: CSTString {
+                    span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                     value: "example".into()
                 }
             }
@@ -188,15 +286,20 @@ mod tests {
         assert_eq!(
             ast,
             CSTObjectMember {
+                span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                 visibility: None,
                 name: CSTIdent {
+                    span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                     value: "name".into()
                 },
                 type_annotation: Some(CSTElpType {
+                    span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                     mutability: None,
                     pointer_semantics: None,
                     value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                        span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                         name: CSTIdent {
+                            span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                             value: "String".into()
                         },
                         generics: vec![]
@@ -217,15 +320,20 @@ mod tests {
         assert_eq!(
             ast,
             CSTObjectMember {
+                span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                 visibility: Some(VisibilitySelector::Private(PrivateVisibility {})),
                 name: CSTIdent {
+                    span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                     value: "name".into()
                 },
                 type_annotation: Some(CSTElpType {
+                    span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                     mutability: None,
                     pointer_semantics: None,
                     value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                        span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                         name: CSTIdent {
+                            span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                             value: "String".into()
                         },
                         generics: vec![]
@@ -246,15 +354,20 @@ mod tests {
         assert_eq!(
             ast,
             CSTObjectMember {
+                span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                 visibility: Some(VisibilitySelector::Public(PublicVisibility {})),
                 name: CSTIdent {
+                    span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                     value: "name".into()
                 },
                 type_annotation: Some(CSTElpType {
+                    span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                     mutability: None,
                     pointer_semantics: None,
                     value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                        span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                         name: CSTIdent {
+                            span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                             value: "String".into()
                         },
                         generics: vec![]
@@ -275,15 +388,20 @@ mod tests {
         assert_eq!(
             ast,
             CSTObjectMember {
+                span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                 visibility: None,
                 name: CSTIdent {
+                    span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                     value: "name".into()
                 },
                 type_annotation: Some(CSTElpType {
+                    span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                     mutability: None,
                     pointer_semantics: None,
                     value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                        span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                         name: CSTIdent {
+                            span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                             value: "String".into()
                         },
                         generics: vec![]
@@ -291,10 +409,13 @@ mod tests {
                 }),
                 default_value: None,
                 tags: vec![CSTObjectMemberTags {
+                    span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                     name: CSTIdent {
+                        span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                         value: "name".into()
                     },
                     contents: CSTString {
+                        span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                         value: "example".into()
                     }
                 }]
@@ -311,22 +432,29 @@ mod tests {
         assert_eq!(
             ast,
             CSTObjectMember {
+                span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                 visibility: None,
                 name: CSTIdent {
+                    span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                     value: "name".into()
                 },
                 type_annotation: Some(CSTElpType {
+                    span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                     mutability: None,
                     pointer_semantics: None,
                     value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                        span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                         name: CSTIdent {
+                            span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                             value: "String".into()
                         },
                         generics: vec![]
                     })
                 }),
                 default_value: Some(CSTObjectMemberDefaultValue {
+                    span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                     value: CSTExpression::String(Box::new(CSTString {
+                        span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                         value: "example".into()
                     }))
                 }),
@@ -344,30 +472,40 @@ mod tests {
         assert_eq!(
             ast,
             CSTObjectMember {
+                span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                 visibility: None,
                 name: CSTIdent {
+                    span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                     value: "name".into()
                 },
                 type_annotation: Some(CSTElpType {
+                    span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                     mutability: None,
                     pointer_semantics: None,
                     value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                        span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                         name: CSTIdent {
+                            span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                             value: "String".into()
                         },
                         generics: vec![]
                     })
                 }),
                 default_value: Some(CSTObjectMemberDefaultValue {
+                    span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                     value: CSTExpression::String(Box::new(CSTString {
+                        span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                         value: "example_default".into()
                     }))
                 }),
                 tags: vec![CSTObjectMemberTags {
+                    span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                     name: CSTIdent {
+                        span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                         value: "name".into()
                     },
                     contents: CSTString {
+                        span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                         value: "example".into()
                     }
                 }]
@@ -384,20 +522,28 @@ mod tests {
         assert_eq!(
             ast,
             CSTObject {
+                span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                 name: CSTIdent {
+                    span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                     value: "Test".into()
                 },
                 implements: None,
                 members: vec![CSTObjectMember {
+                    span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                     visibility: None,
                     name: CSTIdent {
+                        span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                         value: "name".into()
                     },
                     type_annotation: Some(CSTElpType {
+                        span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                         mutability: None,
                         pointer_semantics: None,
                         value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                            span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                             name: CSTIdent {
+                                span: pest::Span::new(expression_str, 0, expression_str.len())
+                                    .unwrap(),
                                 value: "String".into()
                             },
                             generics: vec![]
@@ -419,15 +565,22 @@ mod tests {
         assert_eq!(
             ast,
             CSTObject {
+                span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                 name: CSTIdent {
+                    span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                     value: "Test".into()
                 },
                 implements: Some(CSTObjectImplements {
+                    span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                     types: vec![CSTElpType {
+                        span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                         mutability: None,
                         pointer_semantics: None,
                         value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                            span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                             name: CSTIdent {
+                                span: pest::Span::new(expression_str, 0, expression_str.len())
+                                    .unwrap(),
                                 value: "MyInterface".into()
                             },
                             generics: vec![]
@@ -435,15 +588,21 @@ mod tests {
                     }]
                 }),
                 members: vec![CSTObjectMember {
+                    span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                     visibility: None,
                     name: CSTIdent {
+                        span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                         value: "name".into()
                     },
                     type_annotation: Some(CSTElpType {
+                        span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                         mutability: None,
                         pointer_semantics: None,
                         value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                            span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                             name: CSTIdent {
+                                span: pest::Span::new(expression_str, 0, expression_str.len())
+                                    .unwrap(),
                                 value: "String".into()
                             },
                             generics: vec![]
@@ -465,26 +624,39 @@ mod tests {
         assert_eq!(
             ast,
             CSTObject {
+                span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                 name: CSTIdent {
+                    span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                     value: "Test".into()
                 },
                 implements: Some(CSTObjectImplements {
+                    span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                     types: vec![
                         CSTElpType {
+                            span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                             mutability: None,
                             pointer_semantics: None,
                             value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                                span: pest::Span::new(expression_str, 0, expression_str.len())
+                                    .unwrap(),
                                 name: CSTIdent {
+                                    span: pest::Span::new(expression_str, 0, expression_str.len())
+                                        .unwrap(),
                                     value: "MyInterface".into()
                                 },
                                 generics: vec![]
                             })
                         },
                         CSTElpType {
+                            span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                             mutability: None,
                             pointer_semantics: None,
                             value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                                span: pest::Span::new(expression_str, 0, expression_str.len())
+                                    .unwrap(),
                                 name: CSTIdent {
+                                    span: pest::Span::new(expression_str, 0, expression_str.len())
+                                        .unwrap(),
                                     value: "AnotherInterface".into()
                                 },
                                 generics: vec![]
@@ -493,15 +665,21 @@ mod tests {
                     ]
                 }),
                 members: vec![CSTObjectMember {
+                    span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                     visibility: None,
                     name: CSTIdent {
+                        span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                         value: "name".into()
                     },
                     type_annotation: Some(CSTElpType {
+                        span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                         mutability: None,
                         pointer_semantics: None,
                         value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                            span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                             name: CSTIdent {
+                                span: pest::Span::new(expression_str, 0, expression_str.len())
+                                    .unwrap(),
                                 value: "String".into()
                             },
                             generics: vec![]
@@ -528,24 +706,53 @@ mod tests {
         assert_eq!(
             ast,
             CSTObject {
+                span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                 name: CSTIdent {
+                    span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                     value: "Test".into()
                 },
                 implements: Some(CSTObjectImplements {
+                    span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                     types: vec![CSTElpType {
+                        span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                         mutability: None,
                         pointer_semantics: None,
                         value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                            span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                             name: CSTIdent {
+                                span: pest::Span::new(expression_str, 0, expression_str.len())
+                                    .unwrap(),
                                 value: "Into".into()
                             },
                             generics: vec![CSTElpTypeGeneric {
+                                span: pest::Span::new(expression_str, 0, expression_str.len())
+                                    .unwrap(),
                                 params: vec![CSTElpTypeGenericParam {
+                                    span: pest::Span::new(expression_str, 0, expression_str.len())
+                                        .unwrap(),
                                     elp_type: CSTElpType {
+                                        span: pest::Span::new(
+                                            expression_str,
+                                            0,
+                                            expression_str.len()
+                                        )
+                                        .unwrap(),
                                         mutability: None,
                                         pointer_semantics: None,
                                         value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                                            span: pest::Span::new(
+                                                expression_str,
+                                                0,
+                                                expression_str.len()
+                                            )
+                                            .unwrap(),
                                             name: CSTIdent {
+                                                span: pest::Span::new(
+                                                    expression_str,
+                                                    0,
+                                                    expression_str.len()
+                                                )
+                                                .unwrap(),
                                                 value: "JSON".into()
                                             },
                                             generics: vec![]
@@ -559,15 +766,22 @@ mod tests {
                 }),
                 members: vec![
                     CSTObjectMember {
+                        span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                         visibility: Some(VisibilitySelector::Public(PublicVisibility {})),
                         name: CSTIdent {
+                            span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                             value: "name".into()
                         },
                         type_annotation: Some(CSTElpType {
+                            span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                             mutability: None,
                             pointer_semantics: None,
                             value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                                span: pest::Span::new(expression_str, 0, expression_str.len())
+                                    .unwrap(),
                                 name: CSTIdent {
+                                    span: pest::Span::new(expression_str, 0, expression_str.len())
+                                        .unwrap(),
                                     value: "String".into()
                                 },
                                 generics: vec![]
@@ -575,24 +789,36 @@ mod tests {
                         }),
                         default_value: None,
                         tags: vec![CSTObjectMemberTags {
+                            span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                             name: CSTIdent {
+                                span: pest::Span::new(expression_str, 0, expression_str.len())
+                                    .unwrap(),
                                 value: "json".into()
                             },
                             contents: CSTString {
+                                span: pest::Span::new(expression_str, 0, expression_str.len())
+                                    .unwrap(),
                                 value: "name".into()
                             }
                         }]
                     },
                     CSTObjectMember {
+                        span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                         visibility: Some(VisibilitySelector::Private(PrivateVisibility {})),
                         name: CSTIdent {
+                            span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                             value: "age".into()
                         },
                         type_annotation: Some(CSTElpType {
+                            span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                             mutability: None,
                             pointer_semantics: None,
                             value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                                span: pest::Span::new(expression_str, 0, expression_str.len())
+                                    .unwrap(),
                                 name: CSTIdent {
+                                    span: pest::Span::new(expression_str, 0, expression_str.len())
+                                        .unwrap(),
                                     value: "Int".into()
                                 },
                                 generics: vec![]
@@ -600,34 +826,72 @@ mod tests {
                         }),
                         default_value: None,
                         tags: vec![CSTObjectMemberTags {
+                            span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                             name: CSTIdent {
+                                span: pest::Span::new(expression_str, 0, expression_str.len())
+                                    .unwrap(),
                                 value: "json".into()
                             },
                             contents: CSTString {
+                                span: pest::Span::new(expression_str, 0, expression_str.len())
+                                    .unwrap(),
                                 value: "age".into()
                             }
                         }],
                     },
                     CSTObjectMember {
+                        span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                         visibility: None,
                         name: CSTIdent {
+                            span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                             value: "friends".into()
                         },
                         type_annotation: Some(CSTElpType {
+                            span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                             mutability: None,
                             pointer_semantics: None,
                             value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                                span: pest::Span::new(expression_str, 0, expression_str.len())
+                                    .unwrap(),
                                 name: CSTIdent {
+                                    span: pest::Span::new(expression_str, 0, expression_str.len())
+                                        .unwrap(),
                                     value: "Vec".into()
                                 },
                                 generics: vec![CSTElpTypeGeneric {
+                                    span: pest::Span::new(expression_str, 0, expression_str.len())
+                                        .unwrap(),
                                     params: vec![CSTElpTypeGenericParam {
+                                        span: pest::Span::new(
+                                            expression_str,
+                                            0,
+                                            expression_str.len()
+                                        )
+                                        .unwrap(),
                                         elp_type: CSTElpType {
+                                            span: pest::Span::new(
+                                                expression_str,
+                                                0,
+                                                expression_str.len()
+                                            )
+                                            .unwrap(),
                                             mutability: None,
                                             pointer_semantics: None,
                                             value: CSTElpTypeValue::Parameter(
                                                 CSTElpTypeParameter {
+                                                    span: pest::Span::new(
+                                                        "Friend",
+                                                        0,
+                                                        expression_str.len()
+                                                    )
+                                                    .unwrap(),
                                                     name: CSTIdent {
+                                                        span: pest::Span::new(
+                                                            "Friend",
+                                                            0,
+                                                            expression_str.len()
+                                                        )
+                                                        .unwrap(),
                                                         value: "Friend".into()
                                                     },
                                                     generics: vec![]
@@ -641,30 +905,51 @@ mod tests {
                         }),
                         default_value: None,
                         tags: vec![CSTObjectMemberTags {
+                            span: pest::Span::new(
+                                "friends `json: \"friends\"`",
+                                0,
+                                expression_str.len()
+                            )
+                            .unwrap(),
                             name: CSTIdent {
+                                span: pest::Span::new("json", 0, expression_str.len()).unwrap(),
                                 value: "json".into()
                             },
                             contents: CSTString {
+                                span: pest::Span::new("friends", 0, expression_str.len()).unwrap(),
                                 value: "friends".into()
                             }
                         }]
                     },
                     CSTObjectMember {
+                        span: pest::Span::new(
+                            "studentId = 123 `json: \"studentId\"`",
+                            0,
+                            expression_str.len()
+                        )
+                        .unwrap(),
                         visibility: None,
                         name: CSTIdent {
+                            span: pest::Span::new("studentId", 0, expression_str.len()).unwrap(),
                             value: "studentId".into()
                         },
                         type_annotation: None,
                         default_value: Some(CSTObjectMemberDefaultValue {
+                            span: pest::Span::new("123", 0, expression_str.len()).unwrap(),
                             value: CSTExpression::Number(Box::new(CSTNumber {
+                                span: pest::Span::new("123", 0, expression_str.len()).unwrap(),
                                 value: "123".into()
                             }))
                         }),
                         tags: vec![CSTObjectMemberTags {
+                            span: pest::Span::new("`json: \"studentId\"", 0, expression_str.len())
+                                .unwrap(),
                             name: CSTIdent {
+                                span: pest::Span::new("json", 0, 4).unwrap(),
                                 value: "json".into()
                             },
                             contents: CSTString {
+                                span: pest::Span::new("studentId", 0, 8).unwrap(),
                                 value: "studentId".into()
                             }
                         }]

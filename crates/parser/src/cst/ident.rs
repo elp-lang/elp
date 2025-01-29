@@ -1,10 +1,13 @@
 use crate::cst::span_into_string;
 use crate::parser::Rule;
+use pest::Span;
 use pest_ast::FromPest;
 
 #[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::IDENT))]
-pub struct CSTIdent {
+pub struct CSTIdent<'a> {
+    #[pest_ast(outer())]
+    pub span: Span<'a>,
     #[pest_ast(outer(with(span_into_string)))]
     pub value: String,
 }
@@ -25,6 +28,7 @@ mod tests {
         assert_eq!(
             ast,
             CSTIdent {
+                span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                 value: "hello".into(),
             }
         )

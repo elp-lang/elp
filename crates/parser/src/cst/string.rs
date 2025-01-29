@@ -1,3 +1,4 @@
+use pest::Span;
 use pest_ast::FromPest;
 
 use crate::parser::Rule;
@@ -6,7 +7,9 @@ use super::span_into_string;
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::string))]
-pub struct CSTString {
+pub struct CSTString<'a> {
+    #[pest_ast(outer())]
+    pub span: Span<'a>,
     #[pest_ast(inner(with(span_into_string)))]
     pub value: String,
 }
@@ -28,6 +31,7 @@ mod tests {
         assert_eq!(
             ref_ast,
             CSTString {
+                span: pest::Span::new(ref_expression_str, 0, ref_expression_str.len()).unwrap(),
                 value: "hello world".into()
             }
         );

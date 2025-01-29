@@ -1,41 +1,54 @@
 use crate::cst::ident::CSTIdent;
 use crate::parser::Rule;
+use pest::Span;
 use pest_ast::FromPest;
 
 // Not a fan of having anonymous structs for these rules to fit into the enum
 // but it is what it is.
 #[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::POINTER))]
-pub struct CSTPointer;
+pub struct CSTPointer<'a> {
+    #[pest_ast(outer())]
+    pub span: Span<'a>,
+}
 
 #[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::REFERENCE))]
-pub struct CSTReference;
+pub struct CSTReference<'a> {
+    #[pest_ast(outer())]
+    pub span: Span<'a>,
+}
 
 #[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::pointer_semantics))]
-pub enum CSTPointerSemantics {
-    Pointer(CSTPointer),
-    Reference(CSTReference),
+pub enum CSTPointerSemantics<'a> {
+    Pointer(CSTPointer<'a>),
+    Reference(CSTReference<'a>),
 }
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::variable_access))]
-pub struct CSTVariableAccess {
-    pub pointer_semantics: Vec<CSTPointerSemantics>,
-    pub names: CSTVariableAccessNames,
+pub struct CSTVariableAccess<'a> {
+    #[pest_ast(outer())]
+    pub span: Span<'a>,
+    pub pointer_semantics: Vec<CSTPointerSemantics<'a>>,
+    pub names: CSTVariableAccessNames<'a>,
 }
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::variable_access_names))]
-pub struct CSTVariableAccessNames {
-    pub names: Vec<CSTIdent>,
+pub struct CSTVariableAccessNames<'a> {
+    #[pest_ast(outer())]
+    pub span: Span<'a>,
+    pub names: Vec<CSTIdent<'a>>,
 }
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::contextual_variable_access))]
-pub struct CSTContextualVariableAccess {
-    pub name: CSTIdent,
+pub struct CSTContextualVariableAccess<'a> {
+    #[pest_ast(outer())]
+    pub span: Span<'a>,
+    pub name: CSTIdent<'a>,
 }
 
 #[cfg(test)]
@@ -45,7 +58,6 @@ mod tests {
     use crate::parser::ElpParser;
     use from_pest::FromPest;
     use pest::Parser;
-    use pretty_assertions::assert_eq;
 
     #[test]
     fn test_pointer_semantics() {
@@ -53,13 +65,23 @@ mod tests {
         let mut ref_pairs = ElpParser::parse(Rule::pointer_semantics, ref_expression_str).unwrap();
         let ref_ast = CSTPointerSemantics::from_pest(&mut ref_pairs).unwrap();
 
-        assert_eq!(ref_ast, CSTPointerSemantics::Reference(CSTReference {}));
+        assert_eq!(
+            ref_ast,
+            CSTPointerSemantics::Reference(CSTReference {
+                span: pest::Span::new(ref_expression_str, 0, ref_expression_str.len()).unwrap(),
+            })
+        );
 
         let ptr_expression_str = "*";
         let mut ptr_pairs = ElpParser::parse(Rule::pointer_semantics, ptr_expression_str).unwrap();
         let ptr_ast = CSTPointerSemantics::from_pest(&mut ptr_pairs).unwrap();
 
-        assert_eq!(ptr_ast, CSTPointerSemantics::Pointer(CSTPointer {}));
+        assert_eq!(
+            ptr_ast,
+            CSTPointerSemantics::Pointer(CSTPointer {
+                span: pest::Span::new(ref_expression_str, 0, ref_expression_str.len()).unwrap(),
+            })
+        );
     }
 
     #[test]
@@ -71,21 +93,33 @@ mod tests {
         assert_eq!(
             ast,
             CSTVariableAccess {
+                span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                 pointer_semantics: vec![],
                 names: CSTVariableAccessNames {
+                    span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                     names: vec![
                         CSTIdent {
+                            span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                             value: "hello".into()
                         },
                         CSTIdent {
+                            span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                             value: "world".into()
                         },
-                        CSTIdent { value: "my".into() },
                         CSTIdent {
+                            span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                            value: "my".into()
+                        },
+                        CSTIdent {
+                            span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                             value: "name".into()
                         },
-                        CSTIdent { value: "is".into() },
                         CSTIdent {
+                            span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                            value: "is".into()
+                        },
+                        CSTIdent {
+                            span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                             value: "dave".into()
                         },
                     ],
@@ -104,21 +138,76 @@ mod tests {
         assert_eq!(
             reference_ast,
             CSTVariableAccess {
-                pointer_semantics: vec![CSTPointerSemantics::Reference(CSTReference {})],
+                span: pest::Span::new(expression_str_reference, 0, expression_str_reference.len())
+                    .unwrap(),
+                pointer_semantics: vec![CSTPointerSemantics::Reference(CSTReference {
+                    span: pest::Span::new(
+                        expression_str_reference,
+                        0,
+                        expression_str_reference.len()
+                    )
+                    .unwrap(),
+                })],
                 names: CSTVariableAccessNames {
+                    span: pest::Span::new(
+                        expression_str_reference,
+                        0,
+                        expression_str_reference.len()
+                    )
+                    .unwrap(),
                     names: vec![
                         CSTIdent {
+                            span: pest::Span::new(
+                                expression_str_reference,
+                                0,
+                                expression_str_reference.len()
+                            )
+                            .unwrap(),
                             value: "hello".into()
                         },
                         CSTIdent {
+                            span: pest::Span::new(
+                                expression_str_reference,
+                                0,
+                                expression_str_reference.len()
+                            )
+                            .unwrap(),
                             value: "world".into()
                         },
-                        CSTIdent { value: "my".into() },
                         CSTIdent {
+                            span: pest::Span::new(
+                                expression_str_reference,
+                                0,
+                                expression_str_reference.len()
+                            )
+                            .unwrap(),
+                            value: "my".into()
+                        },
+                        CSTIdent {
+                            span: pest::Span::new(
+                                expression_str_reference,
+                                0,
+                                expression_str_reference.len()
+                            )
+                            .unwrap(),
                             value: "name".into()
                         },
-                        CSTIdent { value: "is".into() },
                         CSTIdent {
+                            span: pest::Span::new(
+                                expression_str_reference,
+                                0,
+                                expression_str_reference.len()
+                            )
+                            .unwrap(),
+                            value: "is".into()
+                        },
+                        CSTIdent {
+                            span: pest::Span::new(
+                                expression_str_reference,
+                                0,
+                                expression_str_reference.len()
+                            )
+                            .unwrap(),
                             value: "dave".into()
                         },
                     ],
@@ -134,21 +223,72 @@ mod tests {
         assert_eq!(
             pointer_ast,
             CSTVariableAccess {
-                pointer_semantics: vec![CSTPointerSemantics::Pointer(CSTPointer {})],
+                span: pest::Span::new(expression_str_reference, 0, expression_str_reference.len())
+                    .unwrap(),
+                pointer_semantics: vec![CSTPointerSemantics::Pointer(CSTPointer {
+                    span: pest::Span::new(expression_str_pointer, 0, expression_str_pointer.len())
+                        .unwrap()
+                })],
                 names: CSTVariableAccessNames {
+                    span: pest::Span::new(
+                        expression_str_reference,
+                        0,
+                        expression_str_reference.len()
+                    )
+                    .unwrap(),
                     names: vec![
                         CSTIdent {
+                            span: pest::Span::new(
+                                expression_str_reference,
+                                0,
+                                expression_str_reference.len()
+                            )
+                            .unwrap(),
                             value: "hello".into()
                         },
                         CSTIdent {
+                            span: pest::Span::new(
+                                expression_str_reference,
+                                0,
+                                expression_str_reference.len()
+                            )
+                            .unwrap(),
                             value: "world".into()
                         },
-                        CSTIdent { value: "my".into() },
                         CSTIdent {
+                            span: pest::Span::new(
+                                expression_str_reference,
+                                0,
+                                expression_str_reference.len()
+                            )
+                            .unwrap(),
+                            value: "my".into()
+                        },
+                        CSTIdent {
+                            span: pest::Span::new(
+                                expression_str_reference,
+                                0,
+                                expression_str_reference.len()
+                            )
+                            .unwrap(),
                             value: "name".into()
                         },
-                        CSTIdent { value: "is".into() },
                         CSTIdent {
+                            span: pest::Span::new(
+                                expression_str_reference,
+                                0,
+                                expression_str_reference.len()
+                            )
+                            .unwrap(),
+                            value: "is".into()
+                        },
+                        CSTIdent {
+                            span: pest::Span::new(
+                                expression_str_reference,
+                                0,
+                                expression_str_reference.len()
+                            )
+                            .unwrap(),
                             value: "dave".into()
                         },
                     ],
@@ -167,7 +307,11 @@ mod tests {
         assert_eq!(
             pointer_ast,
             CSTContextualVariableAccess {
+                span: pest::Span::new(expression_str_pointer, 0, expression_str_pointer.len())
+                    .unwrap(),
                 name: CSTIdent {
+                    span: pest::Span::new(expression_str_pointer, 0, expression_str_pointer.len())
+                        .unwrap(),
                     value: "CONTEXTUAL".into()
                 },
             }

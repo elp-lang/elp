@@ -10,9 +10,9 @@ use super::{block::CSTBlock, expression::CSTExpression};
 pub struct CSTForLoop<'a> {
     #[pest_ast(outer())]
     pub span: Span<'a>,
-    pub declaration_expression: CSTExpression,
-    pub in_expression: CSTExpression,
-    pub body: CSTBlock,
+    pub declaration_expression: CSTExpression<'a>,
+    pub in_expression: CSTExpression<'a>,
+    pub body: CSTBlock<'a>,
 }
 
 #[cfg(test)]
@@ -43,8 +43,12 @@ mod tests {
                 span: pest::Span::new(expression_str, 0, 38).unwrap(),
                 declaration_expression: CSTExpression::VariableAccess(Box::new(
                     CSTVariableAccess {
+                        span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                         names: CSTVariableAccessNames {
+                            span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                             names: vec![CSTIdent {
+                                span: pest::Span::new(expression_str, 0, expression_str.len())
+                                    .unwrap(),
                                 value: "thing".into()
                             }],
                         },
@@ -52,19 +56,29 @@ mod tests {
                     }
                 )),
                 in_expression: CSTExpression::VariableAccess(Box::new(CSTVariableAccess {
+                    span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                     names: CSTVariableAccessNames {
+                        span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                         names: vec![CSTIdent {
+                            span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                             value: "thingies".into()
                         }],
                     },
                     pointer_semantics: vec![],
                 })),
                 body: CSTBlock {
+                    span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                     expressions: vec![CSTExpression::FunctionCall(Box::new(CSTFunctionCall {
+                        span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                         name: CSTFunctionCallName::VariableAccess(CSTVariableAccess {
+                            span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                             pointer_semantics: vec![],
                             names: CSTVariableAccessNames {
+                                span: pest::Span::new(expression_str, 0, expression_str.len())
+                                    .unwrap(),
                                 names: vec![CSTIdent {
+                                    span: pest::Span::new(expression_str, 0, expression_str.len())
+                                        .unwrap(),
                                     value: "print".into()
                                 }],
                             },
@@ -72,8 +86,18 @@ mod tests {
                         generics: None,
                         arguments: vec![CSTExpression::VariableAccess(Box::new(
                             CSTVariableAccess {
+                                span: pest::Span::new(expression_str, 0, expression_str.len())
+                                    .unwrap(),
                                 names: CSTVariableAccessNames {
+                                    span: pest::Span::new(expression_str, 0, expression_str.len())
+                                        .unwrap(),
                                     names: vec![CSTIdent {
+                                        span: pest::Span::new(
+                                            expression_str,
+                                            0,
+                                            expression_str.len()
+                                        )
+                                        .unwrap(),
                                         value: "thing".into()
                                     }],
                                 },

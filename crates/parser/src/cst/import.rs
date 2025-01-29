@@ -1,33 +1,40 @@
-use super::{span_into_string, string::CSTString};
+use super::{ident::CSTIdent, string::CSTString};
 use crate::parser::Rule;
+use pest::Span;
 use pest_ast::FromPest;
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::import))]
-pub struct CSTImport {
-    pub names: Vec<CSTImportName>,
-    pub module_path: CSTImportModulePath,
+pub struct CSTImport<'a> {
+    #[pest_ast(outer())]
+    pub span: Span<'a>,
+    pub names: Vec<CSTImportName<'a>>,
+    pub module_path: CSTImportModulePath<'a>,
 }
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::import_name))]
-pub struct CSTImportName {
-    #[pest_ast(inner(with(span_into_string)))]
-    pub name: String,
-    pub alias: Option<CSTImportNameAlias>,
+pub struct CSTImportName<'a> {
+    #[pest_ast(outer())]
+    pub span: Span<'a>,
+    pub name: CSTIdent<'a>,
+    pub alias: Option<CSTImportNameAlias<'a>>,
 }
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::import_name_alias))]
-pub struct CSTImportNameAlias {
-    #[pest_ast(inner(with(span_into_string)))]
-    pub alias: String,
+pub struct CSTImportNameAlias<'a> {
+    #[pest_ast(outer())]
+    pub span: Span<'a>,
+    pub alias: CSTIdent<'a>,
 }
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::import_module_path))]
-pub struct CSTImportModulePath {
-    pub module_path: CSTString,
+pub struct CSTImportModulePath<'a> {
+    #[pest_ast(outer())]
+    pub span: Span<'a>,
+    pub module_path: CSTString<'a>,
 }
 
 #[cfg(test)]
@@ -46,20 +53,36 @@ mod tests {
         assert_eq!(
             ast,
             CSTImport {
+                span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                 names: vec![
                     CSTImportName {
-                        name: "Bar".into(),
+                        span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                        name: CSTIdent {
+                            span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                            value: "Bar".into()
+                        },
                         alias: None,
                     },
                     CSTImportName {
-                        name: "Baz".to_string(),
+                        span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                        name: CSTIdent {
+                            span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                            value: "Baz".to_string()
+                        },
                         alias: Some(CSTImportNameAlias {
-                            alias: "BazAlias".into()
+                            span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                            alias: CSTIdent {
+                                span: pest::Span::new(expression_str, 0, expression_str.len())
+                                    .unwrap(),
+                                value: "BazAlias".into()
+                            }
                         }),
                     }
                 ],
                 module_path: CSTImportModulePath {
+                    span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                     module_path: CSTString {
+                        span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                         value: "foo".into()
                     }
                 }

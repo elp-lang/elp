@@ -9,7 +9,7 @@ use super::expression::CSTExpression;
 pub struct CSTBlock<'a> {
     #[pest_ast(outer())]
     pub span: Span<'a>,
-    pub expressions: Vec<CSTExpression>,
+    pub expressions: Vec<CSTExpression<'a>>,
 }
 
 #[cfg(test)]
@@ -40,14 +40,27 @@ mod tests {
                 span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                 expressions: vec![CSTExpression::VariableDeclaration(Box::new(
                     CSTVariableDeclaration {
-                        name: "hello".into(),
+                        span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                        name: CSTIdent {
+                            span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                            value: "hello".into()
+                        },
                         mutability: CSTMutabilitySelector::Immutable(Const),
                         type_annotation: Some(Box::new(CSTElpType {
+                            span: pest::Span::new(expression_str, 4, expression_str.len()).unwrap(),
                             pointer_semantics: None,
                             mutability: None,
                             value: crate::cst::elp_type::CSTElpTypeValue::Parameter(
                                 CSTElpTypeParameter {
+                                    span: pest::Span::new(expression_str, 4, expression_str.len())
+                                        .unwrap(),
                                     name: CSTIdent {
+                                        span: pest::Span::new(
+                                            expression_str,
+                                            4,
+                                            expression_str.len()
+                                        )
+                                        .unwrap(),
                                         value: "String".into()
                                     },
                                     generics: vec![]
