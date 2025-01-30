@@ -262,20 +262,20 @@ mod tests {
         assert_eq!(
             ast,
             CSTObjectMember {
-                span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                span: pest::Span::new(expression_str, 0, 20).unwrap(),
                 visibility: Some(VisibilitySelector::Private(PrivateVisibility {})),
                 name: CSTIdent {
-                    span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                    span: pest::Span::new(expression_str, 9, 13).unwrap(),
                     value: "name".into()
                 },
                 type_annotation: Some(CSTElpType {
-                    span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                    span: pest::Span::new(expression_str, 14, 20).unwrap(),
                     mutability: None,
                     pointer_semantics: None,
                     value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
-                        span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                        span: pest::Span::new(expression_str, 14, 20).unwrap(),
                         name: CSTIdent {
-                            span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                            span: pest::Span::new(expression_str, 14, 20).unwrap(),
                             value: "String".into()
                         },
                         generics: vec![]
