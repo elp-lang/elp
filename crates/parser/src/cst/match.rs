@@ -76,22 +76,21 @@ mod tests {
                 span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                 subject: CSTMatchArmSubject::Expression(CSTExpression::VariableAccess(Box::new(
                     CSTVariableAccess {
-                        span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                        span: pest::Span::new(expression_str, 0, 5).unwrap(),
                         pointer_semantics: vec![],
                         names: CSTVariableAccessNames {
-                            span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                            span: pest::Span::new(expression_str, 0, 5).unwrap(),
                             names: vec![CSTIdent {
-                                span: pest::Span::new(expression_str, 0, expression_str.len())
-                                    .unwrap(),
+                                span: pest::Span::new(expression_str, 0, 4).unwrap(),
                                 value: "expr".into()
                             }],
                         },
                     }
                 ))),
                 body: CSTMatchBody::Block(Box::new(CSTBlock {
-                    span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                    span: pest::Span::new(expression_str, 8, expression_str.len()).unwrap(),
                     expressions: vec![CSTExpression::String(Box::new(CSTString {
-                        span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                        span: pest::Span::new(expression_str, 10, 25).unwrap(),
                         value: "Hello, World!".into()
                     }))]
                 }))
@@ -130,13 +129,13 @@ mod tests {
         assert_eq!(
             ast,
             CSTMatchArmSubject::MatchRange(CSTMatchRange {
-                span: pest::Span::new(expression_ident, 0, expression_ident.len()).unwrap(),
+                span: pest::Span::new(expression_range, 0, expression_range.len()).unwrap(),
                 range_start: Some(Box::new(CSTExpression::Number(Box::new(CSTNumber {
-                    span: pest::Span::new(expression_ident, 0, expression_ident.len()).unwrap(),
+                    span: pest::Span::new(expression_range, 0, 1).unwrap(),
                     value: "1".into()
                 })))),
                 range_end: Some(Box::new(CSTExpression::Number(Box::new(CSTNumber {
-                    span: pest::Span::new(expression_ident, 0, expression_ident.len()).unwrap(),
+                    span: pest::Span::new(expression_range, 3, expression_range.len()).unwrap(),
                     value: "10".into()
                 })))),
             })
@@ -159,34 +158,27 @@ mod tests {
             CSTMatchTree {
                 span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                 match_expression: CSTExpression::VariableAccess(Box::new(CSTVariableAccess {
-                    span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                    span: pest::Span::new(expression_str, 6, 11).unwrap(),
                     pointer_semantics: vec![],
                     names: CSTVariableAccessNames {
-                        span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                        span: pest::Span::new(expression_str, 6, 11).unwrap(),
                         names: vec![CSTIdent {
-                            span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                            span: pest::Span::new(expression_str, 6, 10).unwrap(),
                             value: "expr".into()
                         }],
                     }
                 })),
                 match_arms: vec![
                     CSTMatchTreeArm {
-                        span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                        span: pest::Span::new(expression_str, 25, 49).unwrap(),
                         subject: CSTMatchArmSubject::Expression(CSTExpression::VariableAccess(
                             Box::new(CSTVariableAccess {
-                                span: pest::Span::new(expression_str, 0, expression_str.len())
-                                    .unwrap(),
+                                span: pest::Span::new(expression_str, 25, 30).unwrap(),
                                 pointer_semantics: vec![],
                                 names: CSTVariableAccessNames {
-                                    span: pest::Span::new(expression_str, 0, expression_str.len())
-                                        .unwrap(),
+                                    span: pest::Span::new(expression_str, 25, 30).unwrap(),
                                     names: vec![CSTIdent {
-                                        span: pest::Span::new(
-                                            expression_str,
-                                            0,
-                                            expression_str.len()
-                                        )
-                                        .unwrap(),
+                                        span: pest::Span::new(expression_str, 25, 29).unwrap(),
                                         value: "expr".into()
                                     }],
                                 },
@@ -194,47 +186,33 @@ mod tests {
                         )),
                         body: CSTMatchBody::Expression(Box::new(CSTExpression::String(Box::new(
                             CSTString {
-                                span: pest::Span::new(expression_str, 0, expression_str.len())
-                                    .unwrap(),
+                                span: pest::Span::new(expression_str, 33, 48).unwrap(),
                                 value: "Hello, World!".into()
                             }
                         ))))
                     },
                     CSTMatchTreeArm {
-                        span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                        span: pest::Span::new(expression_str, 62, 130).unwrap(),
                         subject: CSTMatchArmSubject::Expression(CSTExpression::VariableAccess(
                             Box::new(CSTVariableAccess {
-                                span: pest::Span::new(expression_str, 0, expression_str.len())
-                                    .unwrap(),
+                                span: pest::Span::new(expression_str, 62, 64).unwrap(),
                                 pointer_semantics: vec![],
                                 names: CSTVariableAccessNames {
-                                    span: pest::Span::new(expression_str, 0, expression_str.len())
-                                        .unwrap(),
+                                    span: pest::Span::new(expression_str, 62, 64).unwrap(),
                                     names: vec![CSTIdent {
-                                        span: pest::Span::new(
-                                            expression_str,
-                                            0,
-                                            expression_str.len()
-                                        )
-                                        .unwrap(),
+                                        span: pest::Span::new(expression_str, 62, 63).unwrap(),
                                         value: "_".into()
                                     }],
                                 },
                             })
                         )),
                         body: CSTMatchBody::Block(Box::new(CSTBlock {
-                            span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                            span: pest::Span::new(expression_str, 67, 121).unwrap(),
                             expressions: vec![CSTExpression::FunctionReturnValue(Box::new(
                                 CSTFunctionReturnValue {
-                                    span: pest::Span::new(expression_str, 0, expression_str.len())
-                                        .unwrap(),
+                                    span: pest::Span::new(expression_str, 85, 107).unwrap(),
                                     value: Box::new(CSTExpression::String(Box::new(CSTString {
-                                        span: pest::Span::new(
-                                            expression_str,
-                                            0,
-                                            expression_str.len()
-                                        )
-                                        .unwrap(),
+                                        span: pest::Span::new(expression_str, 92, 107).unwrap(),
                                         value: "Default value".into()
                                     })))
                                 }
