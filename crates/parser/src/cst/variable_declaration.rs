@@ -8,7 +8,7 @@ use pest_ast::FromPest;
 pub struct CSTVariableDeclaration<'a> {
     #[pest_ast(outer())]
     pub span: Span<'a>,
-    pub mutability: CSTMutabilitySelector,
+    pub mutability: CSTMutabilitySelector<'a>,
     pub name: CSTIdent<'a>,
     pub type_annotation: Option<Box<CSTElpType<'a>>>,
 }
@@ -38,7 +38,9 @@ mod tests {
             ast,
             CSTVariableDeclaration {
                 span: pest::Span::new(expression_str, 0, 16).unwrap(),
-                mutability: CSTMutabilitySelector::Mutable(Var),
+                mutability: CSTMutabilitySelector::Mutable(Var {
+                    span: Span::new(expression_str, 0, 3).unwrap(),
+                }),
                 name: CSTIdent {
                     span: pest::Span::new(expression_str, 4, 9).unwrap(),
                     value: "hello".to_string(),

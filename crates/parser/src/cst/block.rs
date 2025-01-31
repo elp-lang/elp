@@ -37,30 +37,26 @@ mod tests {
         assert_eq!(
             ast,
             CSTBlock {
-                span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                span: pest::Span::new(expression_str, 0, 22).unwrap(),
                 expressions: vec![CSTExpression::VariableDeclaration(Box::new(
                     CSTVariableDeclaration {
-                        span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                        span: pest::Span::new(expression_str, 2, 21).unwrap(),
                         name: CSTIdent {
-                            span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                            span: pest::Span::new(expression_str, 8, 13).unwrap(),
                             value: "hello".into()
                         },
-                        mutability: CSTMutabilitySelector::Immutable(Const),
+                        mutability: CSTMutabilitySelector::Immutable(Const {
+                            span: Span::new(expression_str, 2, 7).unwrap()
+                        }),
                         type_annotation: Some(Box::new(CSTElpType {
-                            span: pest::Span::new(expression_str, 4, expression_str.len()).unwrap(),
+                            span: pest::Span::new(expression_str, 14, 21).unwrap(),
                             pointer_semantics: None,
                             mutability: None,
                             value: crate::cst::elp_type::CSTElpTypeValue::Parameter(
                                 CSTElpTypeParameter {
-                                    span: pest::Span::new(expression_str, 4, expression_str.len())
-                                        .unwrap(),
+                                    span: pest::Span::new(expression_str, 14, 21).unwrap(),
                                     name: CSTIdent {
-                                        span: pest::Span::new(
-                                            expression_str,
-                                            4,
-                                            expression_str.len()
-                                        )
-                                        .unwrap(),
+                                        span: pest::Span::new(expression_str, 14, 20).unwrap(),
                                         value: "String".into()
                                     },
                                     generics: vec![]

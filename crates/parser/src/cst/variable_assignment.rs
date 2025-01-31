@@ -52,7 +52,9 @@ mod tests {
                 variable_assignment_target: CSTVariableAssignmentTarget::VariableDeclaration(
                     CSTVariableDeclaration {
                         span: pest::Span::new(expression_str, 0, 12).unwrap(),
-                        mutability: CSTMutabilitySelector::Immutable(Const),
+                        mutability: CSTMutabilitySelector::Immutable(Const {
+                            span: Span::new(expression_str, 0, 5).unwrap(),
+                        }),
                         name: CSTIdent {
                             span: pest::Span::new(expression_str, 6, 11).unwrap(),
                             value: "hello".into()

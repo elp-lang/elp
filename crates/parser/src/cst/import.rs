@@ -43,6 +43,7 @@ mod tests {
     use crate::parser::ElpParser;
     use from_pest::FromPest;
     use pest::Parser;
+    use pretty_assertions::assert_eq;
 
     #[test]
     fn single_import_ast_generation() {
@@ -53,36 +54,35 @@ mod tests {
         assert_eq!(
             ast,
             CSTImport {
-                span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                span: pest::Span::new(expression_str, 0, 40).unwrap(),
                 names: vec![
                     CSTImportName {
-                        span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                        span: pest::Span::new(expression_str, 8, 11).unwrap(),
                         name: CSTIdent {
-                            span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                            span: pest::Span::new(expression_str, 8, 11).unwrap(),
                             value: "Bar".into()
                         },
                         alias: None,
                     },
                     CSTImportName {
-                        span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                        span: pest::Span::new(expression_str, 13, 28).unwrap(),
                         name: CSTIdent {
-                            span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                            span: pest::Span::new(expression_str, 13, 16).unwrap(),
                             value: "Baz".to_string()
                         },
                         alias: Some(CSTImportNameAlias {
-                            span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                            span: pest::Span::new(expression_str, 17, 28).unwrap(),
                             alias: CSTIdent {
-                                span: pest::Span::new(expression_str, 0, expression_str.len())
-                                    .unwrap(),
+                                span: pest::Span::new(expression_str, 20, 28).unwrap(),
                                 value: "BazAlias".into()
                             }
                         }),
                     }
                 ],
                 module_path: CSTImportModulePath {
-                    span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                    span: pest::Span::new(expression_str, 35, 40).unwrap(),
                     module_path: CSTString {
-                        span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                        span: pest::Span::new(expression_str, 35, 40).unwrap(),
                         value: "foo".into()
                     }
                 }

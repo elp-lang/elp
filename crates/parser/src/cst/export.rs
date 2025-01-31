@@ -35,12 +35,14 @@ mod tests {
         assert_eq!(
             ast,
             CSTExport {
-                span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                span: pest::Span::new(expression_str, 0, 18).unwrap(),
                 expression: CSTExpression::VariableDeclaration(Box::new(CSTVariableDeclaration {
-                    span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
-                    mutability: CSTMutabilitySelector::Immutable(Const),
+                    span: pest::Span::new(expression_str, 7, 18).unwrap(),
+                    mutability: CSTMutabilitySelector::Immutable(Const {
+                        span: Span::new(expression_str, 7, 12).unwrap(),
+                    }),
                     name: CSTIdent {
-                        span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                        span: pest::Span::new(expression_str, 13, 18).unwrap(),
                         value: "hello".into(),
                     },
                     type_annotation: None

@@ -29,7 +29,7 @@ pub enum ASTMutability {
     Mutable,
 }
 
-impl FromCST<CSTMutabilitySelector> for ASTMutability {
+impl FromCST<CSTMutabilitySelector<'_>> for ASTMutability {
     fn from_cst(cst: &CSTMutabilitySelector) -> Self {
         match cst {
             CSTMutabilitySelector::Mutable(_) => ASTMutability::Mutable,

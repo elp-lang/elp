@@ -26,17 +26,23 @@ use crate::parser::Rule;
 
 #[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::VAR))]
-pub struct Var;
+pub struct Var<'a> {
+    #[pest_ast(outer())]
+    pub span: Span<'a>,
+}
 
 #[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::CONST))]
-pub struct Const;
+pub struct Const<'a> {
+    #[pest_ast(outer())]
+    pub span: Span<'a>,
+}
 
 #[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::mutability_selector))]
-pub enum CSTMutabilitySelector {
-    Mutable(Var),
-    Immutable(Const),
+pub enum CSTMutabilitySelector<'a> {
+    Mutable(Var<'a>),
+    Immutable(Const<'a>),
 }
 
 #[derive(Debug, FromPest, PartialEq, Eq)]

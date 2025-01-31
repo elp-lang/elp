@@ -9,7 +9,7 @@ pub struct CSTElpType<'a> {
     #[pest_ast(outer())]
     pub span: Span<'a>,
     pub pointer_semantics: Option<CSTPointerSemantics<'a>>,
-    pub mutability: Option<CSTMutabilitySelector>,
+    pub mutability: Option<CSTMutabilitySelector<'a>>,
     pub value: CSTElpTypeValue<'a>,
 }
 
