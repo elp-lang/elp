@@ -72,7 +72,7 @@ mod tests {
         assert_eq!(
             plus_ast,
             CSTUnaryOperator::Plus(CSTUnaryPlus {
-                span: pest::Span::new(plus_expression_str, 0, plus_expression_str.len()).unwrap(),
+                span: pest::Span::new(plus_expression_str, 0, 1).unwrap(),
             })
         );
 
@@ -82,7 +82,7 @@ mod tests {
         assert_eq!(
             minus_ast,
             CSTUnaryOperator::Minus(CSTUnaryMinus {
-                span: pest::Span::new(plus_expression_str, 0, plus_expression_str.len()).unwrap(),
+                span: pest::Span::new(minus_expression_str, 0, 1).unwrap(),
             })
         );
 
@@ -93,7 +93,7 @@ mod tests {
         assert_eq!(
             multiply_ast,
             CSTUnaryOperator::Multiply(CSTUnaryMultiply {
-                span: pest::Span::new(plus_expression_str, 0, plus_expression_str.len()).unwrap(),
+                span: pest::Span::new(multiply_expression_str, 0, 1).unwrap(),
             })
         );
 
@@ -104,7 +104,7 @@ mod tests {
         assert_eq!(
             divide_ast,
             CSTUnaryOperator::Divide(CSTUnaryDivide {
-                span: pest::Span::new(plus_expression_str, 0, plus_expression_str.len()).unwrap(),
+                span: pest::Span::new(divide_expression_str, 0, 1).unwrap(),
             })
         );
 
@@ -114,7 +114,7 @@ mod tests {
         assert_eq!(
             power_ast,
             CSTUnaryOperator::Power(CSTUnaryPower {
-                span: pest::Span::new(plus_expression_str, 0, plus_expression_str.len()).unwrap(),
+                span: pest::Span::new(power_expression_str, 0, 1).unwrap(),
             })
         );
 
@@ -125,7 +125,7 @@ mod tests {
         assert_eq!(
             modulo_ast,
             CSTUnaryOperator::Modulo(CSTUnaryModulo {
-                span: pest::Span::new(plus_expression_str, 0, plus_expression_str.len()).unwrap(),
+                span: pest::Span::new(modulo_expression_str, 0, 1).unwrap(),
             })
         );
     }

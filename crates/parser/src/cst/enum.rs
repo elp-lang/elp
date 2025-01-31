@@ -49,7 +49,7 @@ mod tests {
         assert_eq!(
             ast,
             CSTEnumMember {
-                span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                span: pest::Span::new(expression_str, 0, 7).unwrap(),
                 name: "MEMBER".into(),
                 params: vec![]
             }
@@ -65,16 +65,16 @@ mod tests {
         assert_eq!(
             ast,
             CSTEnumMember {
-                span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                span: pest::Span::new(expression_str, 0, 10).unwrap(),
                 name: "Member".into(),
                 params: vec![CSTElpType {
-                    span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                    span: pest::Span::new(expression_str, 8, 9).unwrap(),
                     mutability: None,
                     pointer_semantics: None,
                     value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
-                        span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                        span: pest::Span::new(expression_str, 8, 9).unwrap(),
                         name: CSTIdent {
-                            span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                            span: pest::Span::new(expression_str, 8, 9).unwrap(),
                             value: "T".into()
                         },
                         generics: vec![]
@@ -93,14 +93,14 @@ mod tests {
         assert_eq!(
             ast,
             CSTEnum {
-                span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                span: pest::Span::new(expression_str, 0, 23).unwrap(),
                 name: CSTIdent {
-                    span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                    span: pest::Span::new(expression_str, 5, 11).unwrap(),
                     value: "MyEnum".into()
                 },
                 implements: None,
                 members: vec![CSTEnumMember {
-                    span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                    span: pest::Span::new(expression_str, 14, 22).unwrap(),
                     name: "MEMBER".into(),
                     params: vec![]
                 }]
@@ -117,22 +117,21 @@ mod tests {
         assert_eq!(
             ast,
             CSTEnum {
-                span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                span: pest::Span::new(expression_str, 0, 46).unwrap(),
                 name: CSTIdent {
-                    span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                    span: pest::Span::new(expression_str, 5, 11).unwrap(),
                     value: "MyEnum".into()
                 },
                 implements: Some(CSTObjectImplements {
-                    span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                    span: pest::Span::new(expression_str, 12, 35).unwrap(),
                     types: vec![CSTElpType {
-                        span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                        span: pest::Span::new(expression_str, 23, 35).unwrap(),
                         mutability: None,
                         pointer_semantics: None,
                         value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
-                            span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                            span: pest::Span::new(expression_str, 23, 35).unwrap(),
                             name: CSTIdent {
-                                span: pest::Span::new(expression_str, 0, expression_str.len())
-                                    .unwrap(),
+                                span: pest::Span::new(expression_str, 23, 34).unwrap(),
                                 value: "MyInterface".into()
                             },
                             generics: vec![]
@@ -140,7 +139,7 @@ mod tests {
                     }]
                 }),
                 members: vec![CSTEnumMember {
-                    span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                    span: pest::Span::new(expression_str, 37, 45).unwrap(),
                     name: "MEMBER".into(),
                     params: vec![]
                 }]

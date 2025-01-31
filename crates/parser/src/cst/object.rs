@@ -307,7 +307,7 @@ mod tests {
             CSTObjectMember {
                 span: pest::Span::new(expression_str, 0, 19).unwrap(),
                 visibility: Some(VisibilitySelector::Public(PublicVisibility {
-                    span: pest::Span::new(expression_str, 0, 13).unwrap()
+                    span: pest::Span::new(expression_str, 0, 6).unwrap()
                 })),
                 name: CSTIdent {
                     span: pest::Span::new(expression_str, 8, 12).unwrap(),

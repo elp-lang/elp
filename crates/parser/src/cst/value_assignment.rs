@@ -154,6 +154,7 @@ mod tests {
         cst::{number_value::CSTNumber, string::CSTString},
         parser::ElpParser,
     };
+    use pretty_assertions::assert_eq;
 
     use super::*;
 
@@ -166,12 +167,12 @@ mod tests {
         assert_eq!(
             ast,
             CSTValueAssignment {
-                span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                span: pest::Span::new(expression_str, 0, 9).unwrap(),
                 operand: CSTOperand::Equals(CSTEquals {
-                    span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                    span: pest::Span::new(expression_str, 0, 1).unwrap(),
                 }),
                 value: Box::new(CSTExpression::String(Box::new(CSTString {
-                    span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                    span: pest::Span::new(expression_str, 2, 9).unwrap(),
                     value: "world".into(),
                 }))),
             }
@@ -187,12 +188,12 @@ mod tests {
         assert_eq!(
             ast,
             CSTValueAssignment {
-                span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                span: pest::Span::new(expression_str, 0, 4).unwrap(),
                 operand: CSTOperand::Plus(CSTPlus {
-                    span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                    span: pest::Span::new(expression_str, 0, 2).unwrap(),
                 }),
                 value: Box::new(CSTExpression::Number(Box::new(CSTNumber {
-                    span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                    span: pest::Span::new(expression_str, 3, 4).unwrap(),
                     value: "1".into()
                 }))),
             }
@@ -208,12 +209,12 @@ mod tests {
         assert_eq!(
             ast,
             CSTValueAssignment {
-                span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                span: pest::Span::new(expression_str, 0, 4).unwrap(),
                 operand: CSTOperand::Modulo(CSTModulo {
-                    span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                    span: pest::Span::new(expression_str, 0, 2).unwrap(),
                 }),
                 value: Box::new(CSTExpression::Number(Box::new(CSTNumber {
-                    span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                    span: pest::Span::new(expression_str, 3, 4).unwrap(),
                     value: "1".into()
                 }))),
             }
@@ -229,12 +230,12 @@ mod tests {
         assert_eq!(
             ast,
             CSTValueAssignment {
-                span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                span: pest::Span::new(expression_str, 0, 4).unwrap(),
                 operand: CSTOperand::EqualityEqual(CSTEqualityEqual {
-                    span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                    span: pest::Span::new(expression_str, 0, 2).unwrap(),
                 }),
                 value: Box::new(CSTExpression::Number(Box::new(CSTNumber {
-                    span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                    span: pest::Span::new(expression_str, 3, 4).unwrap(),
                     value: "2".into()
                 }))),
             }
@@ -250,12 +251,12 @@ mod tests {
         assert_eq!(
             ast,
             CSTValueAssignment {
-                span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                span: pest::Span::new(expression_str, 0, 4).unwrap(),
                 operand: CSTOperand::EqualityNot(CSTEqualityNot {
-                    span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                    span: pest::Span::new(expression_str, 0, 2).unwrap(),
                 }),
                 value: Box::new(CSTExpression::Number(Box::new(CSTNumber {
-                    span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                    span: pest::Span::new(expression_str, 3, 4).unwrap(),
                     value: "2".into()
                 }))),
             }
@@ -271,12 +272,12 @@ mod tests {
         assert_eq!(
             ast,
             CSTValueAssignment {
-                span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                span: pest::Span::new(expression_str, 0, 4).unwrap(),
                 operand: CSTOperand::EqualityBitNot(CSTEqualityBitNot {
-                    span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                    span: pest::Span::new(expression_str, 0, 2).unwrap(),
                 }),
                 value: Box::new(CSTExpression::Number(Box::new(CSTNumber {
-                    span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                    span: pest::Span::new(expression_str, 3, 4).unwrap(),
                     value: "2".into()
                 }))),
             }
@@ -292,12 +293,12 @@ mod tests {
         assert_eq!(
             ast,
             CSTValueAssignment {
-                span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                span: pest::Span::new(expression_str, 0, 4).unwrap(),
                 operand: CSTOperand::BitAnd(CSTBitAnd {
-                    span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                    span: pest::Span::new(expression_str, 0, 2).unwrap(),
                 }),
                 value: Box::new(CSTExpression::Number(Box::new(CSTNumber {
-                    span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                    span: pest::Span::new(expression_str, 3, 4).unwrap(),
                     value: "2".into()
                 }))),
             }

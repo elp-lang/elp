@@ -26,6 +26,7 @@ mod tests {
     };
     use from_pest::FromPest;
     use pest::Parser;
+    use pretty_assertions::assert_eq;
 
     #[test]
     fn variable_declaration() {
@@ -36,20 +37,20 @@ mod tests {
         assert_eq!(
             ast,
             CSTVariableDeclaration {
-                span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                span: pest::Span::new(expression_str, 0, 16).unwrap(),
                 mutability: CSTMutabilitySelector::Mutable(Var),
                 name: CSTIdent {
-                    span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                    span: pest::Span::new(expression_str, 4, 9).unwrap(),
                     value: "hello".to_string(),
                 },
                 type_annotation: Some(Box::new(CSTElpType {
-                    span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                    span: pest::Span::new(expression_str, 10, 16).unwrap(),
                     mutability: None,
                     pointer_semantics: None,
                     value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
-                        span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                        span: pest::Span::new(expression_str, 10, 16).unwrap(),
                         name: CSTIdent {
-                            span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                            span: pest::Span::new(expression_str, 10, 16).unwrap(),
                             value: "String".into()
                         },
                         generics: vec![],

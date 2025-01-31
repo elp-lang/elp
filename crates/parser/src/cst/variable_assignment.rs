@@ -48,25 +48,25 @@ mod tests {
         assert_eq!(
             ast,
             CSTVariableAssignment {
-                span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                span: pest::Span::new(expression_str, 0, 21).unwrap(),
                 variable_assignment_target: CSTVariableAssignmentTarget::VariableDeclaration(
                     CSTVariableDeclaration {
-                        span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                        span: pest::Span::new(expression_str, 0, 12).unwrap(),
                         mutability: CSTMutabilitySelector::Immutable(Const),
                         name: CSTIdent {
-                            span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                            span: pest::Span::new(expression_str, 6, 11).unwrap(),
                             value: "hello".into()
                         },
                         type_annotation: None,
                     }
                 ),
                 value_assignment: CSTValueAssignment {
-                    span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                    span: pest::Span::new(expression_str, 12, 21).unwrap(),
                     operand: CSTOperand::Equals(CSTEquals {
-                        span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                        span: pest::Span::new(expression_str, 12, 13).unwrap(),
                     }),
                     value: Box::new(CSTExpression::String(Box::new(CSTString {
-                        span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                        span: pest::Span::new(expression_str, 14, 21).unwrap(),
                         value: "world".into(),
                     }))),
                 },
