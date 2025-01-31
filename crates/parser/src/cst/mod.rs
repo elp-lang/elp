@@ -41,17 +41,23 @@ pub enum CSTMutabilitySelector {
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::PUBLIC))]
-pub struct PublicVisibility;
+pub struct PublicVisibility<'a> {
+    #[pest_ast(outer())]
+    pub span: Span<'a>,
+}
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::PRIVATE))]
-pub struct PrivateVisibility;
+pub struct PrivateVisibility<'a> {
+    #[pest_ast(outer())]
+    pub span: Span<'a>,
+}
 
 #[derive(Debug, FromPest, PartialEq, Eq)]
 #[pest_ast(rule(Rule::visibility_selector))]
-pub enum VisibilitySelector {
-    Public(PublicVisibility),
-    Private(PrivateVisibility),
+pub enum VisibilitySelector<'a> {
+    Public(PublicVisibility<'a>),
+    Private(PrivateVisibility<'a>),
 }
 
 fn span_into_string(span: Span) -> String {
