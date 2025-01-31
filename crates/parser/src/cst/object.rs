@@ -506,22 +506,21 @@ mod tests {
         assert_eq!(
             ast,
             CSTObject {
-                span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                span: pest::Span::new(expression_str, 0, 49).unwrap(),
                 name: CSTIdent {
-                    span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                    span: pest::Span::new(expression_str, 7, 11).unwrap(),
                     value: "Test".into()
                 },
                 implements: Some(CSTObjectImplements {
-                    span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                    span: pest::Span::new(expression_str, 12, 35).unwrap(),
                     types: vec![CSTElpType {
-                        span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                        span: pest::Span::new(expression_str, 23, 35).unwrap(),
                         mutability: None,
                         pointer_semantics: None,
                         value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
-                            span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                            span: pest::Span::new(expression_str, 23, 35).unwrap(),
                             name: CSTIdent {
-                                span: pest::Span::new(expression_str, 0, expression_str.len())
-                                    .unwrap(),
+                                span: pest::Span::new(expression_str, 23, 34).unwrap(),
                                 value: "MyInterface".into()
                             },
                             generics: vec![]
@@ -529,21 +528,20 @@ mod tests {
                     }]
                 }),
                 members: vec![CSTObjectMember {
-                    span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                    span: pest::Span::new(expression_str, 36, 48).unwrap(),
                     visibility: None,
                     name: CSTIdent {
-                        span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                        span: pest::Span::new(expression_str, 37, 41).unwrap(),
                         value: "name".into()
                     },
                     type_annotation: Some(CSTElpType {
-                        span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                        span: pest::Span::new(expression_str, 42, 48).unwrap(),
                         mutability: None,
                         pointer_semantics: None,
                         value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
-                            span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                            span: pest::Span::new(expression_str, 42, 48).unwrap(),
                             name: CSTIdent {
-                                span: pest::Span::new(expression_str, 0, expression_str.len())
-                                    .unwrap(),
+                                span: pest::Span::new(expression_str, 42, 48).unwrap(),
                                 value: "String".into()
                             },
                             generics: vec![]
@@ -565,39 +563,35 @@ mod tests {
         assert_eq!(
             ast,
             CSTObject {
-                span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                span: pest::Span::new(expression_str, 0, 67).unwrap(),
                 name: CSTIdent {
-                    span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                    span: pest::Span::new(expression_str, 7, 11).unwrap(),
                     value: "Test".into()
                 },
                 implements: Some(CSTObjectImplements {
-                    span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                    span: pest::Span::new(expression_str, 12, 53).unwrap(),
                     types: vec![
                         CSTElpType {
-                            span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                            span: pest::Span::new(expression_str, 23, 34).unwrap(),
                             mutability: None,
                             pointer_semantics: None,
                             value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
-                                span: pest::Span::new(expression_str, 0, expression_str.len())
-                                    .unwrap(),
+                                span: pest::Span::new(expression_str, 23, 34).unwrap(),
                                 name: CSTIdent {
-                                    span: pest::Span::new(expression_str, 0, expression_str.len())
-                                        .unwrap(),
+                                    span: pest::Span::new(expression_str, 23, 34).unwrap(),
                                     value: "MyInterface".into()
                                 },
                                 generics: vec![]
                             })
                         },
                         CSTElpType {
-                            span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                            span: pest::Span::new(expression_str, 36, 53).unwrap(),
                             mutability: None,
                             pointer_semantics: None,
                             value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
-                                span: pest::Span::new(expression_str, 0, expression_str.len())
-                                    .unwrap(),
+                                span: pest::Span::new(expression_str, 36, 53).unwrap(),
                                 name: CSTIdent {
-                                    span: pest::Span::new(expression_str, 0, expression_str.len())
-                                        .unwrap(),
+                                    span: pest::Span::new(expression_str, 36, 52).unwrap(),
                                     value: "AnotherInterface".into()
                                 },
                                 generics: vec![]
@@ -606,21 +600,20 @@ mod tests {
                     ]
                 }),
                 members: vec![CSTObjectMember {
-                    span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                    span: pest::Span::new(expression_str, 54, 66).unwrap(),
                     visibility: None,
                     name: CSTIdent {
-                        span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                        span: pest::Span::new(expression_str, 55, 59).unwrap(),
                         value: "name".into()
                     },
                     type_annotation: Some(CSTElpType {
-                        span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                        span: pest::Span::new(expression_str, 60, 66).unwrap(),
                         mutability: None,
                         pointer_semantics: None,
                         value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
-                            span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                            span: pest::Span::new(expression_str, 60, 66).unwrap(),
                             name: CSTIdent {
-                                span: pest::Span::new(expression_str, 0, expression_str.len())
-                                    .unwrap(),
+                                span: pest::Span::new(expression_str, 60, 66).unwrap(),
                                 value: "String".into()
                             },
                             generics: vec![]
