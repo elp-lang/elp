@@ -75,15 +75,15 @@ impl FromCST<CSTElpType<'_>> for ASTElpType {
                 mutability: cst.mutability.clone(),
                 pointer_semantics: cst.pointer_semantics.clone(),
                 value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
-                    span: pest::Span::new("Arrau", 0, 5).unwrap(),
+                    span: pest::Span::new("Array", 0, 5).unwrap(),
                     name: CSTIdent {
-                        span: pest::Span::new("Arrau", 0, 5).unwrap(),
+                        span: pest::Span::new("Array", 0, 5).unwrap(),
                         value: "Array".into(),
                     },
                     generics: vec![CSTElpTypeGeneric {
-                        span: pest::Span::new("Arrau", 0, 5).unwrap(),
+                        span: pest::Span::new("Array", 0, 5).unwrap(),
                         params: vec![CSTElpTypeGenericParam {
-                            span: pest::Span::new("Arrau", 0, 5).unwrap(),
+                            span: pest::Span::new("Array", 0, 5).unwrap(),
                             elp_type: *arr.of_elp_type.clone(),
                             type_constraint: None,
                         }],
@@ -142,6 +142,7 @@ impl FromCST<CSTElpType<'_>> for ASTElpType {
 #[cfg(test)]
 mod tests {
     use crate::cst::elp_type::CSTElpTypeArray;
+    use pretty_assertions::assert_eq;
 
     use super::*;
 

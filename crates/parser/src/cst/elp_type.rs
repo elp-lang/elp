@@ -326,6 +326,33 @@ mod tests {
     }
 
     #[test]
+    fn elp_type_array() {
+        let expression_str = "[Number]";
+        let mut pairs = ElpParser::parse(Rule::elp_type_array, expression_str).unwrap();
+        let ast = CSTElpTypeArray::from_pest(&mut pairs).unwrap();
+
+        assert_eq!(
+            ast,
+            CSTElpTypeArray {
+                span: pest::Span::new(expression_str, 0, 9).unwrap(),
+                of_elp_type: Box::new(CSTElpType {
+                    span: pest::Span::new(expression_str, 1, 9).unwrap(),
+                    mutability: None,
+                    pointer_semantics: None,
+                    value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                        span: pest::Span::new(expression_str, 1, 9).unwrap(),
+                        name: CSTIdent {
+                            span: pest::Span::new(expression_str, 1, 9).unwrap(),
+                            value: "Number".into()
+                        },
+                        generics: vec![]
+                    })
+                })
+            }
+        );
+    }
+
+    #[test]
     fn elp_multiple_generic_constraints() {
         let expression_str = "<Number: Copy, String: Copy + Clone>";
         let mut pairs = ElpParser::parse(Rule::elp_type_generic, expression_str).unwrap();
