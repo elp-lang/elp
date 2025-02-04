@@ -3,7 +3,7 @@ use pest_ast::FromPest;
 
 use crate::parser::Rule;
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::UNARY_OPERATOR))]
 pub enum CSTUnaryOperator<'a> {
     Plus(CSTUnaryPlus<'a>),
@@ -14,42 +14,42 @@ pub enum CSTUnaryOperator<'a> {
     Modulo(CSTUnaryModulo<'a>),
 }
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::UNARY_ADD))]
 pub struct CSTUnaryPlus<'a> {
     #[pest_ast(outer())]
     pub span: Span<'a>,
 }
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::UNARY_SUB))]
 pub struct CSTUnaryMinus<'a> {
     #[pest_ast(outer())]
     pub span: Span<'a>,
 }
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::UNARY_MULT))]
 pub struct CSTUnaryMultiply<'a> {
     #[pest_ast(outer())]
     pub span: Span<'a>,
 }
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::UNARY_DIV))]
 pub struct CSTUnaryDivide<'a> {
     #[pest_ast(outer())]
     pub span: Span<'a>,
 }
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::UNARY_POW))]
 pub struct CSTUnaryPower<'a> {
     #[pest_ast(outer())]
     pub span: Span<'a>,
 }
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::UNARY_MOD))]
 pub struct CSTUnaryModulo<'a> {
     #[pest_ast(outer())]

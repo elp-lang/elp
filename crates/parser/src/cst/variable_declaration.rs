@@ -3,7 +3,7 @@ use crate::parser::Rule;
 use pest::Span;
 use pest_ast::FromPest;
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::variable_declaration))]
 pub struct CSTVariableDeclaration<'a> {
     #[pest_ast(outer())]

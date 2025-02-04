@@ -22,12 +22,23 @@ pub struct CSTElpTypeParameter<'a> {
     pub generics: Vec<CSTElpTypeGeneric<'a>>,
 }
 
+impl<'a> CSTElpTypeParameter<'a> {
+    pub fn to_elp_type(&self) -> CSTElpType<'a> {
+        CSTElpType {
+            span: self.span,
+            pointer_semantics: None,
+            mutability: None,
+            value: CSTElpTypeValue::Parameter(self.clone()),
+        }
+    }
+}
+
 #[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::elp_type_array))]
 pub struct CSTElpTypeArray<'a> {
     #[pest_ast(outer())]
     pub span: Span<'a>,
-    pub of_elp_type: Box<CSTElpType<'a>>,
+    pub of_elp_type: Box<CSTElpTypeParameter<'a>>,
 }
 
 #[derive(Debug, FromPest, PartialEq, Eq, Clone)]
@@ -334,19 +345,14 @@ mod tests {
         assert_eq!(
             ast,
             CSTElpTypeArray {
-                span: pest::Span::new(expression_str, 0, 9).unwrap(),
-                of_elp_type: Box::new(CSTElpType {
-                    span: pest::Span::new(expression_str, 1, 9).unwrap(),
-                    mutability: None,
-                    pointer_semantics: None,
-                    value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
-                        span: pest::Span::new(expression_str, 1, 9).unwrap(),
-                        name: CSTIdent {
-                            span: pest::Span::new(expression_str, 1, 9).unwrap(),
-                            value: "Number".into()
-                        },
-                        generics: vec![]
-                    })
+                span: pest::Span::new(expression_str, 0, 8).unwrap(),
+                of_elp_type: Box::new(CSTElpTypeParameter {
+                    span: pest::Span::new(expression_str, 1, 7).unwrap(),
+                    name: CSTIdent {
+                        span: pest::Span::new(expression_str, 1, 7).unwrap(),
+                        value: "Number".into()
+                    },
+                    generics: vec![]
                 })
             }
         );

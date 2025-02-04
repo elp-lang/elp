@@ -9,7 +9,7 @@ use crate::parser::Rule;
 use pest::Span;
 use pest_ast::FromPest;
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::function_argument))]
 pub struct CSTFunctionArgument<'a> {
     #[pest_ast(outer())]
@@ -19,7 +19,7 @@ pub struct CSTFunctionArgument<'a> {
     pub type_annotation: Option<CSTElpType<'a>>,
 }
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::function_arguments))]
 pub struct CSTFunctionArguments<'a> {
     #[pest_ast(outer())]
@@ -27,7 +27,7 @@ pub struct CSTFunctionArguments<'a> {
     pub arguments: Vec<CSTFunctionArgument<'a>>,
 }
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::function_return_type))]
 pub struct CSTFunctionReturnType<'a> {
     #[pest_ast(outer())]
@@ -35,7 +35,7 @@ pub struct CSTFunctionReturnType<'a> {
     pub type_annotations: Vec<CSTElpType<'a>>,
 }
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::function_return_value))]
 pub struct CSTFunctionReturnValue<'a> {
     #[pest_ast(outer())]
@@ -43,7 +43,7 @@ pub struct CSTFunctionReturnValue<'a> {
     pub value: Box<CSTExpression<'a>>,
 }
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::function_def))]
 pub struct CSTFunctionDef<'a> {
     #[pest_ast(outer())]
@@ -55,7 +55,7 @@ pub struct CSTFunctionDef<'a> {
     pub block: Box<CSTBlock<'a>>,
 }
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::fn_header_def))]
 pub struct CSTFunctionHeaderDef<'a> {
     #[pest_ast(outer())]
@@ -67,14 +67,14 @@ pub struct CSTFunctionHeaderDef<'a> {
     pub return_type: CSTFunctionReturnType<'a>,
 }
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::function_call_name))]
 pub enum CSTFunctionCallName<'a> {
     VariableAccess(CSTVariableAccess<'a>),
     ContextualVariableAccess(CSTContextualVariableAccess<'a>),
 }
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::function_call))]
 pub struct CSTFunctionCall<'a> {
     #[pest_ast(outer())]

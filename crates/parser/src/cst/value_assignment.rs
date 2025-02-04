@@ -5,35 +5,35 @@ use crate::parser::Rule;
 
 use super::{expression::CSTExpression, variable_access::CSTReference};
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::BITWISE_OPERAND_TILDE))]
 pub struct CSTTilde<'a> {
     #[pest_ast(outer())]
     pub span: Span<'a>,
 }
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::BITWISE_OPERAND_LEFT_SHIFT))]
 pub struct CSTLeftShift<'a> {
     #[pest_ast(outer())]
     pub span: Span<'a>,
 }
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::BITWISE_OPERAND_RIGHT_SHIFT))]
 pub struct CSTRightShift<'a> {
     #[pest_ast(outer())]
     pub span: Span<'a>,
 }
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::BITWISE_OPERAND_OR))]
 pub struct CSTOr<'a> {
     #[pest_ast(outer())]
     pub span: Span<'a>,
 }
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::BITWISE_OPERAND))]
 pub enum CSTBitwiseOperand<'a> {
     Tilde(CSTTilde<'a>),
@@ -43,84 +43,84 @@ pub enum CSTBitwiseOperand<'a> {
     BitAnd(CSTReference<'a>),
 }
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::OPERAND_PLUS))]
 pub struct CSTPlus<'a> {
     #[pest_ast(outer())]
     pub span: Span<'a>,
 }
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::OPERAND_MINUS))]
 pub struct CSTMinus<'a> {
     #[pest_ast(outer())]
     pub span: Span<'a>,
 }
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::OPERAND_MUL))]
 pub struct CSTMultiply<'a> {
     #[pest_ast(outer())]
     pub span: Span<'a>,
 }
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::OPERAND_DIV))]
 pub struct CSTDivide<'a> {
     #[pest_ast(outer())]
     pub span: Span<'a>,
 }
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::OPERAND_MOD))]
 pub struct CSTModulo<'a> {
     #[pest_ast(outer())]
     pub span: Span<'a>,
 }
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::OPERAND_POW))]
 pub struct CSTPower<'a> {
     #[pest_ast(outer())]
     pub span: Span<'a>,
 }
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::OPERAND_NOT_EQUAL))]
 pub struct CSTEqualityNot<'a> {
     #[pest_ast(outer())]
     pub span: Span<'a>,
 }
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::OPERAND_BIT_NOT_EQUAL))]
 pub struct CSTEqualityBitNot<'a> {
     #[pest_ast(outer())]
     pub span: Span<'a>,
 }
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::OPERAND_EQUALS))]
 pub struct CSTEquals<'a> {
     #[pest_ast(outer())]
     pub span: Span<'a>,
 }
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::OPERAND_EQUAL))]
 pub struct CSTEqualityEqual<'a> {
     #[pest_ast(outer())]
     pub span: Span<'a>,
 }
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::OPERAND_BITAND))]
 pub struct CSTBitAnd<'a> {
     #[pest_ast(outer())]
     pub span: Span<'a>,
 }
 
-#[derive(Debug, PartialEq, Eq, FromPest)]
+#[derive(Debug, PartialEq, Eq, Clone, FromPest)]
 #[pest_ast(rule(Rule::value_assignment))]
 pub struct CSTValueAssignment<'a> {
     #[pest_ast(outer())]
@@ -129,7 +129,7 @@ pub struct CSTValueAssignment<'a> {
     pub value: Box<CSTExpression<'a>>,
 }
 
-#[derive(Debug, PartialEq, FromPest, Eq)]
+#[derive(Debug, PartialEq, FromPest, Eq, Clone)]
 #[pest_ast(rule(Rule::OPERAND))]
 pub enum CSTOperand<'a> {
     Plus(CSTPlus<'a>),

@@ -4,7 +4,7 @@ use pest_ast::FromPest;
 
 use super::{block::CSTBlock, expression::CSTExpression};
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::match_tree))]
 pub struct CSTMatchTree<'a> {
     #[pest_ast(outer())]
@@ -13,14 +13,14 @@ pub struct CSTMatchTree<'a> {
     pub match_arms: Vec<CSTMatchTreeArm<'a>>,
 }
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::match_arm_subject))]
 pub enum CSTMatchArmSubject<'a> {
     Expression(CSTExpression<'a>),
     MatchRange(CSTMatchRange<'a>),
 }
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::match_range))]
 pub struct CSTMatchRange<'a> {
     #[pest_ast(outer())]
@@ -29,14 +29,14 @@ pub struct CSTMatchRange<'a> {
     pub range_end: Option<Box<CSTExpression<'a>>>,
 }
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::match_arm_body))]
 pub enum CSTMatchBody<'a> {
     Expression(Box<CSTExpression<'a>>),
     Block(Box<CSTBlock<'a>>),
 }
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::match_arm))]
 pub struct CSTMatchTreeArm<'a> {
     #[pest_ast(outer())]

@@ -6,7 +6,7 @@ use crate::parser::Rule;
 use pest::Span;
 use pest_ast::FromPest;
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::object_implements))]
 pub struct CSTObjectImplements<'a> {
     #[pest_ast(outer())]
@@ -14,7 +14,7 @@ pub struct CSTObjectImplements<'a> {
     pub types: Vec<CSTElpType<'a>>,
 }
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::object_key_default_value))]
 pub struct CSTObjectMemberDefaultValue<'a> {
     #[pest_ast(outer())]
@@ -22,7 +22,7 @@ pub struct CSTObjectMemberDefaultValue<'a> {
     pub value: CSTExpression<'a>,
 }
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::object_key_tags))]
 pub struct CSTObjectMemberTags<'a> {
     #[pest_ast(outer())]
@@ -31,7 +31,7 @@ pub struct CSTObjectMemberTags<'a> {
     pub contents: CSTString<'a>,
 }
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::object_member))]
 pub struct CSTObjectMember<'a> {
     #[pest_ast(outer())]
@@ -43,7 +43,7 @@ pub struct CSTObjectMember<'a> {
     pub tags: Vec<CSTObjectMemberTags<'a>>,
 }
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::object_def))]
 pub struct CSTObject<'a> {
     #[pest_ast(outer())]

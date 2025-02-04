@@ -3,7 +3,7 @@ use crate::parser::Rule;
 use pest::Span;
 use pest_ast::FromPest;
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::import))]
 pub struct CSTImport<'a> {
     #[pest_ast(outer())]
@@ -12,7 +12,7 @@ pub struct CSTImport<'a> {
     pub module_path: CSTImportModulePath<'a>,
 }
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::import_name))]
 pub struct CSTImportName<'a> {
     #[pest_ast(outer())]
@@ -21,7 +21,7 @@ pub struct CSTImportName<'a> {
     pub alias: Option<CSTImportNameAlias<'a>>,
 }
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::import_name_alias))]
 pub struct CSTImportNameAlias<'a> {
     #[pest_ast(outer())]
@@ -29,7 +29,7 @@ pub struct CSTImportNameAlias<'a> {
     pub alias: CSTIdent<'a>,
 }
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::import_module_path))]
 pub struct CSTImportModulePath<'a> {
     #[pest_ast(outer())]

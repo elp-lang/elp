@@ -5,7 +5,7 @@ use crate::parser::Rule;
 
 use super::{elp_type::CSTElpType, ident::CSTIdent, object::CSTObjectImplements, span_into_string};
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::enum_member))]
 pub struct CSTEnumMember<'a> {
     #[pest_ast(outer())]
@@ -15,7 +15,7 @@ pub struct CSTEnumMember<'a> {
     pub params: Vec<CSTElpType<'a>>,
 }
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::r#enum))]
 pub struct CSTEnum<'a> {
     #[pest_ast(outer())]

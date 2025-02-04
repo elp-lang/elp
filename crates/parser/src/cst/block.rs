@@ -4,7 +4,7 @@ use pest_ast::FromPest;
 
 use super::expression::CSTExpression;
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::block))]
 pub struct CSTBlock<'a> {
     #[pest_ast(outer())]

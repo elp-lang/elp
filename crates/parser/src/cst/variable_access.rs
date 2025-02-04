@@ -26,7 +26,7 @@ pub enum CSTPointerSemantics<'a> {
     Reference(CSTReference<'a>),
 }
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::variable_access))]
 pub struct CSTVariableAccess<'a> {
     #[pest_ast(outer())]
@@ -35,7 +35,7 @@ pub struct CSTVariableAccess<'a> {
     pub names: CSTVariableAccessNames<'a>,
 }
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::variable_access_names))]
 pub struct CSTVariableAccessNames<'a> {
     #[pest_ast(outer())]
@@ -43,7 +43,7 @@ pub struct CSTVariableAccessNames<'a> {
     pub names: Vec<CSTIdent<'a>>,
 }
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::contextual_variable_access))]
 pub struct CSTContextualVariableAccess<'a> {
     #[pest_ast(outer())]

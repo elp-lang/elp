@@ -45,21 +45,21 @@ pub enum CSTMutabilitySelector<'a> {
     Immutable(Const<'a>),
 }
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::PUBLIC))]
 pub struct PublicVisibility<'a> {
     #[pest_ast(outer())]
     pub span: Span<'a>,
 }
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::PRIVATE))]
 pub struct PrivateVisibility<'a> {
     #[pest_ast(outer())]
     pub span: Span<'a>,
 }
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::visibility_selector))]
 pub enum VisibilitySelector<'a> {
     Public(PublicVisibility<'a>),
@@ -70,14 +70,14 @@ fn span_into_string(span: Span) -> String {
     span.as_str().into()
 }
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::module))]
 pub struct Module<'a> {
     pub expressions: Vec<CSTExpression<'a>>,
     _eoi: Eoi,
 }
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::EOI))]
 struct Eoi;
 

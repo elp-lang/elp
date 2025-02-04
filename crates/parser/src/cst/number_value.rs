@@ -5,7 +5,7 @@ use crate::parser::Rule;
 
 use super::span_into_string;
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::number))]
 pub struct CSTNumber<'a> {
     #[pest_ast(outer())]

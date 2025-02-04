@@ -6,14 +6,14 @@ use crate::parser::Rule;
 use pest::Span;
 use pest_ast::FromPest;
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::variable_assignment_target))]
 pub enum CSTVariableAssignmentTarget<'a> {
     VariableDeclaration(CSTVariableDeclaration<'a>),
     VariableAccess(CSTVariableAccess<'a>),
 }
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::variable_assignment))]
 pub struct CSTVariableAssignment<'a> {
     #[pest_ast(outer())]
