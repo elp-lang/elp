@@ -49,5 +49,5 @@ More complete examples can be found in the [examples](https://github.com/elp-lan
 
 ### Notes and other resources
 
-[Goals](https://github.com/elp-lang/elp/blob/main/README.md)
+[Goals](https://github.com/elp-lang/elp/blob/main/GOALS.md)
 [Transparency](https://vsoch.github.io/2019/transparency/)
