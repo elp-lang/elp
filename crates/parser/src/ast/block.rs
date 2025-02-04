@@ -7,7 +7,7 @@ pub struct ASTBlock {
     pub expressions: Vec<ASTExpression>,
 }
 
-impl FromCST<CSTBlock> for ASTBlock {
+impl FromCST<CSTBlock<'_>> for ASTBlock {
     fn from_cst(cst: &CSTBlock) -> Self {
         ASTBlock {
             expressions: cst
@@ -21,11 +21,15 @@ impl FromCST<CSTBlock> for ASTBlock {
 
 #[cfg(test)]
 mod tests {
+    use crate::cst;
+    use pretty_assertions::assert_eq;
+
     use super::*;
 
     #[test]
     fn block_from_cst() {
-        let cst_block = crate::cst::block::CSTBlock {
+        let cst_block = cst::block::CSTBlock {
+            span: pest::Span::new("", 0, 0).unwrap(),
             expressions: vec![],
         };
         let ast_block = ASTBlock::from_cst(&cst_block);

@@ -1,100 +1,148 @@
+use pest::Span;
 use pest_ast::FromPest;
 
 use crate::parser::Rule;
 
 use super::{expression::CSTExpression, variable_access::CSTReference};
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::BITWISE_OPERAND_TILDE))]
-pub struct CSTTilde;
+pub struct CSTTilde<'a> {
+    #[pest_ast(outer())]
+    pub span: Span<'a>,
+}
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::BITWISE_OPERAND_LEFT_SHIFT))]
-pub struct CSTLeftShift;
+pub struct CSTLeftShift<'a> {
+    #[pest_ast(outer())]
+    pub span: Span<'a>,
+}
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::BITWISE_OPERAND_RIGHT_SHIFT))]
-pub struct CSTRightShift;
+pub struct CSTRightShift<'a> {
+    #[pest_ast(outer())]
+    pub span: Span<'a>,
+}
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::BITWISE_OPERAND_OR))]
-pub struct CSTOr;
+pub struct CSTOr<'a> {
+    #[pest_ast(outer())]
+    pub span: Span<'a>,
+}
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::BITWISE_OPERAND))]
-pub enum CSTBitwiseOperand {
-    Tilde(CSTTilde),
-    LeftShift(CSTLeftShift),
-    RightShift(CSTRightShift),
-    BitOr(CSTOr),
-    BitAnd(CSTReference),
+pub enum CSTBitwiseOperand<'a> {
+    Tilde(CSTTilde<'a>),
+    LeftShift(CSTLeftShift<'a>),
+    RightShift(CSTRightShift<'a>),
+    BitOr(CSTOr<'a>),
+    BitAnd(CSTReference<'a>),
 }
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::OPERAND_PLUS))]
-pub struct CSTPlus;
-
-#[derive(Debug, FromPest, PartialEq, Eq)]
-#[pest_ast(rule(Rule::OPERAND_MINUS))]
-pub struct CSTMinus;
-
-#[derive(Debug, FromPest, PartialEq, Eq)]
-#[pest_ast(rule(Rule::OPERAND_MUL))]
-pub struct CSTMultiply;
-
-#[derive(Debug, FromPest, PartialEq, Eq)]
-#[pest_ast(rule(Rule::OPERAND_DIV))]
-pub struct CSTDivide;
-
-#[derive(Debug, FromPest, PartialEq, Eq)]
-#[pest_ast(rule(Rule::OPERAND_MOD))]
-pub struct CSTModulo;
-
-#[derive(Debug, FromPest, PartialEq, Eq)]
-#[pest_ast(rule(Rule::OPERAND_POW))]
-pub struct CSTPower;
-
-#[derive(Debug, FromPest, PartialEq, Eq)]
-#[pest_ast(rule(Rule::OPERAND_NOT_EQUAL))]
-pub struct CSTEqualityNot;
-
-#[derive(Debug, FromPest, PartialEq, Eq)]
-#[pest_ast(rule(Rule::OPERAND_BIT_NOT_EQUAL))]
-pub struct CSTEqualityBitNot;
-
-#[derive(Debug, FromPest, PartialEq, Eq)]
-#[pest_ast(rule(Rule::OPERAND_EQUALS))]
-pub struct CSTEquals;
-
-#[derive(Debug, FromPest, PartialEq, Eq)]
-#[pest_ast(rule(Rule::OPERAND_EQUAL))]
-pub struct CSTEqualityEqual;
-
-#[derive(Debug, FromPest, PartialEq, Eq)]
-#[pest_ast(rule(Rule::OPERAND_BITAND))]
-pub struct CSTBitAnd;
-
-#[derive(Debug, PartialEq, Eq, FromPest)]
-#[pest_ast(rule(Rule::value_assignment))]
-pub struct CSTValueAssignment {
-    pub operand: CSTOperand,
-    pub value: Box<CSTExpression>,
+pub struct CSTPlus<'a> {
+    #[pest_ast(outer())]
+    pub span: Span<'a>,
 }
 
-#[derive(Debug, PartialEq, FromPest, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
+#[pest_ast(rule(Rule::OPERAND_MINUS))]
+pub struct CSTMinus<'a> {
+    #[pest_ast(outer())]
+    pub span: Span<'a>,
+}
+
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
+#[pest_ast(rule(Rule::OPERAND_MUL))]
+pub struct CSTMultiply<'a> {
+    #[pest_ast(outer())]
+    pub span: Span<'a>,
+}
+
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
+#[pest_ast(rule(Rule::OPERAND_DIV))]
+pub struct CSTDivide<'a> {
+    #[pest_ast(outer())]
+    pub span: Span<'a>,
+}
+
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
+#[pest_ast(rule(Rule::OPERAND_MOD))]
+pub struct CSTModulo<'a> {
+    #[pest_ast(outer())]
+    pub span: Span<'a>,
+}
+
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
+#[pest_ast(rule(Rule::OPERAND_POW))]
+pub struct CSTPower<'a> {
+    #[pest_ast(outer())]
+    pub span: Span<'a>,
+}
+
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
+#[pest_ast(rule(Rule::OPERAND_NOT_EQUAL))]
+pub struct CSTEqualityNot<'a> {
+    #[pest_ast(outer())]
+    pub span: Span<'a>,
+}
+
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
+#[pest_ast(rule(Rule::OPERAND_BIT_NOT_EQUAL))]
+pub struct CSTEqualityBitNot<'a> {
+    #[pest_ast(outer())]
+    pub span: Span<'a>,
+}
+
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
+#[pest_ast(rule(Rule::OPERAND_EQUALS))]
+pub struct CSTEquals<'a> {
+    #[pest_ast(outer())]
+    pub span: Span<'a>,
+}
+
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
+#[pest_ast(rule(Rule::OPERAND_EQUAL))]
+pub struct CSTEqualityEqual<'a> {
+    #[pest_ast(outer())]
+    pub span: Span<'a>,
+}
+
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
+#[pest_ast(rule(Rule::OPERAND_BITAND))]
+pub struct CSTBitAnd<'a> {
+    #[pest_ast(outer())]
+    pub span: Span<'a>,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, FromPest)]
+#[pest_ast(rule(Rule::value_assignment))]
+pub struct CSTValueAssignment<'a> {
+    #[pest_ast(outer())]
+    pub span: Span<'a>,
+    pub operand: CSTOperand<'a>,
+    pub value: Box<CSTExpression<'a>>,
+}
+
+#[derive(Debug, PartialEq, FromPest, Eq, Clone)]
 #[pest_ast(rule(Rule::OPERAND))]
-pub enum CSTOperand {
-    Plus(CSTPlus),
-    Minus(CSTMinus),
-    Multiply(CSTMultiply),
-    Divide(CSTDivide),
-    Modulo(CSTModulo),
-    Power(CSTPower),
-    EqualityNot(CSTEqualityNot),
-    EqualityBitNot(CSTEqualityBitNot),
-    Equals(CSTEquals),
-    EqualityEqual(CSTEqualityEqual),
-    BitAnd(CSTBitAnd),
+pub enum CSTOperand<'a> {
+    Plus(CSTPlus<'a>),
+    Minus(CSTMinus<'a>),
+    Multiply(CSTMultiply<'a>),
+    Divide(CSTDivide<'a>),
+    Modulo(CSTModulo<'a>),
+    Power(CSTPower<'a>),
+    EqualityNot(CSTEqualityNot<'a>),
+    EqualityBitNot(CSTEqualityBitNot<'a>),
+    Equals(CSTEquals<'a>),
+    EqualityEqual(CSTEqualityEqual<'a>),
+    BitAnd(CSTBitAnd<'a>),
 }
 
 #[cfg(test)]
@@ -106,6 +154,7 @@ mod tests {
         cst::{number_value::CSTNumber, string::CSTString},
         parser::ElpParser,
     };
+    use pretty_assertions::assert_eq;
 
     use super::*;
 
@@ -118,8 +167,12 @@ mod tests {
         assert_eq!(
             ast,
             CSTValueAssignment {
-                operand: CSTOperand::Equals(CSTEquals {}),
+                span: pest::Span::new(expression_str, 0, 9).unwrap(),
+                operand: CSTOperand::Equals(CSTEquals {
+                    span: pest::Span::new(expression_str, 0, 1).unwrap(),
+                }),
                 value: Box::new(CSTExpression::String(Box::new(CSTString {
+                    span: pest::Span::new(expression_str, 2, 9).unwrap(),
                     value: "world".into(),
                 }))),
             }
@@ -135,8 +188,12 @@ mod tests {
         assert_eq!(
             ast,
             CSTValueAssignment {
-                operand: CSTOperand::Plus(CSTPlus {}),
+                span: pest::Span::new(expression_str, 0, 4).unwrap(),
+                operand: CSTOperand::Plus(CSTPlus {
+                    span: pest::Span::new(expression_str, 0, 2).unwrap(),
+                }),
                 value: Box::new(CSTExpression::Number(Box::new(CSTNumber {
+                    span: pest::Span::new(expression_str, 3, 4).unwrap(),
                     value: "1".into()
                 }))),
             }
@@ -152,8 +209,12 @@ mod tests {
         assert_eq!(
             ast,
             CSTValueAssignment {
-                operand: CSTOperand::Modulo(CSTModulo {}),
+                span: pest::Span::new(expression_str, 0, 4).unwrap(),
+                operand: CSTOperand::Modulo(CSTModulo {
+                    span: pest::Span::new(expression_str, 0, 2).unwrap(),
+                }),
                 value: Box::new(CSTExpression::Number(Box::new(CSTNumber {
+                    span: pest::Span::new(expression_str, 3, 4).unwrap(),
                     value: "1".into()
                 }))),
             }
@@ -169,8 +230,12 @@ mod tests {
         assert_eq!(
             ast,
             CSTValueAssignment {
-                operand: CSTOperand::EqualityEqual(CSTEqualityEqual {}),
+                span: pest::Span::new(expression_str, 0, 4).unwrap(),
+                operand: CSTOperand::EqualityEqual(CSTEqualityEqual {
+                    span: pest::Span::new(expression_str, 0, 2).unwrap(),
+                }),
                 value: Box::new(CSTExpression::Number(Box::new(CSTNumber {
+                    span: pest::Span::new(expression_str, 3, 4).unwrap(),
                     value: "2".into()
                 }))),
             }
@@ -186,8 +251,12 @@ mod tests {
         assert_eq!(
             ast,
             CSTValueAssignment {
-                operand: CSTOperand::EqualityNot(CSTEqualityNot {}),
+                span: pest::Span::new(expression_str, 0, 4).unwrap(),
+                operand: CSTOperand::EqualityNot(CSTEqualityNot {
+                    span: pest::Span::new(expression_str, 0, 2).unwrap(),
+                }),
                 value: Box::new(CSTExpression::Number(Box::new(CSTNumber {
+                    span: pest::Span::new(expression_str, 3, 4).unwrap(),
                     value: "2".into()
                 }))),
             }
@@ -203,8 +272,12 @@ mod tests {
         assert_eq!(
             ast,
             CSTValueAssignment {
-                operand: CSTOperand::EqualityBitNot(CSTEqualityBitNot {}),
+                span: pest::Span::new(expression_str, 0, 4).unwrap(),
+                operand: CSTOperand::EqualityBitNot(CSTEqualityBitNot {
+                    span: pest::Span::new(expression_str, 0, 2).unwrap(),
+                }),
                 value: Box::new(CSTExpression::Number(Box::new(CSTNumber {
+                    span: pest::Span::new(expression_str, 3, 4).unwrap(),
                     value: "2".into()
                 }))),
             }
@@ -220,8 +293,12 @@ mod tests {
         assert_eq!(
             ast,
             CSTValueAssignment {
-                operand: CSTOperand::BitAnd(CSTBitAnd),
+                span: pest::Span::new(expression_str, 0, 4).unwrap(),
+                operand: CSTOperand::BitAnd(CSTBitAnd {
+                    span: pest::Span::new(expression_str, 0, 2).unwrap(),
+                }),
                 value: Box::new(CSTExpression::Number(Box::new(CSTNumber {
+                    span: pest::Span::new(expression_str, 3, 4).unwrap(),
                     value: "2".into()
                 }))),
             }

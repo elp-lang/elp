@@ -1,41 +1,48 @@
 use crate::parser::Rule;
+use pest::Span;
 use pest_ast::FromPest;
 
 use super::{block::CSTBlock, expression::CSTExpression};
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::match_tree))]
-pub struct CSTMatchTree {
-    pub match_expression: CSTExpression,
-    pub match_arms: Vec<CSTMatchTreeArm>,
+pub struct CSTMatchTree<'a> {
+    #[pest_ast(outer())]
+    pub span: Span<'a>,
+    pub match_expression: CSTExpression<'a>,
+    pub match_arms: Vec<CSTMatchTreeArm<'a>>,
 }
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::match_arm_subject))]
-pub enum CSTMatchArmSubject {
-    Expression(CSTExpression),
-    MatchRange(CSTMatchRange),
+pub enum CSTMatchArmSubject<'a> {
+    Expression(CSTExpression<'a>),
+    MatchRange(CSTMatchRange<'a>),
 }
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::match_range))]
-pub struct CSTMatchRange {
-    pub range_start: Option<Box<CSTExpression>>,
-    pub range_end: Option<Box<CSTExpression>>,
+pub struct CSTMatchRange<'a> {
+    #[pest_ast(outer())]
+    pub span: Span<'a>,
+    pub range_start: Option<Box<CSTExpression<'a>>>,
+    pub range_end: Option<Box<CSTExpression<'a>>>,
 }
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::match_arm_body))]
-pub enum CSTMatchBody {
-    Expression(Box<CSTExpression>),
-    Block(Box<CSTBlock>),
+pub enum CSTMatchBody<'a> {
+    Expression(Box<CSTExpression<'a>>),
+    Block(Box<CSTBlock<'a>>),
 }
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::match_arm))]
-pub struct CSTMatchTreeArm {
-    pub subject: CSTMatchArmSubject,
-    pub body: CSTMatchBody,
+pub struct CSTMatchTreeArm<'a> {
+    #[pest_ast(outer())]
+    pub span: Span<'a>,
+    pub subject: CSTMatchArmSubject<'a>,
+    pub body: CSTMatchBody<'a>,
 }
 
 #[cfg(test)]
@@ -66,18 +73,24 @@ mod tests {
         assert_eq!(
             ast,
             CSTMatchTreeArm {
+                span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                 subject: CSTMatchArmSubject::Expression(CSTExpression::VariableAccess(Box::new(
                     CSTVariableAccess {
+                        span: pest::Span::new(expression_str, 0, 5).unwrap(),
                         pointer_semantics: vec![],
                         names: CSTVariableAccessNames {
+                            span: pest::Span::new(expression_str, 0, 5).unwrap(),
                             names: vec![CSTIdent {
+                                span: pest::Span::new(expression_str, 0, 4).unwrap(),
                                 value: "expr".into()
                             }],
                         },
                     }
                 ))),
                 body: CSTMatchBody::Block(Box::new(CSTBlock {
+                    span: pest::Span::new(expression_str, 8, expression_str.len()).unwrap(),
                     expressions: vec![CSTExpression::String(Box::new(CSTString {
+                        span: pest::Span::new(expression_str, 10, 25).unwrap(),
                         value: "Hello, World!".into()
                     }))]
                 }))
@@ -95,9 +108,13 @@ mod tests {
             ast,
             CSTMatchArmSubject::Expression(CSTExpression::VariableAccess(Box::new(
                 CSTVariableAccess {
+                    span: pest::Span::new(expression_ident, 0, expression_ident.len()).unwrap(),
                     pointer_semantics: vec![],
                     names: CSTVariableAccessNames {
+                        span: pest::Span::new(expression_ident, 0, expression_ident.len()).unwrap(),
                         names: vec![CSTIdent {
+                            span: pest::Span::new(expression_ident, 0, expression_ident.len())
+                                .unwrap(),
                             value: "expr".into()
                         }],
                     },
@@ -112,10 +129,13 @@ mod tests {
         assert_eq!(
             ast,
             CSTMatchArmSubject::MatchRange(CSTMatchRange {
+                span: pest::Span::new(expression_range, 0, expression_range.len()).unwrap(),
                 range_start: Some(Box::new(CSTExpression::Number(Box::new(CSTNumber {
+                    span: pest::Span::new(expression_range, 0, 1).unwrap(),
                     value: "1".into()
                 })))),
                 range_end: Some(Box::new(CSTExpression::Number(Box::new(CSTNumber {
+                    span: pest::Span::new(expression_range, 3, expression_range.len()).unwrap(),
                     value: "10".into()
                 })))),
             })
@@ -136,21 +156,29 @@ mod tests {
         assert_eq!(
             ast,
             CSTMatchTree {
+                span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                 match_expression: CSTExpression::VariableAccess(Box::new(CSTVariableAccess {
+                    span: pest::Span::new(expression_str, 6, 11).unwrap(),
                     pointer_semantics: vec![],
                     names: CSTVariableAccessNames {
+                        span: pest::Span::new(expression_str, 6, 11).unwrap(),
                         names: vec![CSTIdent {
+                            span: pest::Span::new(expression_str, 6, 10).unwrap(),
                             value: "expr".into()
                         }],
                     }
                 })),
                 match_arms: vec![
                     CSTMatchTreeArm {
+                        span: pest::Span::new(expression_str, 25, 49).unwrap(),
                         subject: CSTMatchArmSubject::Expression(CSTExpression::VariableAccess(
                             Box::new(CSTVariableAccess {
+                                span: pest::Span::new(expression_str, 25, 30).unwrap(),
                                 pointer_semantics: vec![],
                                 names: CSTVariableAccessNames {
+                                    span: pest::Span::new(expression_str, 25, 30).unwrap(),
                                     names: vec![CSTIdent {
+                                        span: pest::Span::new(expression_str, 25, 29).unwrap(),
                                         value: "expr".into()
                                     }],
                                 },
@@ -158,23 +186,33 @@ mod tests {
                         )),
                         body: CSTMatchBody::Expression(Box::new(CSTExpression::String(Box::new(
                             CSTString {
+                                span: pest::Span::new(expression_str, 33, 48).unwrap(),
                                 value: "Hello, World!".into()
                             }
                         ))))
                     },
                     CSTMatchTreeArm {
+                        span: pest::Span::new(expression_str, 62, 130).unwrap(),
                         subject: CSTMatchArmSubject::Expression(CSTExpression::VariableAccess(
                             Box::new(CSTVariableAccess {
+                                span: pest::Span::new(expression_str, 62, 64).unwrap(),
                                 pointer_semantics: vec![],
                                 names: CSTVariableAccessNames {
-                                    names: vec![CSTIdent { value: "_".into() }],
+                                    span: pest::Span::new(expression_str, 62, 64).unwrap(),
+                                    names: vec![CSTIdent {
+                                        span: pest::Span::new(expression_str, 62, 63).unwrap(),
+                                        value: "_".into()
+                                    }],
                                 },
                             })
                         )),
                         body: CSTMatchBody::Block(Box::new(CSTBlock {
+                            span: pest::Span::new(expression_str, 67, 121).unwrap(),
                             expressions: vec![CSTExpression::FunctionReturnValue(Box::new(
                                 CSTFunctionReturnValue {
+                                    span: pest::Span::new(expression_str, 85, 107).unwrap(),
                                     value: Box::new(CSTExpression::String(Box::new(CSTString {
+                                        span: pest::Span::new(expression_str, 92, 107).unwrap(),
                                         value: "Default value".into()
                                     })))
                                 }

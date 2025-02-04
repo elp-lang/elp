@@ -19,53 +19,65 @@ pub(crate) mod variable_assignment;
 pub(crate) mod variable_declaration;
 
 use expression::CSTExpression;
-use pest::{LinesSpan, Span};
+use pest::Span;
 use pest_ast::FromPest;
 
 use crate::parser::Rule;
 
 #[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::VAR))]
-pub struct Var;
+pub struct Var<'a> {
+    #[pest_ast(outer())]
+    pub span: Span<'a>,
+}
 
 #[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::CONST))]
-pub struct Const;
+pub struct Const<'a> {
+    #[pest_ast(outer())]
+    pub span: Span<'a>,
+}
 
 #[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::mutability_selector))]
-pub enum CSTMutabilitySelector {
-    Mutable(Var),
-    Immutable(Const),
+pub enum CSTMutabilitySelector<'a> {
+    Mutable(Var<'a>),
+    Immutable(Const<'a>),
 }
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::PUBLIC))]
-pub struct PublicVisibility;
+pub struct PublicVisibility<'a> {
+    #[pest_ast(outer())]
+    pub span: Span<'a>,
+}
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::PRIVATE))]
-pub struct PrivateVisibility;
+pub struct PrivateVisibility<'a> {
+    #[pest_ast(outer())]
+    pub span: Span<'a>,
+}
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::visibility_selector))]
-pub enum VisibilitySelector {
-    Public(PublicVisibility),
-    Private(PrivateVisibility),
+pub enum VisibilitySelector<'a> {
+    Public(PublicVisibility<'a>),
+    Private(PrivateVisibility<'a>),
 }
 
 fn span_into_string(span: Span) -> String {
     span.as_str().into()
 }
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::module))]
-pub struct Module {
-    pub expressions: Vec<CSTExpression>,
+pub struct Module<'a> {
+    pub expressions: Vec<CSTExpression<'a>>,
     _eoi: Eoi,
 }
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::EOI))]
 struct Eoi;
 
@@ -74,8 +86,10 @@ mod tests {
     use super::*;
     use crate::parser::ElpParser;
     use from_pest::FromPest;
+    use ident::CSTIdent;
     use import::CSTImport;
     use pest::Parser;
+    use pretty_assertions::assert_eq;
     use string::CSTString;
 
     use crate::cst::import::{CSTImportModulePath, CSTImportName, CSTImportNameAlias};
@@ -90,20 +104,35 @@ mod tests {
             ast,
             Module {
                 expressions: vec![CSTExpression::Import(Box::new(CSTImport {
+                    span: pest::Span::new(expression_str, 0, 40).unwrap(),
                     names: vec![
                         CSTImportName {
-                            name: "Bar".into(),
+                            span: pest::Span::new(expression_str, 8, 11).unwrap(),
+                            name: CSTIdent {
+                                span: pest::Span::new(expression_str, 8, 11).unwrap(),
+                                value: "Bar".into()
+                            },
                             alias: None,
                         },
                         CSTImportName {
-                            name: "Baz".to_string(),
+                            span: pest::Span::new(expression_str, 13, 28).unwrap(),
+                            name: CSTIdent {
+                                span: pest::Span::new(expression_str, 13, 16).unwrap(),
+                                value: "Baz".to_string()
+                            },
                             alias: Some(CSTImportNameAlias {
-                                alias: "BazAlias".into()
+                                span: pest::Span::new(expression_str, 17, 28).unwrap(),
+                                alias: CSTIdent {
+                                    span: pest::Span::new(expression_str, 20, 28).unwrap(),
+                                    value: "BazAlias".into(),
+                                }
                             }),
                         }
                     ],
                     module_path: CSTImportModulePath {
+                        span: pest::Span::new(expression_str, 35, 40).unwrap(),
                         module_path: CSTString {
+                            span: pest::Span::new(expression_str, 35, 40).unwrap(),
                             value: "foo".into()
                         }
                     }

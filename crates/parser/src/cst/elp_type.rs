@@ -8,8 +8,8 @@ use pest_ast::FromPest;
 pub struct CSTElpType<'a> {
     #[pest_ast(outer())]
     pub span: Span<'a>,
-    pub pointer_semantics: Option<CSTPointerSemantics>,
-    pub mutability: Option<CSTMutabilitySelector>,
+    pub pointer_semantics: Option<CSTPointerSemantics<'a>>,
+    pub mutability: Option<CSTMutabilitySelector<'a>>,
     pub value: CSTElpTypeValue<'a>,
 }
 
@@ -18,8 +18,19 @@ pub struct CSTElpType<'a> {
 pub struct CSTElpTypeParameter<'a> {
     #[pest_ast(outer())]
     pub span: Span<'a>,
-    pub name: CSTIdent,
+    pub name: CSTIdent<'a>,
     pub generics: Vec<CSTElpTypeGeneric<'a>>,
+}
+
+impl<'a> CSTElpTypeParameter<'a> {
+    pub fn to_elp_type(&self) -> CSTElpType<'a> {
+        CSTElpType {
+            span: self.span,
+            pointer_semantics: None,
+            mutability: None,
+            value: CSTElpTypeValue::Parameter(self.clone()),
+        }
+    }
 }
 
 #[derive(Debug, FromPest, PartialEq, Eq, Clone)]
@@ -27,7 +38,7 @@ pub struct CSTElpTypeParameter<'a> {
 pub struct CSTElpTypeArray<'a> {
     #[pest_ast(outer())]
     pub span: Span<'a>,
-    pub of_elp_type: Box<CSTElpType<'a>>,
+    pub of_elp_type: Box<CSTElpTypeParameter<'a>>,
 }
 
 #[derive(Debug, FromPest, PartialEq, Eq, Clone)]
@@ -69,6 +80,7 @@ mod tests {
     use crate::parser::ElpParser;
     use from_pest::FromPest;
     use pest::Parser;
+    use pretty_assertions::assert_eq;
 
     #[test]
     fn elp_type() {
@@ -83,7 +95,9 @@ mod tests {
                 mutability: None,
                 pointer_semantics: None,
                 value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                    span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                     name: CSTIdent {
+                        span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                         value: "String".into()
                     },
                     generics: vec![]
@@ -101,27 +115,27 @@ mod tests {
         assert_eq!(
             ast,
             CSTElpType {
-                span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                span: pest::Span::new(expression_str, 0, 12).unwrap(),
                 mutability: None,
                 pointer_semantics: None,
                 value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
-                    span: pest::Span::new(expression_str, 0, 4).unwrap(),
+                    span: pest::Span::new(expression_str, 0, 12).unwrap(),
                     name: CSTIdent {
+                        span: pest::Span::new(expression_str, 0, 4).unwrap(),
                         value: "Into".into()
                     },
                     generics: vec![CSTElpTypeGeneric {
-                        span: pest::Span::new(expression_str, 4, expression_str.len()).unwrap(),
+                        span: pest::Span::new(expression_str, 4, 12).unwrap(),
                         params: vec![CSTElpTypeGenericParam {
-                            span: pest::Span::new(expression_str, 4, expression_str.len()).unwrap(),
+                            span: pest::Span::new(expression_str, 5, 11).unwrap(),
                             elp_type: CSTElpType {
-                                span: pest::Span::new(expression_str, 4, expression_str.len())
-                                    .unwrap(),
+                                span: pest::Span::new(expression_str, 5, 11).unwrap(),
                                 mutability: None,
                                 pointer_semantics: None,
                                 value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
-                                    span: pest::Span::new(expression_str, 4, expression_str.len())
-                                        .unwrap(),
+                                    span: pest::Span::new(expression_str, 5, 11).unwrap(),
                                     name: CSTIdent {
+                                        span: pest::Span::new(expression_str, 5, 11).unwrap(),
                                         value: "String".into()
                                     },
                                     generics: vec![]
@@ -146,25 +160,30 @@ mod tests {
             CSTElpTypeGeneric {
                 span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                 params: vec![CSTElpTypeGenericParam {
-                    span: pest::Span::new(expression_str, 0, 7).unwrap(),
+                    span: pest::Span::new(expression_str, 1, 13).unwrap(),
                     elp_type: CSTElpType {
-                        span: pest::Span::new(expression_str, 1, 6).unwrap(),
+                        span: pest::Span::new(expression_str, 1, 7).unwrap(),
                         mutability: None,
                         pointer_semantics: None,
                         value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
-                            span: pest::Span::new(expression_str, 1, 6).unwrap(),
+                            span: pest::Span::new(expression_str, 1, 7).unwrap(),
                             name: CSTIdent {
+                                span: pest::Span::new(expression_str, 1, 7).unwrap(),
                                 value: "String".into()
                             },
                             generics: vec![]
                         })
                     },
                     type_constraint: Some(CSTElpTypeGenericConstraint {
+                        span: pest::Span::new(expression_str, 7, 13).unwrap(),
                         constraints: vec![CSTElpType {
+                            span: pest::Span::new(expression_str, 9, 13).unwrap(),
                             mutability: None,
                             pointer_semantics: None,
                             value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                                span: pest::Span::new(expression_str, 9, 13).unwrap(),
                                 name: CSTIdent {
+                                    span: pest::Span::new(expression_str, 9, 13).unwrap(),
                                     value: "Copy".into()
                                 },
                                 generics: vec![]
@@ -185,34 +204,46 @@ mod tests {
         assert_eq!(
             ast,
             CSTElpTypeGeneric {
+                span: pest::Span::new(expression_str, 0, 22).unwrap(),
                 params: vec![CSTElpTypeGenericParam {
+                    span: pest::Span::new(expression_str, 1, 21).unwrap(),
                     elp_type: CSTElpType {
+                        span: pest::Span::new(expression_str, 1, 7).unwrap(),
                         mutability: None,
                         pointer_semantics: None,
                         value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                            span: pest::Span::new(expression_str, 1, 7).unwrap(),
                             name: CSTIdent {
+                                span: pest::Span::new(expression_str, 1, 7).unwrap(),
                                 value: "String".into()
                             },
                             generics: vec![]
                         })
                     },
                     type_constraint: Some(CSTElpTypeGenericConstraint {
+                        span: pest::Span::new(expression_str, 7, 21).unwrap(),
                         constraints: vec![
                             CSTElpType {
+                                span: pest::Span::new(expression_str, 9, 14).unwrap(),
                                 mutability: None,
                                 pointer_semantics: None,
                                 value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                                    span: pest::Span::new(expression_str, 9, 14).unwrap(),
                                     name: CSTIdent {
+                                        span: pest::Span::new(expression_str, 9, 13).unwrap(),
                                         value: "Copy".into()
                                     },
                                     generics: vec![]
                                 })
                             },
                             CSTElpType {
+                                span: pest::Span::new(expression_str, 16, 21).unwrap(),
                                 mutability: None,
                                 pointer_semantics: None,
                                 value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                                    span: pest::Span::new(expression_str, 16, 21).unwrap(),
                                     name: CSTIdent {
+                                        span: pest::Span::new(expression_str, 16, 21).unwrap(),
                                         value: "Clone".into()
                                     },
                                     generics: vec![]
@@ -234,13 +265,18 @@ mod tests {
         assert_eq!(
             ast,
             CSTElpTypeGeneric {
+                span: pest::Span::new(expression_str, 0, 30).unwrap(),
                 params: vec![
                     CSTElpTypeGenericParam {
+                        span: pest::Span::new(expression_str, 1, 7).unwrap(),
                         elp_type: CSTElpType {
+                            span: pest::Span::new(expression_str, 1, 7).unwrap(),
                             mutability: None,
                             pointer_semantics: None,
                             value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                                span: pest::Span::new(expression_str, 1, 7).unwrap(),
                                 name: CSTIdent {
+                                    span: pest::Span::new(expression_str, 1, 7).unwrap(),
                                     value: "Number".into()
                                 },
                                 generics: vec![]
@@ -249,33 +285,44 @@ mod tests {
                         type_constraint: None
                     },
                     CSTElpTypeGenericParam {
+                        span: pest::Span::new(expression_str, 9, 29).unwrap(),
                         elp_type: CSTElpType {
+                            span: pest::Span::new(expression_str, 9, 15).unwrap(),
                             mutability: None,
                             pointer_semantics: None,
                             value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                                span: pest::Span::new(expression_str, 9, 15).unwrap(),
                                 name: CSTIdent {
+                                    span: pest::Span::new(expression_str, 9, 15).unwrap(),
                                     value: "String".into()
                                 },
                                 generics: vec![]
                             })
                         },
                         type_constraint: Some(CSTElpTypeGenericConstraint {
+                            span: pest::Span::new(expression_str, 15, 29).unwrap(),
                             constraints: vec![
                                 CSTElpType {
+                                    span: pest::Span::new(expression_str, 17, 22).unwrap(),
                                     mutability: None,
                                     pointer_semantics: None,
                                     value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                                        span: pest::Span::new(expression_str, 17, 22).unwrap(),
                                         name: CSTIdent {
+                                            span: pest::Span::new(expression_str, 17, 21).unwrap(),
                                             value: "Copy".into()
                                         },
                                         generics: vec![]
                                     })
                                 },
                                 CSTElpType {
+                                    span: pest::Span::new(expression_str, 24, 29).unwrap(),
                                     mutability: None,
                                     pointer_semantics: None,
                                     value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                                        span: pest::Span::new(expression_str, 24, 29).unwrap(),
                                         name: CSTIdent {
+                                            span: pest::Span::new(expression_str, 24, 29).unwrap(),
                                             value: "Clone".into()
                                         },
                                         generics: vec![]
@@ -290,6 +337,28 @@ mod tests {
     }
 
     #[test]
+    fn elp_type_array() {
+        let expression_str = "[Number]";
+        let mut pairs = ElpParser::parse(Rule::elp_type_array, expression_str).unwrap();
+        let ast = CSTElpTypeArray::from_pest(&mut pairs).unwrap();
+
+        assert_eq!(
+            ast,
+            CSTElpTypeArray {
+                span: pest::Span::new(expression_str, 0, 8).unwrap(),
+                of_elp_type: Box::new(CSTElpTypeParameter {
+                    span: pest::Span::new(expression_str, 1, 7).unwrap(),
+                    name: CSTIdent {
+                        span: pest::Span::new(expression_str, 1, 7).unwrap(),
+                        value: "Number".into()
+                    },
+                    generics: vec![]
+                })
+            }
+        );
+    }
+
+    #[test]
     fn elp_multiple_generic_constraints() {
         let expression_str = "<Number: Copy, String: Copy + Clone>";
         let mut pairs = ElpParser::parse(Rule::elp_type_generic, expression_str).unwrap();
@@ -298,24 +367,33 @@ mod tests {
         assert_eq!(
             ast,
             CSTElpTypeGeneric {
+                span: pest::Span::new(expression_str, 0, 36).unwrap(),
                 params: vec![
                     CSTElpTypeGenericParam {
+                        span: pest::Span::new(expression_str, 1, 13).unwrap(),
                         elp_type: CSTElpType {
+                            span: pest::Span::new(expression_str, 1, 7).unwrap(),
                             mutability: None,
                             pointer_semantics: None,
                             value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                                span: pest::Span::new(expression_str, 1, 7).unwrap(),
                                 name: CSTIdent {
+                                    span: pest::Span::new(expression_str, 1, 7).unwrap(),
                                     value: "Number".into()
                                 },
                                 generics: vec![]
                             })
                         },
                         type_constraint: Some(CSTElpTypeGenericConstraint {
+                            span: pest::Span::new(expression_str, 7, 13).unwrap(),
                             constraints: vec![CSTElpType {
+                                span: pest::Span::new(expression_str, 9, 13).unwrap(),
                                 mutability: None,
                                 pointer_semantics: None,
                                 value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                                    span: pest::Span::new(expression_str, 9, 13).unwrap(),
                                     name: CSTIdent {
+                                        span: pest::Span::new(expression_str, 9, 13).unwrap(),
                                         value: "Copy".into()
                                     },
                                     generics: vec![]
@@ -324,33 +402,44 @@ mod tests {
                         })
                     },
                     CSTElpTypeGenericParam {
+                        span: pest::Span::new(expression_str, 15, 35).unwrap(),
                         elp_type: CSTElpType {
+                            span: pest::Span::new(expression_str, 15, 21).unwrap(),
                             mutability: None,
                             pointer_semantics: None,
                             value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                                span: pest::Span::new(expression_str, 15, 21).unwrap(),
                                 name: CSTIdent {
+                                    span: pest::Span::new(expression_str, 15, 21).unwrap(),
                                     value: "String".into()
                                 },
                                 generics: vec![]
                             })
                         },
                         type_constraint: Some(CSTElpTypeGenericConstraint {
+                            span: pest::Span::new(expression_str, 21, 35).unwrap(),
                             constraints: vec![
                                 CSTElpType {
+                                    span: pest::Span::new(expression_str, 23, 28).unwrap(),
                                     mutability: None,
                                     pointer_semantics: None,
                                     value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                                        span: pest::Span::new(expression_str, 23, 28).unwrap(),
                                         name: CSTIdent {
+                                            span: pest::Span::new(expression_str, 23, 27).unwrap(),
                                             value: "Copy".into()
                                         },
                                         generics: vec![]
                                     })
                                 },
                                 CSTElpType {
+                                    span: pest::Span::new(expression_str, 30, 35).unwrap(),
                                     mutability: None,
                                     pointer_semantics: None,
                                     value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                                        span: pest::Span::new(expression_str, 30, 35).unwrap(),
                                         name: CSTIdent {
+                                            span: pest::Span::new(expression_str, 30, 35).unwrap(),
                                             value: "Clone".into()
                                         },
                                         generics: vec![]

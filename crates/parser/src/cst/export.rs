@@ -1,11 +1,14 @@
 use super::expression::CSTExpression;
 use crate::parser::Rule;
+use pest::Span;
 use pest_ast::FromPest;
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::export))]
-pub struct CSTExport {
-    pub expression: CSTExpression,
+pub struct CSTExport<'a> {
+    #[pest_ast(outer())]
+    pub span: Span<'a>,
+    pub expression: CSTExpression<'a>,
 }
 
 #[cfg(test)]
@@ -13,7 +16,10 @@ mod tests {
     use super::*;
 
     use crate::{
-        cst::{variable_declaration::CSTVariableDeclaration, CSTMutabilitySelector, Const},
+        cst::{
+            ident::CSTIdent, variable_declaration::CSTVariableDeclaration, CSTMutabilitySelector,
+            Const,
+        },
         parser::ElpParser,
     };
     use from_pest::FromPest;
@@ -29,9 +35,16 @@ mod tests {
         assert_eq!(
             ast,
             CSTExport {
+                span: pest::Span::new(expression_str, 0, 18).unwrap(),
                 expression: CSTExpression::VariableDeclaration(Box::new(CSTVariableDeclaration {
-                    mutability: CSTMutabilitySelector::Immutable(Const),
-                    name: "hello".into(),
+                    span: pest::Span::new(expression_str, 7, 18).unwrap(),
+                    mutability: CSTMutabilitySelector::Immutable(Const {
+                        span: Span::new(expression_str, 7, 12).unwrap(),
+                    }),
+                    name: CSTIdent {
+                        span: pest::Span::new(expression_str, 13, 18).unwrap(),
+                        value: "hello".into(),
+                    },
                     type_annotation: None
                 }))
             }

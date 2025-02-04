@@ -8,7 +8,7 @@ pub struct ASTObject {
     pub members: Vec<ASTObjectMember>,
 }
 
-impl FromCST<CSTObject> for ASTObject {
+impl FromCST<CSTObject<'_>> for ASTObject {
     fn from_cst(_cst: &CSTObject) -> Self {
         ASTObject {
             name: String::new(),
@@ -20,7 +20,7 @@ impl FromCST<CSTObject> for ASTObject {
 #[derive(Debug, PartialEq, PartialOrd)]
 pub struct ASTObjectMember {}
 
-impl FromCST<CSTObjectMember> for ASTObjectMember {
+impl FromCST<CSTObjectMember<'_>> for ASTObjectMember {
     fn from_cst(_cst: &CSTObjectMember) -> Self {
         ASTObjectMember {}
     }

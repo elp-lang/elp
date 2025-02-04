@@ -4,12 +4,12 @@ use pest_ast::FromPest;
 
 use super::expression::CSTExpression;
 
-#[derive(Debug, FromPest, PartialEq, Eq)]
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::block))]
 pub struct CSTBlock<'a> {
     #[pest_ast(outer())]
     pub span: Span<'a>,
-    pub expressions: Vec<CSTExpression>,
+    pub expressions: Vec<CSTExpression<'a>>,
 }
 
 #[cfg(test)]
@@ -37,17 +37,26 @@ mod tests {
         assert_eq!(
             ast,
             CSTBlock {
-                span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                span: pest::Span::new(expression_str, 0, 22).unwrap(),
                 expressions: vec![CSTExpression::VariableDeclaration(Box::new(
                     CSTVariableDeclaration {
-                        name: "hello".into(),
-                        mutability: CSTMutabilitySelector::Immutable(Const),
+                        span: pest::Span::new(expression_str, 2, 21).unwrap(),
+                        name: CSTIdent {
+                            span: pest::Span::new(expression_str, 8, 13).unwrap(),
+                            value: "hello".into()
+                        },
+                        mutability: CSTMutabilitySelector::Immutable(Const {
+                            span: Span::new(expression_str, 2, 7).unwrap()
+                        }),
                         type_annotation: Some(Box::new(CSTElpType {
+                            span: pest::Span::new(expression_str, 14, 21).unwrap(),
                             pointer_semantics: None,
                             mutability: None,
                             value: crate::cst::elp_type::CSTElpTypeValue::Parameter(
                                 CSTElpTypeParameter {
+                                    span: pest::Span::new(expression_str, 14, 21).unwrap(),
                                     name: CSTIdent {
+                                        span: pest::Span::new(expression_str, 14, 20).unwrap(),
                                         value: "String".into()
                                     },
                                     generics: vec![]

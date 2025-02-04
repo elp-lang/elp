@@ -10,9 +10,9 @@ use super::{block::CSTBlock, expression::CSTExpression};
 pub struct CSTForLoop<'a> {
     #[pest_ast(outer())]
     pub span: Span<'a>,
-    pub declaration_expression: CSTExpression,
-    pub in_expression: CSTExpression,
-    pub body: CSTBlock,
+    pub declaration_expression: CSTExpression<'a>,
+    pub in_expression: CSTExpression<'a>,
+    pub body: CSTBlock<'a>,
 }
 
 #[cfg(test)]
@@ -43,8 +43,11 @@ mod tests {
                 span: pest::Span::new(expression_str, 0, 38).unwrap(),
                 declaration_expression: CSTExpression::VariableAccess(Box::new(
                     CSTVariableAccess {
+                        span: pest::Span::new(expression_str, 4, 10).unwrap(),
                         names: CSTVariableAccessNames {
+                            span: pest::Span::new(expression_str, 4, 10).unwrap(),
                             names: vec![CSTIdent {
+                                span: pest::Span::new(expression_str, 4, 9).unwrap(),
                                 value: "thing".into()
                             }],
                         },
@@ -52,19 +55,27 @@ mod tests {
                     }
                 )),
                 in_expression: CSTExpression::VariableAccess(Box::new(CSTVariableAccess {
+                    span: pest::Span::new(expression_str, 13, 22).unwrap(),
                     names: CSTVariableAccessNames {
+                        span: pest::Span::new(expression_str, 13, 22).unwrap(),
                         names: vec![CSTIdent {
+                            span: pest::Span::new(expression_str, 13, 21).unwrap(),
                             value: "thingies".into()
                         }],
                     },
                     pointer_semantics: vec![],
                 })),
                 body: CSTBlock {
+                    span: pest::Span::new(expression_str, 22, 38).unwrap(),
                     expressions: vec![CSTExpression::FunctionCall(Box::new(CSTFunctionCall {
+                        span: pest::Span::new(expression_str, 24, 36).unwrap(),
                         name: CSTFunctionCallName::VariableAccess(CSTVariableAccess {
+                            span: pest::Span::new(expression_str, 24, 29).unwrap(),
                             pointer_semantics: vec![],
                             names: CSTVariableAccessNames {
+                                span: pest::Span::new(expression_str, 24, 29).unwrap(),
                                 names: vec![CSTIdent {
+                                    span: pest::Span::new(expression_str, 24, 29).unwrap(),
                                     value: "print".into()
                                 }],
                             },
@@ -72,8 +83,11 @@ mod tests {
                         generics: None,
                         arguments: vec![CSTExpression::VariableAccess(Box::new(
                             CSTVariableAccess {
+                                span: pest::Span::new(expression_str, 30, 35).unwrap(),
                                 names: CSTVariableAccessNames {
+                                    span: pest::Span::new(expression_str, 30, 35).unwrap(),
                                     names: vec![CSTIdent {
+                                        span: pest::Span::new(expression_str, 30, 35).unwrap(),
                                         value: "thing".into()
                                     }],
                                 },
