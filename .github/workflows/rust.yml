@@ -17,14 +17,14 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-    - name: Clippy
-      run: cargo clippy
     - name: Install Rust llvm
       run: rustup toolchain install nightly --component llvm-tools-preview
     - name: Install LLVM and Clang
       uses: KyleMayes/install-llvm-action@v2
       with:
         version: "18.1"
+    - name: Clippy
+      run: cargo clippy
     - name: Install cargo-llvm-cov
       run: cargo install cargo-llvm-cov --locked
     - name: test with coverage
