@@ -19,7 +19,7 @@ pub struct CSTInterfaceMemberKeyValue<'a> {
 #[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::interface_member))]
 pub enum CSTInterfaceMember<'a> {
-    Field(CSTInterfaceMemberKeyValue<'a>),
+    Field(Box<CSTInterfaceMemberKeyValue<'a>>),
     Method(Box<CSTFunctionHeaderDef<'a>>),
 }
 
@@ -59,7 +59,7 @@ mod tests {
 
         assert_eq!(
             ast,
-            CSTInterfaceMember::Field(CSTInterfaceMemberKeyValue {
+            CSTInterfaceMember::Field(Box::new(CSTInterfaceMemberKeyValue {
                 span: Span::new(expression_str, 0, 12).unwrap(),
                 name: CSTIdent {
                     span: Span::new(expression_str, 1, 5).unwrap(),
@@ -78,7 +78,7 @@ mod tests {
                         generics: vec![]
                     })
                 }),
-            })
+            }))
         );
     }
 
@@ -99,26 +99,28 @@ mod tests {
                     value: "Test".into()
                 },
                 generics: None,
-                members: vec![CSTInterfaceMember::Field(CSTInterfaceMemberKeyValue {
-                    span: Span::new(expression_str, 19, 32).unwrap(),
-                    name: CSTIdent {
-                        span: Span::new(expression_str, 20, 24).unwrap(),
-                        value: "name".into()
-                    },
-                    type_annotation: Some(CSTElpType {
-                        span: Span::new(expression_str, 25, 32).unwrap(),
-                        mutability: None,
-                        pointer_semantics: None,
-                        value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                members: vec![CSTInterfaceMember::Field(Box::new(
+                    CSTInterfaceMemberKeyValue {
+                        span: Span::new(expression_str, 19, 32).unwrap(),
+                        name: CSTIdent {
+                            span: Span::new(expression_str, 20, 24).unwrap(),
+                            value: "name".into()
+                        },
+                        type_annotation: Some(CSTElpType {
                             span: Span::new(expression_str, 25, 32).unwrap(),
-                            name: CSTIdent {
-                                span: Span::new(expression_str, 25, 31).unwrap(),
-                                value: "String".into()
-                            },
-                            generics: vec![]
-                        })
-                    }),
-                })],
+                            mutability: None,
+                            pointer_semantics: None,
+                            value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                                span: Span::new(expression_str, 25, 32).unwrap(),
+                                name: CSTIdent {
+                                    span: Span::new(expression_str, 25, 31).unwrap(),
+                                    value: "String".into()
+                                },
+                                generics: vec![]
+                            })
+                        }),
+                    }
+                ))],
             }
         );
     }
