@@ -44,7 +44,7 @@ export fn HelloWorld -> App {
 }
 ```
 
-More complete examples can be found in the [examples](https://github.com/elp-lang/elpc/tree/main/examples) folder.
+More complete examples can be found in the [examples](https://github.com/elp-lang/elp/tree/main/examples) folder.
 
 
 ### Notes and other resources
