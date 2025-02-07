@@ -33,8 +33,9 @@ impl FromCST<CSTExpression<'_>> for ASTExpression {
             CSTExpression::Block(block) => {
                 ASTExpression::Block(Box::new(ASTBlock::from_cst(block)))
             }
-            CSTExpression::ElpType(elp_type) => {
-                ASTExpression::ElpType(Box::new(ASTElpType::from_cst(elp_type)))
+            CSTExpression::ElpType(boxed_elp_type) => {
+                let elp_type = *boxed_elp_type.clone();
+                ASTExpression::ElpType(Box::new(ASTElpType::from_cst(&elp_type)))
             }
             CSTExpression::Object(object) => {
                 ASTExpression::Object(Box::new(ASTObject::from_cst(object)))

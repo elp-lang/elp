@@ -38,7 +38,7 @@ impl<'a> CSTElpTypeParameter<'a> {
 pub struct CSTElpTypeArray<'a> {
     #[pest_ast(outer())]
     pub span: Span<'a>,
-    pub of_elp_type: Box<CSTElpTypeParameter<'a>>,
+    pub of_type_param: Box<CSTElpTypeParameter<'a>>,
 }
 
 #[derive(Debug, FromPest, PartialEq, Eq, Clone)]
@@ -346,7 +346,7 @@ mod tests {
             ast,
             CSTElpTypeArray {
                 span: pest::Span::new(expression_str, 0, 8).unwrap(),
-                of_elp_type: Box::new(CSTElpTypeParameter {
+                of_type_param: Box::new(CSTElpTypeParameter {
                     span: pest::Span::new(expression_str, 1, 7).unwrap(),
                     name: CSTIdent {
                         span: pest::Span::new(expression_str, 1, 7).unwrap(),
