@@ -4,7 +4,7 @@ use crate::cst::expression::CSTExpression;
 
 use super::{block::ASTBlock, elp_type::ASTElpType, object::ASTObject, traits::FromCST};
 
-#[derive(Debug, PartialEq, PartialOrd)]
+#[derive(Debug, PartialEq, PartialOrd, Clone)]
 pub enum ASTExpression {
     Block(Box<ASTBlock>),
     ElpType(Box<ASTElpType>),

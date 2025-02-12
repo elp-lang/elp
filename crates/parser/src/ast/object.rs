@@ -2,7 +2,7 @@ use crate::cst::object::{CSTObject, CSTObjectMember};
 
 use super::traits::FromCST;
 
-#[derive(Debug, PartialEq, PartialOrd)]
+#[derive(Debug, PartialEq, PartialOrd, Clone)]
 pub struct ASTObject {
     pub name: String,
     pub members: Vec<ASTObjectMember>,
@@ -17,7 +17,7 @@ impl FromCST<CSTObject<'_>> for ASTObject {
     }
 }
 
-#[derive(Debug, PartialEq, PartialOrd)]
+#[derive(Debug, PartialEq, PartialOrd, Clone)]
 pub struct ASTObjectMember {}
 
 impl FromCST<CSTObjectMember<'_>> for ASTObjectMember {

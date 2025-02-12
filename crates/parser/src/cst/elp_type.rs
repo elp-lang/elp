@@ -19,18 +19,7 @@ pub struct CSTElpTypeParameter<'a> {
     #[pest_ast(outer())]
     pub span: Span<'a>,
     pub name: CSTIdent<'a>,
-    pub generics: Vec<CSTElpTypeGeneric<'a>>,
-}
-
-impl<'a> CSTElpTypeParameter<'a> {
-    pub fn to_elp_type(&self) -> CSTElpType<'a> {
-        CSTElpType {
-            span: self.span,
-            pointer_semantics: None,
-            mutability: None,
-            value: CSTElpTypeValue::Parameter(self.clone()),
-        }
-    }
+    pub generics: Option<CSTElpTypeGeneric<'a>>,
 }
 
 #[derive(Debug, FromPest, PartialEq, Eq, Clone)]
@@ -54,7 +43,7 @@ pub struct CSTElpTypeGenericParam<'a> {
     #[pest_ast(outer())]
     pub span: Span<'a>,
     pub elp_type: CSTElpType<'a>,
-    pub type_constraint: Option<CSTElpTypeGenericConstraint<'a>>,
+    pub type_constraints: Option<CSTElpTypeGenericConstraint<'a>>,
 }
 
 #[derive(Debug, FromPest, PartialEq, Eq, Clone)]
@@ -100,7 +89,7 @@ mod tests {
                         span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                         value: "String".into()
                     },
-                    generics: vec![]
+                    generics: None,
                 })
             }
         )
@@ -124,7 +113,7 @@ mod tests {
                         span: pest::Span::new(expression_str, 0, 4).unwrap(),
                         value: "Into".into()
                     },
-                    generics: vec![CSTElpTypeGeneric {
+                    generics: Some(CSTElpTypeGeneric {
                         span: pest::Span::new(expression_str, 4, 12).unwrap(),
                         params: vec![CSTElpTypeGenericParam {
                             span: pest::Span::new(expression_str, 5, 11).unwrap(),
@@ -138,12 +127,12 @@ mod tests {
                                         span: pest::Span::new(expression_str, 5, 11).unwrap(),
                                         value: "String".into()
                                     },
-                                    generics: vec![]
+                                    generics: None
                                 })
                             },
-                            type_constraint: None
+                            type_constraints: None
                         }]
-                    }]
+                    })
                 })
             }
         )
@@ -171,10 +160,10 @@ mod tests {
                                 span: pest::Span::new(expression_str, 1, 7).unwrap(),
                                 value: "String".into()
                             },
-                            generics: vec![]
+                            generics: None
                         })
                     },
-                    type_constraint: Some(CSTElpTypeGenericConstraint {
+                    type_constraints: Some(CSTElpTypeGenericConstraint {
                         span: pest::Span::new(expression_str, 7, 13).unwrap(),
                         constraints: vec![CSTElpType {
                             span: pest::Span::new(expression_str, 9, 13).unwrap(),
@@ -186,7 +175,7 @@ mod tests {
                                     span: pest::Span::new(expression_str, 9, 13).unwrap(),
                                     value: "Copy".into()
                                 },
-                                generics: vec![]
+                                generics: None
                             })
                         }]
                     })
@@ -217,10 +206,10 @@ mod tests {
                                 span: pest::Span::new(expression_str, 1, 7).unwrap(),
                                 value: "String".into()
                             },
-                            generics: vec![]
+                            generics: None
                         })
                     },
-                    type_constraint: Some(CSTElpTypeGenericConstraint {
+                    type_constraints: Some(CSTElpTypeGenericConstraint {
                         span: pest::Span::new(expression_str, 7, 21).unwrap(),
                         constraints: vec![
                             CSTElpType {
@@ -233,7 +222,7 @@ mod tests {
                                         span: pest::Span::new(expression_str, 9, 13).unwrap(),
                                         value: "Copy".into()
                                     },
-                                    generics: vec![]
+                                    generics: None
                                 })
                             },
                             CSTElpType {
@@ -246,7 +235,7 @@ mod tests {
                                         span: pest::Span::new(expression_str, 16, 21).unwrap(),
                                         value: "Clone".into()
                                     },
-                                    generics: vec![]
+                                    generics: None
                                 })
                             }
                         ]
@@ -279,10 +268,10 @@ mod tests {
                                     span: pest::Span::new(expression_str, 1, 7).unwrap(),
                                     value: "Number".into()
                                 },
-                                generics: vec![]
+                                generics: None
                             })
                         },
-                        type_constraint: None
+                        type_constraints: None
                     },
                     CSTElpTypeGenericParam {
                         span: pest::Span::new(expression_str, 9, 29).unwrap(),
@@ -296,10 +285,10 @@ mod tests {
                                     span: pest::Span::new(expression_str, 9, 15).unwrap(),
                                     value: "String".into()
                                 },
-                                generics: vec![]
+                                generics: None
                             })
                         },
-                        type_constraint: Some(CSTElpTypeGenericConstraint {
+                        type_constraints: Some(CSTElpTypeGenericConstraint {
                             span: pest::Span::new(expression_str, 15, 29).unwrap(),
                             constraints: vec![
                                 CSTElpType {
@@ -312,7 +301,7 @@ mod tests {
                                             span: pest::Span::new(expression_str, 17, 21).unwrap(),
                                             value: "Copy".into()
                                         },
-                                        generics: vec![]
+                                        generics: None
                                     })
                                 },
                                 CSTElpType {
@@ -325,7 +314,7 @@ mod tests {
                                             span: pest::Span::new(expression_str, 24, 29).unwrap(),
                                             value: "Clone".into()
                                         },
-                                        generics: vec![]
+                                        generics: None
                                     })
                                 }
                             ]
@@ -352,7 +341,7 @@ mod tests {
                         span: pest::Span::new(expression_str, 1, 7).unwrap(),
                         value: "Number".into()
                     },
-                    generics: vec![]
+                    generics: None
                 })
             }
         );
@@ -381,10 +370,10 @@ mod tests {
                                     span: pest::Span::new(expression_str, 1, 7).unwrap(),
                                     value: "Number".into()
                                 },
-                                generics: vec![]
+                                generics: None
                             })
                         },
-                        type_constraint: Some(CSTElpTypeGenericConstraint {
+                        type_constraints: Some(CSTElpTypeGenericConstraint {
                             span: pest::Span::new(expression_str, 7, 13).unwrap(),
                             constraints: vec![CSTElpType {
                                 span: pest::Span::new(expression_str, 9, 13).unwrap(),
@@ -396,7 +385,7 @@ mod tests {
                                         span: pest::Span::new(expression_str, 9, 13).unwrap(),
                                         value: "Copy".into()
                                     },
-                                    generics: vec![]
+                                    generics: None
                                 })
                             }]
                         })
@@ -413,10 +402,10 @@ mod tests {
                                     span: pest::Span::new(expression_str, 15, 21).unwrap(),
                                     value: "String".into()
                                 },
-                                generics: vec![]
+                                generics: None
                             })
                         },
-                        type_constraint: Some(CSTElpTypeGenericConstraint {
+                        type_constraints: Some(CSTElpTypeGenericConstraint {
                             span: pest::Span::new(expression_str, 21, 35).unwrap(),
                             constraints: vec![
                                 CSTElpType {
@@ -429,7 +418,7 @@ mod tests {
                                             span: pest::Span::new(expression_str, 23, 27).unwrap(),
                                             value: "Copy".into()
                                         },
-                                        generics: vec![]
+                                        generics: None
                                     })
                                 },
                                 CSTElpType {
@@ -442,7 +431,7 @@ mod tests {
                                             span: pest::Span::new(expression_str, 30, 35).unwrap(),
                                             value: "Clone".into()
                                         },
-                                        generics: vec![]
+                                        generics: None
                                     })
                                 }
                             ]

@@ -55,7 +55,7 @@ mod tests {
                             span: pest::Span::new(expression_str, 10, 16).unwrap(),
                             value: "String".into()
                         },
-                        generics: vec![],
+                        generics: None
                     })
                 })),
             }

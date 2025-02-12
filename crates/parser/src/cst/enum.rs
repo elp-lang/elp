@@ -77,7 +77,7 @@ mod tests {
                             span: pest::Span::new(expression_str, 8, 9).unwrap(),
                             value: "T".into()
                         },
-                        generics: vec![]
+                        generics: None
                     })
                 }]
             }
@@ -134,7 +134,7 @@ mod tests {
                                 span: pest::Span::new(expression_str, 23, 34).unwrap(),
                                 value: "MyInterface".into()
                             },
-                            generics: vec![]
+                            generics: None
                         })
                     }]
                 }),

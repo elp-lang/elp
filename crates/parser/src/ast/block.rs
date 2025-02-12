@@ -2,7 +2,7 @@ use crate::cst::block::CSTBlock;
 
 use super::{expression::ASTExpression, traits::FromCST};
 
-#[derive(Debug, PartialEq, PartialOrd)]
+#[derive(Debug, PartialEq, PartialOrd, Clone)]
 pub struct ASTBlock {
     pub expressions: Vec<ASTExpression>,
 }

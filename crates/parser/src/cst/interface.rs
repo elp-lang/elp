@@ -75,7 +75,7 @@ mod tests {
                             span: Span::new(expression_str, 6, 12).unwrap(),
                             value: "String".into()
                         },
-                        generics: vec![]
+                        generics: None
                     })
                 }),
             }))
@@ -116,7 +116,7 @@ mod tests {
                                     span: Span::new(expression_str, 25, 31).unwrap(),
                                     value: "String".into()
                                 },
-                                generics: vec![]
+                                generics: None
                             })
                         }),
                     }
@@ -156,10 +156,10 @@ mod tests {
                                         span: Span::new(expression_str, 15, 18).unwrap(),
                                         value: "Out".into()
                                     },
-                                    generics: vec![]
+                                    generics: None
                                 })
                             },
-                            type_constraint: None
+                            type_constraints: None
                         },
                         CSTElpTypeGenericParam {
                             span: Span::new(expression_str, 20, 36).unwrap(),
@@ -173,10 +173,10 @@ mod tests {
                                         span: Span::new(expression_str, 20, 29).unwrap(),
                                         value: "ErrorType".into()
                                     },
-                                    generics: vec![]
+                                    generics: None
                                 })
                             },
-                            type_constraint: Some(CSTElpTypeGenericConstraint {
+                            type_constraints: Some(CSTElpTypeGenericConstraint {
                                 span: Span::new(expression_str, 29, 36).unwrap(),
                                 constraints: vec![CSTElpType {
                                     span: Span::new(expression_str, 31, 36).unwrap(),
@@ -188,7 +188,7 @@ mod tests {
                                             span: Span::new(expression_str, 31, 36).unwrap(),
                                             value: "Error".into()
                                         },
-                                        generics: vec![]
+                                        generics: None
                                     })
                                 },]
                             })
@@ -223,10 +223,10 @@ mod tests {
                                         span: Span::new(expression_str, 60, 61).unwrap(),
                                         value: "O".into()
                                     },
-                                    generics: vec![]
+                                    generics: None
                                 })
                             },
-                            type_constraint: None
+                            type_constraints: None
                         },],
                     }),
                     arguments: CSTFunctionArguments {
@@ -253,7 +253,7 @@ mod tests {
                                     span: Span::new(expression_str, 72, 78).unwrap(),
                                     value: "Either".into()
                                 },
-                                generics: vec![CSTElpTypeGeneric {
+                                generics: Some(CSTElpTypeGeneric {
                                     span: Span::new(expression_str, 78, 94).unwrap(),
                                     params: vec![
                                         CSTElpTypeGenericParam {
@@ -272,11 +272,11 @@ mod tests {
                                                                     .unwrap(),
                                                             value: "Out".into()
                                                         },
-                                                        generics: vec![]
+                                                        generics: None
                                                     }
                                                 )
                                             },
-                                            type_constraint: None
+                                            type_constraints: None
                                         },
                                         CSTElpTypeGenericParam {
                                             span: Span::new(expression_str, 84, 93,).unwrap(),
@@ -293,14 +293,14 @@ mod tests {
                                                                 .unwrap(),
                                                             value: "ErrorType".into()
                                                         },
-                                                        generics: vec![]
+                                                        generics: None
                                                     }
                                                 )
                                             },
-                                            type_constraint: None,
+                                            type_constraints: None,
                                         }
                                     ]
-                                },],
+                                }),
                             })
                         }]
                     }

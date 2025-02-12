@@ -127,7 +127,7 @@ mod tests {
                                     span: pest::Span::new(expression_str, 6, 12).unwrap(),
                                     value: "String".into()
                                 },
-                                generics: vec![],
+                                generics: None
                             })
                         }),
                     },
@@ -148,7 +148,7 @@ mod tests {
                                     span: pest::Span::new(expression_str, 20, 26).unwrap(),
                                     value: "String".into()
                                 },
-                                generics: vec![],
+                                generics: None
                             })
                         }),
                     }
@@ -194,7 +194,7 @@ mod tests {
                                     span: pest::Span::new(expression_str, 12, 18).unwrap(),
                                     value: "String".into()
                                 },
-                                generics: vec![],
+                                generics: None
                             })
                         }),
                     },
@@ -215,7 +215,7 @@ mod tests {
                                     span: pest::Span::new(expression_str, 26, 32).unwrap(),
                                     value: "String".into()
                                 },
-                                generics: vec![],
+                                generics: None
                             })
                         }),
                     }
@@ -244,7 +244,7 @@ mod tests {
                             span: pest::Span::new(expression_str, 3, expression_str.len()).unwrap(),
                             value: "String".into()
                         },
-                        generics: vec![],
+                        generics: None
                     })
                 }]
             }
@@ -316,7 +316,7 @@ mod tests {
                                     span: pest::Span::new(expression_str, 19, 25).unwrap(),
                                     value: "String".into()
                                 },
-                                generics: vec![],
+                                generics: None
                             })
                         }),
                     }],
@@ -333,7 +333,7 @@ mod tests {
                                 span: pest::Span::new(expression_str, 30, 36).unwrap(),
                                 value: "String".into()
                             },
-                            generics: vec![],
+                            generics: None
                         })
                     }],
                 }),
@@ -395,7 +395,7 @@ mod tests {
                                     span: pest::Span::new(expression_str, 14, 20).unwrap(),
                                     value: "String".into()
                                 },
-                                generics: vec![],
+                                generics: None
                             })
                         }),
                     }],
@@ -414,7 +414,7 @@ mod tests {
                                     .unwrap(),
                                 value: "String".into()
                             },
-                            generics: vec![],
+                            generics: None
                         })
                     }],
                 },

@@ -91,7 +91,7 @@ mod tests {
                             span: pest::Span::new(expression_str_basic, 11, 17).unwrap(),
                             value: "String".into()
                         },
-                        generics: vec![],
+                        generics: None
                     })
                 }]
             }
@@ -117,7 +117,7 @@ mod tests {
                                 span: pest::Span::new(expression_str_multiple, 11, 17).unwrap(),
                                 value: "String".into()
                             },
-                            generics: vec![],
+                            generics: None
                         })
                     },
                     CSTElpType {
@@ -130,7 +130,7 @@ mod tests {
                                 span: pest::Span::new(expression_str_multiple, 19, 25).unwrap(),
                                 value: "Number".into()
                             },
-                            generics: vec![],
+                            generics: None
                         })
                     },
                     CSTElpType {
@@ -143,7 +143,7 @@ mod tests {
                                 span: pest::Span::new(expression_str_multiple, 27, 31).unwrap(),
                                 value: "Into".into()
                             },
-                            generics: vec![CSTElpTypeGeneric {
+                            generics: Some(CSTElpTypeGeneric {
                                 span: pest::Span::new(expression_str_multiple, 31, 37).unwrap(),
                                 params: vec![CSTElpTypeGenericParam {
                                     span: pest::Span::new(expression_str_multiple, 32, 36).unwrap(),
@@ -164,12 +164,12 @@ mod tests {
                                                 .unwrap(),
                                                 value: "JSON".into()
                                             },
-                                            generics: vec![]
+                                            generics: None
                                         })
                                     },
-                                    type_constraint: None
+                                    type_constraints: None
                                 }]
-                            }]
+                            })
                         })
                     }
                 ]
@@ -251,7 +251,7 @@ mod tests {
                             span: pest::Span::new(expression_str, 6, expression_str.len()).unwrap(),
                             value: "String".into()
                         },
-                        generics: vec![]
+                        generics: None
                     })
                 }),
                 default_value: None,
@@ -287,7 +287,7 @@ mod tests {
                             span: pest::Span::new(expression_str, 14, 20).unwrap(),
                             value: "String".into()
                         },
-                        generics: vec![]
+                        generics: None
                     })
                 }),
                 default_value: None,
@@ -323,7 +323,7 @@ mod tests {
                             span: pest::Span::new(expression_str, 13, 19).unwrap(),
                             value: "String".into()
                         },
-                        generics: vec![]
+                        generics: None
                     })
                 }),
                 default_value: None,
@@ -357,7 +357,7 @@ mod tests {
                             span: pest::Span::new(expression_str, 6, 12).unwrap(),
                             value: "String".into()
                         },
-                        generics: vec![]
+                        generics: None
                     })
                 }),
                 default_value: None,
@@ -401,7 +401,7 @@ mod tests {
                             span: pest::Span::new(expression_str, 6, 12).unwrap(),
                             value: "String".into()
                         },
-                        generics: vec![]
+                        generics: None
                     })
                 }),
                 default_value: Some(CSTObjectMemberDefaultValue {
@@ -441,7 +441,7 @@ mod tests {
                             span: pest::Span::new(expression_str, 6, 12).unwrap(),
                             value: "String".into()
                         },
-                        generics: vec![]
+                        generics: None
                     })
                 }),
                 default_value: Some(CSTObjectMemberDefaultValue {
@@ -498,7 +498,7 @@ mod tests {
                                 span: pest::Span::new(expression_str, 19, 25).unwrap(),
                                 value: "String".into()
                             },
-                            generics: vec![]
+                            generics: None
                         })
                     }),
                     default_value: None,
@@ -534,7 +534,7 @@ mod tests {
                                 span: pest::Span::new(expression_str, 23, 34).unwrap(),
                                 value: "MyInterface".into()
                             },
-                            generics: vec![]
+                            generics: None
                         })
                     }]
                 }),
@@ -555,7 +555,7 @@ mod tests {
                                 span: pest::Span::new(expression_str, 42, 48).unwrap(),
                                 value: "String".into()
                             },
-                            generics: vec![]
+                            generics: None
                         })
                     }),
                     default_value: None,
@@ -592,7 +592,7 @@ mod tests {
                                     span: pest::Span::new(expression_str, 23, 34).unwrap(),
                                     value: "MyInterface".into()
                                 },
-                                generics: vec![]
+                                generics: None
                             })
                         },
                         CSTElpType {
@@ -605,7 +605,7 @@ mod tests {
                                     span: pest::Span::new(expression_str, 36, 52).unwrap(),
                                     value: "AnotherInterface".into()
                                 },
-                                generics: vec![]
+                                generics: None
                             })
                         }
                     ]
@@ -627,7 +627,7 @@ mod tests {
                                 span: pest::Span::new(expression_str, 60, 66).unwrap(),
                                 value: "String".into()
                             },
-                            generics: vec![]
+                            generics: None
                         })
                     }),
                     default_value: None,
@@ -668,7 +668,7 @@ mod tests {
                                 span: pest::Span::new(expression_str, 23, 27).unwrap(),
                                 value: "Into".into()
                             },
-                            generics: vec![CSTElpTypeGeneric {
+                            generics: Some(CSTElpTypeGeneric {
                                 span: pest::Span::new(expression_str, 27, 33).unwrap(),
                                 params: vec![CSTElpTypeGenericParam {
                                     span: pest::Span::new(expression_str, 28, 32).unwrap(),
@@ -683,12 +683,12 @@ mod tests {
                                                     .unwrap(),
                                                 value: "JSON".into()
                                             },
-                                            generics: vec![]
+                                            generics: None
                                         })
                                     },
-                                    type_constraint: None
+                                    type_constraints: None
                                 }]
-                            }]
+                            })
                         })
                     }]
                 }),
@@ -712,7 +712,7 @@ mod tests {
                                     span: pest::Span::new(expression_str, 65, 71).unwrap(),
                                     value: "String".into()
                                 },
-                                generics: vec![]
+                                generics: None
                             })
                         }),
                         default_value: None,
@@ -747,7 +747,7 @@ mod tests {
                                     span: pest::Span::new(expression_str, 115, 118).unwrap(),
                                     value: "Int".into()
                                 },
-                                generics: vec![]
+                                generics: None
                             })
                         }),
                         default_value: None,
@@ -780,7 +780,7 @@ mod tests {
                                     span: pest::Span::new(expression_str, 160, 163).unwrap(),
                                     value: "Vec".into()
                                 },
-                                generics: vec![CSTElpTypeGeneric {
+                                generics: Some(CSTElpTypeGeneric {
                                     span: pest::Span::new(expression_str, 163, 171).unwrap(),
                                     params: vec![CSTElpTypeGenericParam {
                                         span: pest::Span::new(expression_str, 164, 170).unwrap(),
@@ -802,13 +802,13 @@ mod tests {
                                                         .unwrap(),
                                                         value: "Friend".into()
                                                     },
-                                                    generics: vec![]
+                                                    generics: None
                                                 }
                                             )
                                         },
-                                        type_constraint: None
+                                        type_constraints: None
                                     }]
-                                }]
+                                })
                             })
                         }),
                         default_value: None,
