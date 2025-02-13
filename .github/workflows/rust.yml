@@ -9,7 +9,6 @@ on:
 env:
   CARGO_TERM_COLOR: always
   RUSTFLAGS: "-Dwarnings"
-  LLVM_SYS_180_PREFIX: "/home/runner/work/elp/elp/llvm"
 
 jobs:
   build:
