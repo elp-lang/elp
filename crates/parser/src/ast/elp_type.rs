@@ -86,20 +86,12 @@ impl FromCST<CSTElpTypeParameter<'_>> for ASTElpType {
 
 impl FromCST<CSTElpTypeArray<'_>> for ASTElpType {
     fn from_cst(cst: &CSTElpTypeArray) -> Self {
-        let generic_parameters = match &cst.of_type_param.generics {
-            Some(types) => types
-                .params
-                .clone()
-                .into_iter()
-                .map(|t| ASTElpType::from_cst(&t))
-                .collect(),
-            None => vec![],
-        };
+        let generic_parameters = ASTElpType::from_cst(&*cst.of_type_param);
         let elp_type = ASTElpType {
             name: "Array".into(),
             mutability: ASTMutability::Immutable,
             pointer_semantics: None,
-            generic_parameters,
+            generic_parameters: vec![generic_parameters],
             type_constraints: vec![],
         };
 
@@ -109,10 +101,17 @@ impl FromCST<CSTElpTypeArray<'_>> for ASTElpType {
 
 impl FromCST<CSTElpType<'_>> for ASTElpType {
     fn from_cst(cst: &CSTElpType) -> Self {
-        match &cst.value {
+        let mut elp_type = match &cst.value {
             CSTElpTypeValue::Array(arr) => ASTElpType::from_cst(arr),
             CSTElpTypeValue::Parameter(param) => ASTElpType::from_cst(param),
-        }
+        };
+
+        elp_type.pointer_semantics = cst
+            .pointer_semantics
+            .as_ref()
+            .map(ASTPointerSemantics::from_cst);
+
+        elp_type.clone()
     }
 }
 
