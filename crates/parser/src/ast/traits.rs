@@ -1,3 +1,3 @@
-pub trait FromCST<T> {
-    fn from_cst(cst: &T) -> Self;
+pub trait FromCST<'a, T> {
+    fn from_cst(cst: &'a T) -> Self;
 }

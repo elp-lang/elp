@@ -1,15 +1,19 @@
+use pest::Span;
+
 use crate::cst::block::CSTBlock;
 
 use super::{expression::ASTExpression, traits::FromCST};
 
-#[derive(Debug, PartialEq, PartialOrd, Clone)]
-pub struct ASTBlock {
-    pub expressions: Vec<ASTExpression>,
+#[derive(Debug, PartialEq, Clone)]
+pub struct ASTBlock<'a> {
+    pub span: &'a Span<'a>,
+    pub expressions: Vec<ASTExpression<'a>>,
 }
 
-impl FromCST<CSTBlock<'_>> for ASTBlock {
-    fn from_cst(cst: &CSTBlock) -> Self {
+impl<'a> FromCST<'a, CSTBlock<'a>> for ASTBlock<'a> {
+    fn from_cst(cst: &'a CSTBlock) -> Self {
         ASTBlock {
+            span: &cst.span,
             expressions: cst
                 .expressions
                 .iter()
@@ -37,6 +41,7 @@ mod tests {
         assert_eq!(
             ast_block,
             ASTBlock {
+                span: &pest::Span::new("", 0, 0).unwrap(),
                 expressions: vec![]
             }
         )

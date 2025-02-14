@@ -2,13 +2,15 @@
 
 use crate::cst::expression::CSTExpression;
 
-use super::{block::ASTBlock, elp_type::ASTElpType, object::ASTObject, traits::FromCST};
+use super::{
+    block::ASTBlock, elp_type::ASTElpType, object::ASTObject, r#enum::ASTEnum, traits::FromCST,
+};
 
-#[derive(Debug, PartialEq, PartialOrd, Clone)]
-pub enum ASTExpression {
-    Block(Box<ASTBlock>),
-    ElpType(Box<ASTElpType>),
-    //    Enum(Box<Enum>),
+#[derive(Debug, PartialEq, Clone)]
+pub enum ASTExpression<'a> {
+    Block(Box<ASTBlock<'a>>),
+    ElpType(Box<ASTElpType<'a>>),
+    Enum(Box<ASTEnum<'a>>),
     //    Export(Box<Export>),
     //    FunctionDef(Box<FunctionDef>),
     //    FunctionHeaderDef(Box<FunctionHeaderDef>),
@@ -18,7 +20,7 @@ pub enum ASTExpression {
     //    Interface(Box<Interface>),
     //    Match(Box<MatchTree>),
     //    Number(Box<Number>),
-    Object(Box<ASTObject>),
+    Object(Box<ASTObject<'a>>),
     //    PointerSemantics(Box<PointerSemantics>),
     //    String(Box<StringValue>),
     //    ValueAssignment(Box<ValueAssignment>),
@@ -27,15 +29,14 @@ pub enum ASTExpression {
     //    VariableDeclaration(Box<VariableDeclaration>),
 }
 
-impl FromCST<CSTExpression<'_>> for ASTExpression {
-    fn from_cst(cst: &CSTExpression) -> Self {
+impl<'a> FromCST<'a, CSTExpression<'a>> for ASTExpression<'a> {
+    fn from_cst(cst: &'a CSTExpression) -> Self {
         match cst {
             CSTExpression::Block(block) => {
                 ASTExpression::Block(Box::new(ASTBlock::from_cst(block)))
             }
             CSTExpression::ElpType(boxed_elp_type) => {
-                let elp_type = *boxed_elp_type.clone();
-                ASTExpression::ElpType(Box::new(ASTElpType::from_cst(&elp_type)))
+                ASTExpression::ElpType(Box::new(ASTElpType::from_cst(&**boxed_elp_type)))
             }
             CSTExpression::Object(object) => {
                 ASTExpression::Object(Box::new(ASTObject::from_cst(object)))
@@ -60,6 +61,7 @@ mod tests {
         assert_eq!(
             ast_expression,
             ASTExpression::Block(Box::new(ASTBlock {
+                span: &pest::Span::new("", 0, 0).unwrap(),
                 expressions: vec![]
             }))
         )

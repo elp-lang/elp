@@ -1,3 +1,5 @@
+use pest::Span;
+
 use crate::cst::{
     elp_type::{
         CSTElpType, CSTElpTypeArray, CSTElpTypeGenericParam, CSTElpTypeParameter, CSTElpTypeValue,
@@ -14,8 +16,8 @@ pub enum ASTMutability {
     Mutable,
 }
 
-impl FromCST<CSTMutabilitySelector<'_>> for ASTMutability {
-    fn from_cst(cst: &CSTMutabilitySelector) -> Self {
+impl<'a> FromCST<'a, CSTMutabilitySelector<'a>> for ASTMutability {
+    fn from_cst(cst: &'a CSTMutabilitySelector) -> Self {
         match cst {
             CSTMutabilitySelector::Mutable(_) => ASTMutability::Mutable,
             CSTMutabilitySelector::Immutable(_) => ASTMutability::Immutable,
@@ -29,8 +31,8 @@ pub enum ASTPointerSemantics {
     Reference,
 }
 
-impl FromCST<CSTPointerSemantics<'_>> for ASTPointerSemantics {
-    fn from_cst(cst: &CSTPointerSemantics) -> Self {
+impl<'a> FromCST<'a, CSTPointerSemantics<'_>> for ASTPointerSemantics {
+    fn from_cst(cst: &'a CSTPointerSemantics) -> Self {
         match cst {
             CSTPointerSemantics::Pointer(_) => ASTPointerSemantics::Pointer,
             CSTPointerSemantics::Reference(_) => ASTPointerSemantics::Reference,
@@ -38,24 +40,24 @@ impl FromCST<CSTPointerSemantics<'_>> for ASTPointerSemantics {
     }
 }
 
-#[derive(Debug, PartialEq, PartialOrd, Clone)]
-pub struct ASTElpType {
+#[derive(Debug, PartialEq, Clone)]
+pub struct ASTElpType<'a> {
+    pub span: &'a Span<'a>,
     pub name: String,
     pub mutability: ASTMutability,
     pub pointer_semantics: Option<ASTPointerSemantics>,
-    pub generic_parameters: Vec<ASTElpType>,
-    pub type_constraints: Vec<ASTElpType>,
+    pub generic_parameters: Vec<ASTElpType<'a>>,
+    pub type_constraints: Vec<ASTElpType<'a>>,
 }
 
-impl FromCST<CSTElpTypeGenericParam<'_>> for ASTElpType {
-    fn from_cst(cst: &CSTElpTypeGenericParam) -> Self {
+impl<'a> FromCST<'a, CSTElpTypeGenericParam<'a>> for ASTElpType<'a> {
+    fn from_cst(cst: &'a CSTElpTypeGenericParam) -> Self {
         let mut ast_elp_type = ASTElpType::from_cst(&cst.elp_type);
         ast_elp_type.type_constraints = match &cst.type_constraints {
             Some(constraint) => constraint
                 .constraints
-                .clone()
-                .into_iter()
-                .map(|constraint| ASTElpType::from_cst(&constraint))
+                .iter()
+                .map(ASTElpType::from_cst)
                 .collect(),
             None => vec![],
         };
@@ -64,19 +66,15 @@ impl FromCST<CSTElpTypeGenericParam<'_>> for ASTElpType {
     }
 }
 
-impl FromCST<CSTElpTypeParameter<'_>> for ASTElpType {
-    fn from_cst(cst: &CSTElpTypeParameter) -> Self {
+impl<'a> FromCST<'a, CSTElpTypeParameter<'a>> for ASTElpType<'a> {
+    fn from_cst(cst: &'a CSTElpTypeParameter) -> Self {
         ASTElpType {
+            span: &cst.span,
             name: cst.name.value.clone(),
             mutability: ASTMutability::Immutable,
             pointer_semantics: None,
             generic_parameters: match &cst.generics {
-                Some(generic) => generic
-                    .params
-                    .clone()
-                    .into_iter()
-                    .map(|p| ASTElpType::from_cst(&p))
-                    .collect(),
+                Some(generic) => generic.params.iter().map(ASTElpType::from_cst).collect(),
                 None => vec![],
             },
             type_constraints: vec![],
@@ -84,10 +82,11 @@ impl FromCST<CSTElpTypeParameter<'_>> for ASTElpType {
     }
 }
 
-impl FromCST<CSTElpTypeArray<'_>> for ASTElpType {
-    fn from_cst(cst: &CSTElpTypeArray) -> Self {
+impl<'a> FromCST<'a, CSTElpTypeArray<'a>> for ASTElpType<'a> {
+    fn from_cst(cst: &'a CSTElpTypeArray) -> Self {
         let generic_parameters = ASTElpType::from_cst(&*cst.of_type_param);
         let elp_type = ASTElpType {
+            span: &cst.span,
             name: "Array".into(),
             mutability: ASTMutability::Immutable,
             pointer_semantics: None,
@@ -99,19 +98,21 @@ impl FromCST<CSTElpTypeArray<'_>> for ASTElpType {
     }
 }
 
-impl FromCST<CSTElpType<'_>> for ASTElpType {
-    fn from_cst(cst: &CSTElpType) -> Self {
+impl<'a> FromCST<'a, CSTElpType<'a>> for ASTElpType<'a> {
+    fn from_cst(cst: &'a CSTElpType) -> Self {
         let mut elp_type = match &cst.value {
             CSTElpTypeValue::Array(arr) => ASTElpType::from_cst(arr),
             CSTElpTypeValue::Parameter(param) => ASTElpType::from_cst(param),
         };
+
+        elp_type.span = &cst.span;
 
         elp_type.pointer_semantics = cst
             .pointer_semantics
             .as_ref()
             .map(ASTPointerSemantics::from_cst);
 
-        elp_type.clone()
+        elp_type
     }
 }
 
@@ -150,6 +151,7 @@ mod tests {
         assert_eq!(
             ast_type_intrinsic,
             ASTElpType {
+                span: &pest::Span::new("int32", 0, 5).unwrap(),
                 name: "int32".into(),
                 mutability: ASTMutability::Immutable,
                 pointer_semantics: None,
@@ -159,17 +161,18 @@ mod tests {
         );
 
         // [int32]
+        let cst_type_array_input = "[int32]";
         let cst_type_array = crate::cst::elp_type::CSTElpType {
-            span: pest::Span::new("int32", 0, 5).unwrap(),
+            span: pest::Span::new(cst_type_array_input, 0, 6).unwrap(),
             mutability: None,
             pointer_semantics: None,
             value: CSTElpTypeValue::Array(CSTElpTypeArray {
-                span: pest::Span::new("int32", 0, 5).unwrap(),
+                span: pest::Span::new(cst_type_array_input, 0, 5).unwrap(),
                 of_type_param: Box::new(CSTElpTypeParameter {
-                    span: pest::Span::new("int32", 0, 5).unwrap(),
+                    span: pest::Span::new(cst_type_array_input, 0, 5).unwrap(),
                     name: CSTIdent {
-                        span: pest::Span::new("int32", 0, 5).unwrap(),
-                        value: "int32".into(),
+                        span: pest::Span::new(cst_type_array_input, 0, 5).unwrap(),
+                        value: cst_type_array_input.into(),
                     },
                     generics: None,
                 }),
@@ -180,11 +183,13 @@ mod tests {
         assert_eq!(
             ast_type_array,
             ASTElpType {
+                span: &pest::Span::new(cst_type_array_input, 0, 6).unwrap(),
                 name: "Array".into(),
                 mutability: ASTMutability::Immutable,
                 pointer_semantics: None,
                 generic_parameters: vec![ASTElpType {
-                    name: "int32".into(),
+                    span: &pest::Span::new(cst_type_array_input, 0, 5).unwrap(),
+                    name: cst_type_array_input.into(),
                     mutability: ASTMutability::Immutable,
                     pointer_semantics: None,
                     generic_parameters: vec![],
@@ -204,8 +209,8 @@ mod tests {
             value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
                 span: pest::Span::new("*int32", 1, 5).unwrap(),
                 name: CSTIdent {
-                    span: pest::Span::new("*int32", 0, 5).unwrap(),
-                    value: "*int32".into(),
+                    span: pest::Span::new("*int32", 1, 5).unwrap(),
+                    value: "int32".into(),
                 },
                 generics: None,
             }),
@@ -216,6 +221,7 @@ mod tests {
         assert_eq!(
             ast_type_int_pointer,
             ASTElpType {
+                span: &pest::Span::new("int32", 0, 5).unwrap(),
                 name: "*int32".into(),
                 mutability: ASTMutability::Immutable,
                 pointer_semantics: Some(ASTPointerSemantics::Pointer),
@@ -229,7 +235,7 @@ mod tests {
     fn complex_elp_type_from_cst() {
         let generic_str = "SpecialType<Number: Copy, String: Copy + Clone>";
         let cst_type_simple_generic = CSTElpType {
-            span: pest::Span::new(generic_str, 0, 17).unwrap(),
+            span: pest::Span::new(generic_str, 0, generic_str.len()).unwrap(),
             mutability: None,
             pointer_semantics: None,
             value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
@@ -330,16 +336,19 @@ mod tests {
         assert_eq!(
             ast_type_simple_generic,
             ASTElpType {
+                span: &pest::Span::new(generic_str, 0, generic_str.len()).unwrap(),
                 name: "SpecialType".into(),
                 mutability: ASTMutability::Immutable,
                 pointer_semantics: None,
                 generic_parameters: vec![
                     ASTElpType {
+                        span: &pest::Span::new(generic_str, 1, 7).unwrap(),
                         name: "Number".into(),
                         mutability: ASTMutability::Immutable,
                         pointer_semantics: None,
                         generic_parameters: vec![],
                         type_constraints: vec![ASTElpType {
+                            span: &pest::Span::new(generic_str, 9, 13).unwrap(),
                             name: "Copy".into(),
                             mutability: ASTMutability::Immutable,
                             pointer_semantics: None,
@@ -348,12 +357,14 @@ mod tests {
                         }],
                     },
                     ASTElpType {
+                        span: &pest::Span::new(generic_str, 15, 21).unwrap(),
                         name: "String".into(),
                         mutability: ASTMutability::Immutable,
                         pointer_semantics: None,
                         generic_parameters: vec![],
                         type_constraints: vec![
                             ASTElpType {
+                                span: &pest::Span::new(generic_str, 23, 28).unwrap(),
                                 name: "Copy".into(),
                                 mutability: ASTMutability::Immutable,
                                 pointer_semantics: None,
@@ -361,6 +372,7 @@ mod tests {
                                 type_constraints: vec![],
                             },
                             ASTElpType {
+                                span: &pest::Span::new(generic_str, 30, 35).unwrap(),
                                 name: "Clone".into(),
                                 mutability: ASTMutability::Immutable,
                                 pointer_semantics: None,
