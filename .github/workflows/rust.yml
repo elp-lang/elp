@@ -16,18 +16,42 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
+
+    - name: Cache Rust toolchain
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
     - name: Install Rust llvm
       run: rustup toolchain install nightly --component llvm-tools-preview
+
+    - name: Cache LLVM
+      id: cache-llvm
+      uses: actions/cache@v3
+      with:
+        path: |
+          /usr/lib/llvm-18
+        key: ${{ runner.os }}-llvm-18-${{ hashFiles('**/Cargo.lock') }}
+
     - name: Install LLVM and Clang
       uses: ZhongRuoyu/setup-llvm@v0
       with:
         llvm-version: 18
+      if: steps.cache-llvm.outputs.cache-hit != 'true'
+
     - name: Clippy
       run: cargo clippy
+
     - name: Install cargo-llvm-cov
       run: cargo install cargo-llvm-cov --locked
+
     - name: test with coverage
       run: cargo llvm-cov --all-features --workspace --lcov --output-path lcov.info
+
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v1
       with:
