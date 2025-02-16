@@ -221,8 +221,8 @@ mod tests {
         assert_eq!(
             ast_type_int_pointer,
             ASTElpType {
-                span: &pest::Span::new("int32", 0, 5).unwrap(),
-                name: "*int32".into(),
+                span: &pest::Span::new("*int32", 0, 5).unwrap(),
+                name: "int32".into(),
                 mutability: ASTMutability::Immutable,
                 pointer_semantics: Some(ASTPointerSemantics::Pointer),
                 generic_parameters: vec![],

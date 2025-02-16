@@ -1,4 +1,4 @@
-// An AST expression is different to an CST expression in the way that a CST expression is a wider set of possible expressions that compute further down to a known AST node. There are a lot of similarities between the two but it must be considered that the CST is an incredibly brief state of the code pipeline and the AST is the first "visible" part as once we have made a pass here we will execute all precomps to refine the AST from userland to satisfy some form of Homoiconicity.
+// An AST expression is different to an CST expression in the way that a CST expression is a wider set of possible expressions that compute further down to a known AST node. There are a lot of similarities between the two but it must be considered that the CST is an incredibly brief state of the code pipeline and the AST is the first "visible" part as once we have made a pass here we will execute all precomps to refine the AST from userland to satisfy some form of Homoiconicity before moving into type safety and memory safety/ownership.
 
 use crate::cst::expression::CSTExpression;
 
@@ -41,6 +41,7 @@ impl<'a> FromCST<'a, CSTExpression<'a>> for ASTExpression<'a> {
             CSTExpression::Object(object) => {
                 ASTExpression::Object(Box::new(ASTObject::from_cst(object)))
             }
+            CSTExpression::Enum(r#enum) => ASTExpression::Enum(Box::new(ASTEnum::from_cst(r#enum))),
             _ => panic!("Invalid CST expression: {:#?}", cst),
         }
     }
