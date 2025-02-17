@@ -61,7 +61,7 @@ pub struct PrivateVisibility<'a> {
 
 #[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::visibility_selector))]
-pub enum VisibilitySelector<'a> {
+pub enum CSTVisibilitySelector<'a> {
     Public(PublicVisibility<'a>),
     Private(PrivateVisibility<'a>),
 }
