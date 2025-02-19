@@ -108,8 +108,16 @@ mod tests {
     use crate::{
         ast::elp_type::ASTMutability,
         cst::{
-            elp_type::{CSTElpType, CSTElpTypeParameter, CSTElpTypeValue},
+            elp_type::{
+                CSTElpType, CSTElpTypeGeneric, CSTElpTypeGenericParam, CSTElpTypeParameter,
+                CSTElpTypeValue,
+            },
+            expression::CSTExpression,
             ident::CSTIdent,
+            number_value::CSTNumber,
+            object::CSTObjectMemberDefaultValue,
+            string::CSTString,
+            CSTPrivateVisibility, CSTPublicVisibility,
         },
     };
 
@@ -173,6 +181,317 @@ mod tests {
                     tags: vec![],
                 }],
                 implements: vec![],
+            }
+        )
+    }
+
+    #[test]
+    fn ast_complex_object() {
+        let expression_str = "object Test implements Into<JSON> {
+            public     .name String `json:\"name\"`,
+            private    .age Int     `json:\"age\"`,
+            .friends   Vec<Friend>  `json:\"friends\"`,
+            .studentId = 123        `json:\"studentId\"`
+    }";
+        let cst = CSTObject {
+            span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+            name: CSTIdent {
+                span: pest::Span::new(expression_str, 7, 11).unwrap(),
+                value: "Test".into(),
+            },
+            implements: Some(CSTObjectImplements {
+                span: pest::Span::new(expression_str, 12, 34).unwrap(),
+                types: vec![CSTElpType {
+                    span: pest::Span::new(expression_str, 23, 33).unwrap(),
+                    mutability: None,
+                    pointer_semantics: None,
+                    value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                        span: pest::Span::new(expression_str, 23, 33).unwrap(),
+                        name: CSTIdent {
+                            span: pest::Span::new(expression_str, 23, 27).unwrap(),
+                            value: "Into".into(),
+                        },
+                        generics: Some(CSTElpTypeGeneric {
+                            span: pest::Span::new(expression_str, 27, 33).unwrap(),
+                            params: vec![CSTElpTypeGenericParam {
+                                span: pest::Span::new(expression_str, 28, 32).unwrap(),
+                                elp_type: CSTElpType {
+                                    span: pest::Span::new(expression_str, 28, 32).unwrap(),
+                                    mutability: None,
+                                    pointer_semantics: None,
+                                    value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                                        span: pest::Span::new(expression_str, 28, 32).unwrap(),
+                                        name: CSTIdent {
+                                            span: pest::Span::new(expression_str, 28, 32).unwrap(),
+                                            value: "JSON".into(),
+                                        },
+                                        generics: None,
+                                    }),
+                                },
+                                type_constraints: None,
+                            }],
+                        }),
+                    }),
+                }],
+            }),
+            members: vec![
+                CSTObjectMember {
+                    span: pest::Span::new(expression_str, 48, 85).unwrap(),
+                    visibility: Some(CSTVisibilitySelector::Public(CSTPublicVisibility {
+                        span: pest::Span::new(expression_str, 48, 54).unwrap(),
+                    })),
+                    name: CSTIdent {
+                        span: pest::Span::new(expression_str, 60, 64).unwrap(),
+                        value: "name".into(),
+                    },
+                    type_annotation: Some(CSTElpType {
+                        span: pest::Span::new(expression_str, 65, 72).unwrap(),
+                        mutability: None,
+                        pointer_semantics: None,
+                        value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                            span: pest::Span::new(expression_str, 65, 72).unwrap(),
+                            name: CSTIdent {
+                                span: pest::Span::new(expression_str, 65, 71).unwrap(),
+                                value: "String".into(),
+                            },
+                            generics: None,
+                        }),
+                    }),
+                    default_value: None,
+                    tags: vec![CSTObjectMemberTags {
+                        span: pest::Span::new(expression_str, 72, 85).unwrap(),
+                        name: CSTIdent {
+                            span: pest::Span::new(expression_str, 73, 77).unwrap(),
+                            value: "json".into(),
+                        },
+                        contents: CSTString {
+                            span: pest::Span::new(expression_str, 78, 84).unwrap(),
+                            value: "name".into(),
+                        },
+                    }],
+                },
+                CSTObjectMember {
+                    span: pest::Span::new(expression_str, 99, 135).unwrap(),
+                    visibility: Some(CSTVisibilitySelector::Private(CSTPrivateVisibility {
+                        span: pest::Span::new(expression_str, 99, 106).unwrap(),
+                    })),
+                    name: CSTIdent {
+                        span: pest::Span::new(expression_str, 111, 114).unwrap(),
+                        value: "age".into(),
+                    },
+                    type_annotation: Some(CSTElpType {
+                        span: pest::Span::new(expression_str, 115, 123).unwrap(),
+                        mutability: None,
+                        pointer_semantics: None,
+                        value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                            span: pest::Span::new(expression_str, 115, 123).unwrap(),
+                            name: CSTIdent {
+                                span: pest::Span::new(expression_str, 115, 118).unwrap(),
+                                value: "Int".into(),
+                            },
+                            generics: None,
+                        }),
+                    }),
+                    default_value: None,
+                    tags: vec![CSTObjectMemberTags {
+                        span: pest::Span::new(expression_str, 123, 135).unwrap(),
+                        name: CSTIdent {
+                            span: pest::Span::new(expression_str, 124, 128).unwrap(),
+                            value: "json".into(),
+                        },
+                        contents: CSTString {
+                            span: pest::Span::new(expression_str, 129, 134).unwrap(),
+                            value: "age".into(),
+                        },
+                    }],
+                },
+                CSTObjectMember {
+                    span: pest::Span::new(expression_str, 149, 189).unwrap(),
+                    visibility: None,
+                    name: CSTIdent {
+                        span: pest::Span::new(expression_str, 150, 157).unwrap(),
+                        value: "friends".into(),
+                    },
+                    type_annotation: Some(CSTElpType {
+                        span: pest::Span::new(expression_str, 160, 171).unwrap(),
+                        mutability: None,
+                        pointer_semantics: None,
+                        value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                            span: pest::Span::new(expression_str, 160, 171).unwrap(),
+                            name: CSTIdent {
+                                span: pest::Span::new(expression_str, 160, 163).unwrap(),
+                                value: "Vec".into(),
+                            },
+                            generics: Some(CSTElpTypeGeneric {
+                                span: pest::Span::new(expression_str, 163, 171).unwrap(),
+                                params: vec![CSTElpTypeGenericParam {
+                                    span: pest::Span::new(expression_str, 164, 170).unwrap(),
+                                    elp_type: CSTElpType {
+                                        span: pest::Span::new(expression_str, 164, 170).unwrap(),
+                                        mutability: None,
+                                        pointer_semantics: None,
+                                        value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                                            span: pest::Span::new(expression_str, 164, 170)
+                                                .unwrap(),
+                                            name: CSTIdent {
+                                                span: pest::Span::new(expression_str, 164, 170)
+                                                    .unwrap(),
+                                                value: "Friend".into(),
+                                            },
+                                            generics: None,
+                                        }),
+                                    },
+                                    type_constraints: None,
+                                }],
+                            }),
+                        }),
+                    }),
+                    default_value: None,
+                    tags: vec![CSTObjectMemberTags {
+                        span: pest::Span::new(expression_str, 173, 189).unwrap(),
+                        name: CSTIdent {
+                            span: pest::Span::new(expression_str, 174, 178).unwrap(),
+                            value: "json".into(),
+                        },
+                        contents: CSTString {
+                            span: pest::Span::new(expression_str, 179, 188).unwrap(),
+                            value: "friends".into(),
+                        },
+                    }],
+                },
+                CSTObjectMember {
+                    span: pest::Span::new(expression_str, 203, 245).unwrap(),
+                    visibility: None,
+                    name: CSTIdent {
+                        span: pest::Span::new(expression_str, 204, 213).unwrap(),
+                        value: "studentId".into(),
+                    },
+                    type_annotation: None,
+                    default_value: Some(CSTObjectMemberDefaultValue {
+                        span: pest::Span::new(expression_str, 214, 219).unwrap(),
+                        value: CSTExpression::Number(Box::new(CSTNumber {
+                            span: pest::Span::new(expression_str, 216, 219).unwrap(),
+                            value: "123".into(),
+                        })),
+                    }),
+                    tags: vec![CSTObjectMemberTags {
+                        span: pest::Span::new(expression_str, 227, 245).unwrap(),
+                        name: CSTIdent {
+                            span: pest::Span::new(expression_str, 228, 232).unwrap(),
+                            value: "json".into(),
+                        },
+                        contents: CSTString {
+                            span: pest::Span::new(expression_str, 233, 244).unwrap(),
+                            value: "studentId".into(),
+                        },
+                    }],
+                },
+            ],
+        };
+
+        let ast = ASTObject::from_cst(&cst);
+
+        assert_eq!(
+            ast,
+            ASTObject {
+                span: &pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                name: "Test".into(),
+                implements: vec![ASTObjectImplements {
+                    span: &pest::Span::new(expression_str, 23, 30).unwrap(),
+                    types: vec![ASTElpType {
+                        span: &pest::Span::new(expression_str, 33, 41).unwrap(),
+                        mutability: ASTMutability::Immutable,
+                        pointer_semantics: None,
+                        name: "JSON".into(),
+                        type_constraints: vec![],
+                        generic_parameters: vec![ASTElpType {
+                            span: &pest::Span::new(expression_str, 42, 48).unwrap(),
+                            name: "JSON".into(),
+                            pointer_semantics: None,
+                            mutability: ASTMutability::Immutable,
+                            generic_parameters: vec![],
+                            type_constraints: vec![],
+                        }],
+                    }],
+                }],
+                members: vec![
+                    ASTObjectMember {
+                        span: &pest::Span::new(expression_str, 23, 65).unwrap(),
+                        visibility: Some(ASTVisibility::Public),
+                        name: "name".into(),
+                        type_annotation: Some(ASTElpType {
+                            span: &pest::Span::new(expression_str, 33, 41).unwrap(),
+                            mutability: ASTMutability::Immutable,
+                            pointer_semantics: None,
+                            name: "String".into(),
+                            type_constraints: vec![],
+                            generic_parameters: vec![],
+                        }),
+                        default_value: None,
+                        tags: vec![ASTObjectMemberTags {
+                            span: &pest::Span::new(expression_str, 42, 65).unwrap(),
+                            name: "json".into(),
+                            value: "name".into(),
+                        }],
+                    },
+                    ASTObjectMember {
+                        span: &pest::Span::new(expression_str, 42, 65).unwrap(),
+                        name: "age".into(),
+                        visibility: Some(ASTVisibility::Private),
+                        type_annotation: Some(ASTElpType {
+                            span: &pest::Span::new(expression_str, 53, 61).unwrap(),
+                            mutability: ASTMutability::Immutable,
+                            pointer_semantics: None,
+                            name: "Int".into(),
+                            type_constraints: vec![],
+                            generic_parameters: vec![],
+                        }),
+                        default_value: None,
+                        tags: vec![ASTObjectMemberTags {
+                            span: &pest::Span::new(expression_str, 62, 65).unwrap(),
+                            name: "json".into(),
+                            value: "age".into(),
+                        }]
+                    },
+                    ASTObjectMember {
+                        span: &pest::Span::new(expression_str, 149, 189).unwrap(),
+                        visibility: Some(ASTVisibility::Private),
+                        name: "friends".into(),
+                        type_annotation: Some(ASTElpType {
+                            span: &pest::Span::new(expression_str, 160, 171).unwrap(),
+                            mutability: ASTMutability::Immutable,
+                            pointer_semantics: None,
+                            name: "Vec".into(),
+                            type_constraints: vec![],
+                            generic_parameters: vec![ASTElpType {
+                                span: &pest::Span::new(expression_str, 164, 170).unwrap(),
+                                name: "Friend".into(),
+                                pointer_semantics: None,
+                                mutability: ASTMutability::Immutable,
+                                generic_parameters: vec![],
+                                type_constraints: vec![],
+                            }],
+                        }),
+                        default_value: None,
+                        tags: vec![ASTObjectMemberTags {
+                            span: &pest::Span::new(expression_str, 173, 189).unwrap(),
+                            name: "json".into(),
+                            value: "friends".into(),
+                        }]
+                    },
+                    ASTObjectMember {
+                        span: &pest::Span::new(expression_str, 203, 245).unwrap(),
+                        visibility: None,
+                        name: "studentId".into(),
+                        type_annotation: None,
+                        default_value: None,
+                        tags: vec![ASTObjectMemberTags {
+                            span: &pest::Span::new(expression_str, 227, 245).unwrap(),
+                            name: "json".into(),
+                            value: "studentId".into(),
+                        }]
+                    }
+                ],
             }
         )
     }

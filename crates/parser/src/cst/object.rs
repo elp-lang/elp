@@ -62,7 +62,7 @@ mod tests {
                 CSTElpTypeGeneric, CSTElpTypeGenericParam, CSTElpTypeParameter, CSTElpTypeValue,
             },
             number_value::CSTNumber,
-            PrivateVisibility, PublicVisibility,
+            CSTPrivateVisibility, CSTPublicVisibility,
         },
         parser::ElpParser,
     };
@@ -186,7 +186,7 @@ mod tests {
 
         assert_eq!(
             private_ast,
-            CSTVisibilitySelector::Private(PrivateVisibility {
+            CSTVisibilitySelector::Private(CSTPrivateVisibility {
                 span: pest::Span::new(expression_str_private, 0, 7).unwrap()
             })
         );
@@ -198,7 +198,7 @@ mod tests {
 
         assert_eq!(
             public_ast,
-            CSTVisibilitySelector::Public(PublicVisibility {
+            CSTVisibilitySelector::Public(CSTPublicVisibility {
                 span: pest::Span::new(expression_str_public, 0, 6).unwrap()
             })
         );
@@ -270,7 +270,7 @@ mod tests {
             ast,
             CSTObjectMember {
                 span: pest::Span::new(expression_str, 0, 20).unwrap(),
-                visibility: Some(CSTVisibilitySelector::Private(PrivateVisibility {
+                visibility: Some(CSTVisibilitySelector::Private(CSTPrivateVisibility {
                     span: pest::Span::new(expression_str, 0, 7).unwrap()
                 })),
                 name: CSTIdent {
@@ -306,7 +306,7 @@ mod tests {
             ast,
             CSTObjectMember {
                 span: pest::Span::new(expression_str, 0, 19).unwrap(),
-                visibility: Some(CSTVisibilitySelector::Public(PublicVisibility {
+                visibility: Some(CSTVisibilitySelector::Public(CSTPublicVisibility {
                     span: pest::Span::new(expression_str, 0, 6).unwrap()
                 })),
                 name: CSTIdent {
@@ -695,7 +695,7 @@ mod tests {
                 members: vec![
                     CSTObjectMember {
                         span: pest::Span::new(expression_str, 48, 85).unwrap(),
-                        visibility: Some(CSTVisibilitySelector::Public(PublicVisibility {
+                        visibility: Some(CSTVisibilitySelector::Public(CSTPublicVisibility {
                             span: pest::Span::new(expression_str, 48, 54).unwrap(),
                         })),
                         name: CSTIdent {
@@ -730,7 +730,7 @@ mod tests {
                     },
                     CSTObjectMember {
                         span: pest::Span::new(expression_str, 99, 135).unwrap(),
-                        visibility: Some(CSTVisibilitySelector::Private(PrivateVisibility {
+                        visibility: Some(CSTVisibilitySelector::Private(CSTPrivateVisibility {
                             span: pest::Span::new(expression_str, 99, 106).unwrap(),
                         })),
                         name: CSTIdent {
