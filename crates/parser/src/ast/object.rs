@@ -123,6 +123,8 @@ mod tests {
 
     use super::*;
 
+    use pretty_assertions::assert_eq;
+
     #[test]
     fn object_from_cst() {
         let expression_str = "object Test {.name String}";

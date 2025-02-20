@@ -14,14 +14,14 @@ pub enum ParsedNumber {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct NumberValue<'a> {
+pub struct ASTNumber<'a> {
     pub span: &'a Span<'a>,
     pub value: ParsedNumber,
 }
 
-impl<'a> FromCST<'a, CSTNumber<'a>> for NumberValue<'a> {
+impl<'a> FromCST<'a, CSTNumber<'a>> for ASTNumber<'a> {
     fn from_cst(cst: &'a CSTNumber) -> Self {
-        NumberValue {
+        Self {
             span: &cst.span,
             value: ParsedNumber::from_string(cst.value.as_str()),
         }
