@@ -6,7 +6,7 @@ So, why do we need a CST? The CST is the foundation upon which we build deeper u
 
 We also use the CST as the input to the language server to make refactoring, formatting and debugging easier and more accurate.
 
-Once we have the CST, we convert it into an Abstract Syntax Tree (AST). The AST strips away unnecessary details (like extra whitespace or redundant parentheses) and focuses on the structure and meaning of your program. The AST adds more information, such as:
+Once we have the CST, we convert it into an Abstract Syntax Tree (AST). The AST strips away unnecessary details, processes your pre-compilation code and focuses on the structure and meaning of your program. The AST adds more information, such as:
 
 * References and borrows: Who owns what, and how things are being accessed.
 * Basic type information: Understanding what types your variables and expressions are using.

@@ -4,7 +4,7 @@ use crate::cst::number_value::CSTNumber;
 
 use super::traits::FromCST;
 
-#[derive(Debug, PartialEq, PartialOrd, Clone)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum ParsedNumber {
     Integer(i64),
     Float(f64),

@@ -3,8 +3,8 @@
 use crate::cst::expression::CSTExpression;
 
 use super::{
-    block::ASTBlock, elp_type::ASTElpType, number::ASTNumber, object::ASTObject, r#enum::ASTEnum,
-    traits::FromCST,
+    block::ASTBlock, elp_type::ASTElpType, import::ASTImport, number::ASTNumber, object::ASTObject,
+    r#enum::ASTEnum, traits::FromCST,
 };
 
 #[derive(Debug, PartialEq, Clone)]
@@ -18,7 +18,7 @@ pub enum ASTExpression<'a> {
     //    FunctionHeaderDef(Box<FunctionHeaderDef>),
     //    FunctionReturnValue(Box<FunctionReturnValue>),
     //    Ident(Box<Ident>),
-    //    Import(Box<Import>),
+    Import(Box<ASTImport<'a>>),
     //    Interface(Box<Interface>),
     //    Match(Box<MatchTree>),
     //    Number(Box<Number>),
@@ -45,6 +45,9 @@ impl<'a> FromCST<'a, CSTExpression<'a>> for ASTExpression<'a> {
             }
             CSTExpression::Enum(r#enum) => ASTExpression::Enum(Box::new(ASTEnum::from_cst(r#enum))),
             CSTExpression::Number(num) => ASTExpression::Number(Box::new(ASTNumber::from_cst(num))),
+            CSTExpression::Import(import) => {
+                ASTExpression::Import(Box::new(ASTImport::from_cst(import)))
+            }
             _ => panic!("Invalid CST expression: {:#?}", cst),
         }
     }

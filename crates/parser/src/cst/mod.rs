@@ -72,7 +72,7 @@ fn span_into_string(span: Span) -> String {
 
 #[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::module))]
-pub struct Module<'a> {
+pub struct CSTModule<'a> {
     pub expressions: Vec<CSTExpression<'a>>,
     _eoi: Eoi,
 }
@@ -91,6 +91,8 @@ mod tests {
     use pest::Parser;
     use pretty_assertions::assert_eq;
     use string::CSTString;
+    use value_assignment::{CSTEquals, CSTOperand, CSTValueAssignment};
+    use variable_assignment::{CSTVariableAssignment, CSTVariableAssignmentTarget};
 
     use crate::cst::import::{CSTImportModulePath, CSTImportName, CSTImportNameAlias};
 
@@ -98,11 +100,11 @@ mod tests {
     fn single_expression_ast_generation() {
         let expression_str = "import {Bar, Baz as BazAlias} from \"foo\"";
         let mut pairs = ElpParser::parse(Rule::module, expression_str).unwrap();
-        let ast = Module::from_pest(&mut pairs).unwrap();
+        let ast = CSTModule::from_pest(&mut pairs).unwrap();
 
         assert_eq!(
             ast,
-            Module {
+            CSTModule {
                 expressions: vec![CSTExpression::Import(Box::new(CSTImport {
                     span: pest::Span::new(expression_str, 0, 40).unwrap(),
                     names: vec![
@@ -137,6 +139,96 @@ mod tests {
                         }
                     }
                 })),],
+                _eoi: Eoi {}
+            }
+        )
+    }
+
+    #[test]
+    fn const_declaration_ast_generation() {
+        let expression_str = "const a = 1";
+        let mut pairs = ElpParser::parse(Rule::module, expression_str).unwrap();
+        let ast = CSTModule::from_pest(&mut pairs).unwrap();
+
+        assert_eq!(
+            ast,
+            CSTModule {
+                expressions: vec![CSTExpression::VariableAssignment(Box::new(
+                    CSTVariableAssignment {
+                        span: pest::Span::new(expression_str, 0, 11).unwrap(),
+                        value_assignment: CSTValueAssignment {
+                            span: pest::Span::new(expression_str, 8, 11).unwrap(),
+                            operand: CSTOperand::Equals(CSTEquals {
+                                span: pest::Span::new(expression_str, 8, 9).unwrap(),
+                            }),
+                            value: Box::new(CSTExpression::Number(Box::new(
+                                number_value::CSTNumber {
+                                    span: pest::Span::new(expression_str, 10, 11).unwrap(),
+                                    value: "1".into()
+                                }
+                            )))
+                        },
+                        variable_assignment_target:
+                            CSTVariableAssignmentTarget::VariableDeclaration(
+                                variable_declaration::CSTVariableDeclaration {
+                                    span: pest::Span::new(expression_str, 0, 8).unwrap(),
+                                    mutability: CSTMutabilitySelector::Immutable(Const {
+                                        span: pest::Span::new(expression_str, 0, 5).unwrap(),
+                                    }),
+                                    name: CSTIdent {
+                                        span: pest::Span::new(expression_str, 6, 7).unwrap(),
+                                        value: "a".into()
+                                    },
+                                    type_annotation: None,
+                                }
+                            )
+                    }
+                ))],
+                _eoi: Eoi {}
+            }
+        )
+    }
+
+    #[test]
+    fn variable_declaration_cst_generation() {
+        let expression_str = "var a = 1";
+        let mut pairs = ElpParser::parse(Rule::module, expression_str).unwrap();
+        let ast = CSTModule::from_pest(&mut pairs).unwrap();
+
+        assert_eq!(
+            ast,
+            CSTModule {
+                expressions: vec![CSTExpression::VariableAssignment(Box::new(
+                    CSTVariableAssignment {
+                        span: pest::Span::new(expression_str, 0, 9).unwrap(),
+                        value_assignment: CSTValueAssignment {
+                            span: pest::Span::new(expression_str, 6, 9).unwrap(),
+                            operand: CSTOperand::Equals(CSTEquals {
+                                span: pest::Span::new(expression_str, 6, 7).unwrap(),
+                            }),
+                            value: Box::new(CSTExpression::Number(Box::new(
+                                number_value::CSTNumber {
+                                    span: pest::Span::new(expression_str, 8, 9).unwrap(),
+                                    value: "1".into()
+                                }
+                            )))
+                        },
+                        variable_assignment_target:
+                            CSTVariableAssignmentTarget::VariableDeclaration(
+                                variable_declaration::CSTVariableDeclaration {
+                                    span: pest::Span::new(expression_str, 0, 6).unwrap(),
+                                    mutability: CSTMutabilitySelector::Mutable(Var {
+                                        span: pest::Span::new(expression_str, 0, 3).unwrap(),
+                                    }),
+                                    name: CSTIdent {
+                                        span: pest::Span::new(expression_str, 4, 5).unwrap(),
+                                        value: "a".into()
+                                    },
+                                    type_annotation: None,
+                                }
+                            )
+                    }
+                ))],
                 _eoi: Eoi {}
             }
         )

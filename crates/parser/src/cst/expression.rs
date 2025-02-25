@@ -45,3 +45,8 @@ pub enum CSTExpression<'a> {
     VariableDeclaration(Box<CSTVariableDeclaration<'a>>),
     Unary(Box<CSTUnaryOperator<'a>>),
 }
+
+// Hey! Where are my tests?
+// There aren't any here because testing here as well as in the code that produces the values for each member
+// would effectively be testing Rust itself and there's no need for that. Each of the value types above are
+// thouroughly tested in their respective files.
