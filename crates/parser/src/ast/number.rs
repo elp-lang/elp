@@ -74,3 +74,36 @@ impl ParsedNumber {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn octal_parsing() {
+        let number_str = "0o123";
+        let parsed_number = ParsedNumber::from_string(number_str);
+        assert_eq!(parsed_number, ParsedNumber::Octal(83));
+    }
+
+    #[test]
+    fn hexadecimal_parsing() {
+        let number_str = "0x123";
+        let parsed_number = ParsedNumber::from_string(number_str);
+        assert_eq!(parsed_number, ParsedNumber::Hexadecimal(291));
+    }
+
+    #[test]
+    fn binary_parsing() {
+        let number_str = "0b1110101";
+        let parsed_number = ParsedNumber::from_string(number_str);
+        assert_eq!(parsed_number, ParsedNumber::Binary(117));
+    }
+
+    #[test]
+    fn float_parsing() {
+        let number_str = "1.23";
+        let parsed_number = ParsedNumber::from_string(number_str);
+        assert_eq!(parsed_number, ParsedNumber::Float(1.23));
+    }
+}

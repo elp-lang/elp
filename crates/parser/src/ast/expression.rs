@@ -52,22 +52,75 @@ impl<'a> FromCST<'a, CSTExpression<'a>> for ASTExpression<'a> {
 
 #[cfg(test)]
 mod tests {
+    use crate::ast::elp_type::ASTMutability;
+
     use super::*;
 
     #[test]
     fn ast_expression_from_cst() {
-        let cst_expression = CSTExpression::Block(Box::new(crate::cst::block::CSTBlock {
+        let block_cst_expression = CSTExpression::Block(Box::new(crate::cst::block::CSTBlock {
             span: pest::Span::new("", 0, 0).unwrap(),
             expressions: vec![],
         }));
-        let ast_expression = ASTExpression::from_cst(&cst_expression);
+        let block_ast_expression = ASTExpression::from_cst(&block_cst_expression);
 
         assert_eq!(
-            ast_expression,
+            block_ast_expression,
             ASTExpression::Block(Box::new(ASTBlock {
                 span: &pest::Span::new("", 0, 0).unwrap(),
                 expressions: vec![]
             }))
-        )
+        );
+
+        let elptype_cst_expression =
+            CSTExpression::ElpType(Box::new(crate::cst::elp_type::CSTElpType {
+                span: pest::Span::new("", 0, 0).unwrap(),
+                mutability: None,
+                pointer_semantics: None,
+                value: crate::cst::elp_type::CSTElpTypeValue::Parameter(
+                    crate::cst::elp_type::CSTElpTypeParameter {
+                        span: pest::Span::new("", 0, 0).unwrap(),
+                        name: crate::cst::ident::CSTIdent {
+                            span: pest::Span::new("", 0, 0).unwrap(),
+                            value: "test".into(),
+                        },
+                        generics: None,
+                    },
+                ),
+            }));
+        let elptype_ast_expression = ASTExpression::from_cst(&elptype_cst_expression);
+
+        assert_eq!(
+            elptype_ast_expression,
+            ASTExpression::ElpType(Box::new(ASTElpType {
+                span: &pest::Span::new("", 0, 0).unwrap(),
+                name: "test".into(),
+                mutability: ASTMutability::Immutable,
+                pointer_semantics: None,
+                generic_parameters: vec![],
+                type_constraints: vec![],
+            }))
+        );
+
+        let enum_cst_expression = CSTExpression::Enum(Box::new(crate::cst::r#enum::CSTEnum {
+            span: pest::Span::new("", 0, 0).unwrap(),
+            name: crate::cst::ident::CSTIdent {
+                span: pest::Span::new("", 0, 0).unwrap(),
+                value: "test".into(),
+            },
+            members: vec![],
+            implements: None,
+        }));
+        let enum_ast_expression = ASTExpression::from_cst(&enum_cst_expression);
+
+        assert_eq!(
+            enum_ast_expression,
+            ASTExpression::Enum(Box::new(ASTEnum {
+                span: &pest::Span::new("", 0, 0).unwrap(),
+                name: "test".into(),
+                members: vec![],
+                implements: vec![]
+            }))
+        );
     }
 }
