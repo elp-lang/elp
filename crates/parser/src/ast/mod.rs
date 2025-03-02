@@ -1,6 +1,7 @@
 pub(crate) mod block;
 pub(crate) mod elp_type;
 pub(crate) mod r#enum;
+pub(crate) mod export;
 pub(crate) mod expression;
 pub(crate) mod import;
 pub(crate) mod module;
