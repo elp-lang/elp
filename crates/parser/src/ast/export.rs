@@ -22,8 +22,12 @@ mod tests {
     use crate::{
         ast::{elp_type::ASTElpType, variable_declaration::ASTVariableDeclaration},
         cst::{
-            export::CSTExport, expression::CSTExpression, ident::CSTIdent,
-            variable_declaration::CSTVariableDeclaration, Const,
+            elp_type::{CSTElpTypeParameter, CSTElpTypeValue},
+            export::CSTExport,
+            expression::CSTExpression,
+            ident::CSTIdent,
+            variable_declaration::CSTVariableDeclaration,
+            CSTMutabilitySelector, Const,
         },
     };
 
@@ -44,7 +48,21 @@ mod tests {
                 mutability: crate::cst::CSTMutabilitySelector::Immutable(Const {
                     span: pest::Span::new(expression_str, 8, 12).unwrap(),
                 }),
-                type_annotation: None,
+                type_annotation: Some(Box::new(crate::cst::elp_type::CSTElpType {
+                    value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                        span: pest::Span::new(expression_str, 6, expression_str.len()).unwrap(),
+                        name: CSTIdent {
+                            span: pest::Span::new(expression_str, 6, expression_str.len()).unwrap(),
+                            value: "String".into(),
+                        },
+                        generics: None,
+                    }),
+                    span: pest::Span::new("", 0, 0).unwrap(),
+                    mutability: Some(CSTMutabilitySelector::Immutable(Const {
+                        span: pest::Span::new(expression_str, 8, 12).unwrap(),
+                    })),
+                    pointer_semantics: None,
+                })),
             })),
         };
 
@@ -60,7 +78,7 @@ mod tests {
                     mutability: crate::ast::elp_type::ASTMutability::Immutable,
                     type_annotation: Some(Box::new(ASTElpType {
                         span: &pest::Span::new("", 0, 0).unwrap(),
-                        name: "string".into(),
+                        name: "String".into(),
                         mutability: crate::ast::elp_type::ASTMutability::Immutable,
                         pointer_semantics: None,
                         generic_parameters: vec![],

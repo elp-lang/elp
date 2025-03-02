@@ -49,5 +49,78 @@ impl<'a> FromCST<'a, CSTVariableAssignment<'a>> for ASTVariableAssignment<'a> {
 
 #[cfg(test)]
 mod tests {
+    use crate::{
+        ast::{
+            elp_type::ASTMutability, expression::ASTExpression, string::ASTString,
+            value_assignment::ASTOperand,
+        },
+        cst::{
+            expression::CSTExpression,
+            ident::CSTIdent,
+            string::CSTString,
+            value_assignment::{CSTEquals, CSTOperand, CSTValueAssignment},
+            variable_declaration::CSTVariableDeclaration,
+            CSTMutabilitySelector, Const,
+        },
+    };
+
     use super::*;
+
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn variable_assignment_from_cst() {
+        let expression_str = "const hello = \"world\"";
+        let cst = CSTVariableAssignment {
+            span: pest::Span::new(expression_str, 0, 21).unwrap(),
+            variable_assignment_target: CSTVariableAssignmentTarget::VariableDeclaration(
+                CSTVariableDeclaration {
+                    span: pest::Span::new(expression_str, 0, 12).unwrap(),
+                    mutability: CSTMutabilitySelector::Immutable(Const {
+                        span: Span::new(expression_str, 0, 5).unwrap(),
+                    }),
+                    name: CSTIdent {
+                        span: pest::Span::new(expression_str, 6, 11).unwrap(),
+                        value: "hello".into(),
+                    },
+                    type_annotation: None,
+                },
+            ),
+            value_assignment: CSTValueAssignment {
+                span: pest::Span::new(expression_str, 12, 21).unwrap(),
+                operand: CSTOperand::Equals(CSTEquals {
+                    span: pest::Span::new(expression_str, 12, 13).unwrap(),
+                }),
+                value: Box::new(CSTExpression::String(Box::new(CSTString {
+                    span: pest::Span::new(expression_str, 14, 21).unwrap(),
+                    value: "world".into(),
+                }))),
+            },
+        };
+
+        let ast = ASTVariableAssignment::from_cst(&cst);
+
+        assert_eq!(
+            ast,
+            ASTVariableAssignment {
+                span: &pest::Span::new(expression_str, 0, 21).unwrap(),
+                variable_assignment_target: ASTVariableAssignmentTarget::VariableDeclaration(
+                    ASTVariableDeclaration {
+                        span: &pest::Span::new(expression_str, 0, 12).unwrap(),
+                        mutability: ASTMutability::Immutable,
+                        name: "hello".into(),
+                        type_annotation: None,
+                    }
+                ),
+                value_assignment: ASTValueAssignment {
+                    span: &pest::Span::new(expression_str, 12, 21).unwrap(),
+                    operand: ASTOperand::Equals,
+                    value: Box::new(ASTExpression::String(Box::new(ASTString {
+                        span: &pest::Span::new(expression_str, 14, 21).unwrap(),
+                        value: "world".into(),
+                    })))
+                }
+            }
+        )
+    }
 }

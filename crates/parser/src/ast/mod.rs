@@ -7,6 +7,7 @@ pub(crate) mod import;
 pub(crate) mod module;
 pub(crate) mod number;
 pub(crate) mod object;
+pub(crate) mod string;
 pub(crate) mod traits;
 pub(crate) mod value_assignment;
 pub(crate) mod variable_access;

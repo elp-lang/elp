@@ -10,6 +10,7 @@ use super::{
     number::ASTNumber,
     object::ASTObject,
     r#enum::ASTEnum,
+    string::ASTString,
     traits::FromCST,
     value_assignment::ASTValueAssignment,
     variable_access::ASTVariableAccess,
@@ -34,7 +35,7 @@ pub enum ASTExpression<'a> {
     //    Number(Box<Number>),
     Object(Box<ASTObject<'a>>),
     PointerSemantics(Box<ASTPointerSemantics>),
-    //    String(Box<StringValue>),
+    String(Box<ASTString<'a>>),
     ValueAssignment(Box<ASTValueAssignment<'a>>),
     VariableAccess(Box<ASTVariableAccess<'a>>),
     VariableAssignment(Box<ASTVariableAssignment<'a>>),
@@ -74,6 +75,7 @@ impl<'a> FromCST<'a, CSTExpression<'a>> for ASTExpression<'a> {
             CSTExpression::VariableDeclaration(cst) => {
                 ASTExpression::VariableDeclaration(Box::new(ASTVariableDeclaration::from_cst(cst)))
             }
+            CSTExpression::String(cst) => ASTExpression::String(Box::new(ASTString::from_cst(cst))),
             _ => panic!("Invalid CST expression: {:#?}", cst),
         }
     }
