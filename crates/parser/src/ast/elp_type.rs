@@ -10,7 +10,7 @@ use crate::cst::{
 
 use super::traits::FromCST;
 
-#[derive(Debug, PartialEq, PartialOrd, Clone)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum ASTMutability {
     Immutable,
     Mutable,
@@ -25,7 +25,7 @@ impl<'a> FromCST<'a, CSTMutabilitySelector<'a>> for ASTMutability {
     }
 }
 
-#[derive(Debug, PartialEq, PartialOrd, Clone)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum ASTPointerSemantics {
     Pointer,
     Reference,

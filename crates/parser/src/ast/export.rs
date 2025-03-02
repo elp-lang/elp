@@ -19,18 +19,22 @@ impl<'a> FromCST<'a, CSTExport<'a>> for ASTExport<'a> {
 
 #[cfg(test)]
 mod tests {
-    use crate::cst::{
-        export::CSTExport, expression::CSTExpression, ident::CSTIdent,
-        variable_declaration::CSTVariableDeclaration, Const,
+    use crate::{
+        ast::{elp_type::ASTElpType, variable_declaration::ASTVariableDeclaration},
+        cst::{
+            export::CSTExport, expression::CSTExpression, ident::CSTIdent,
+            variable_declaration::CSTVariableDeclaration, Const,
+        },
     };
 
     use super::*;
+    use pretty_assertions::assert_eq;
 
     #[test]
     fn export_ast() {
         let expression_str = "export const a string";
         let cst = CSTExport {
-            span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+            span: pest::Span::new(expression_str, 0, 21).unwrap(),
             expression: CSTExpression::VariableDeclaration(Box::new(CSTVariableDeclaration {
                 span: pest::Span::new(expression_str, 7, 20).unwrap(),
                 name: CSTIdent {
@@ -50,12 +54,18 @@ mod tests {
             ast,
             ASTExport {
                 span: &pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
-                value: ASTExpression::Variable(Box::new(ASTVariable {
-                    span: pest::Span::new(expression_str, 7, 20).unwrap(),
-                    name: CSTIdent {
-                        span: pest::Span::new(expression_str, 15, 16).unwrap(),
-                        value: "a".into(),
-                    },
+                value: ASTExpression::VariableDeclaration(Box::new(ASTVariableDeclaration {
+                    span: &pest::Span::new(expression_str, 7, 20).unwrap(),
+                    name: "a".into(),
+                    mutability: crate::ast::elp_type::ASTMutability::Immutable,
+                    type_annotation: Some(Box::new(ASTElpType {
+                        span: &pest::Span::new("", 0, 0).unwrap(),
+                        name: "string".into(),
+                        mutability: crate::ast::elp_type::ASTMutability::Immutable,
+                        pointer_semantics: None,
+                        generic_parameters: vec![],
+                        type_constraints: vec![],
+                    }))
                 })),
             }
         );

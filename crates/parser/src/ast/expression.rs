@@ -3,8 +3,18 @@
 use crate::cst::expression::CSTExpression;
 
 use super::{
-    block::ASTBlock, elp_type::ASTElpType, import::ASTImport, number::ASTNumber, object::ASTObject,
-    r#enum::ASTEnum, traits::FromCST,
+    block::ASTBlock,
+    elp_type::{ASTElpType, ASTPointerSemantics},
+    export::ASTExport,
+    import::ASTImport,
+    number::ASTNumber,
+    object::ASTObject,
+    r#enum::ASTEnum,
+    traits::FromCST,
+    value_assignment::ASTValueAssignment,
+    variable_access::ASTVariableAccess,
+    variable_assignment::ASTVariableAssignment,
+    variable_declaration::ASTVariableDeclaration,
 };
 
 #[derive(Debug, PartialEq, Clone)]
@@ -13,7 +23,7 @@ pub enum ASTExpression<'a> {
     ElpType(Box<ASTElpType<'a>>),
     Enum(Box<ASTEnum<'a>>),
     Number(Box<ASTNumber<'a>>),
-    //    Export(Box<Export>),
+    Export(Box<ASTExport<'a>>),
     //    FunctionDef(Box<FunctionDef>),
     //    FunctionHeaderDef(Box<FunctionHeaderDef>),
     //    FunctionReturnValue(Box<FunctionReturnValue>),
@@ -23,12 +33,12 @@ pub enum ASTExpression<'a> {
     //    Match(Box<MatchTree>),
     //    Number(Box<Number>),
     Object(Box<ASTObject<'a>>),
-    //    PointerSemantics(Box<PointerSemantics>),
+    PointerSemantics(Box<ASTPointerSemantics>),
     //    String(Box<StringValue>),
-    //    ValueAssignment(Box<ValueAssignment>),
-    //    VariableAccess(Box<VariableAccess>),
-    //    VariableAssignment(Box<VariableAssignment>),
-    //    VariableDeclaration(Box<VariableDeclaration>),
+    ValueAssignment(Box<ASTValueAssignment<'a>>),
+    VariableAccess(Box<ASTVariableAccess<'a>>),
+    VariableAssignment(Box<ASTVariableAssignment<'a>>),
+    VariableDeclaration(Box<ASTVariableDeclaration<'a>>),
 }
 
 impl<'a> FromCST<'a, CSTExpression<'a>> for ASTExpression<'a> {
@@ -47,6 +57,22 @@ impl<'a> FromCST<'a, CSTExpression<'a>> for ASTExpression<'a> {
             CSTExpression::Number(num) => ASTExpression::Number(Box::new(ASTNumber::from_cst(num))),
             CSTExpression::Import(import) => {
                 ASTExpression::Import(Box::new(ASTImport::from_cst(import)))
+            }
+            CSTExpression::PointerSemantics(cst) => {
+                ASTExpression::PointerSemantics(Box::new(ASTPointerSemantics::from_cst(cst)))
+            }
+            CSTExpression::Export(cst) => ASTExpression::Export(Box::new(ASTExport::from_cst(cst))),
+            CSTExpression::ValueAssignment(cst) => {
+                ASTExpression::ValueAssignment(Box::new(ASTValueAssignment::from_cst(cst)))
+            }
+            CSTExpression::VariableAccess(cst) => {
+                ASTExpression::VariableAccess(Box::new(ASTVariableAccess::from_cst(cst)))
+            }
+            CSTExpression::VariableAssignment(cst) => {
+                ASTExpression::VariableAssignment(Box::new(ASTVariableAssignment::from_cst(cst)))
+            }
+            CSTExpression::VariableDeclaration(cst) => {
+                ASTExpression::VariableDeclaration(Box::new(ASTVariableDeclaration::from_cst(cst)))
             }
             _ => panic!("Invalid CST expression: {:#?}", cst),
         }
