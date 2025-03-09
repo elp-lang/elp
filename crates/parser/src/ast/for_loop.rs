@@ -24,7 +24,10 @@ impl<'a> FromCST<'a, CSTForLoop<'a>> for ASTForLoop<'a> {
 #[cfg(test)]
 mod tests {
     use crate::{
-        ast::variable_access::{ASTVariableAccess, ASTVariableAccessNames},
+        ast::{
+            function::{ASTFunctionCall, ASTFunctionCallName},
+            variable_access::ASTVariableAccess,
+        },
         cst::{
             block::CSTBlock,
             expression::CSTExpression,
@@ -103,19 +106,13 @@ mod tests {
                 declaration_expression: ASTExpression::VariableAccess(Box::new(
                     ASTVariableAccess {
                         span: &pest::Span::new(expression_str, 4, 10).unwrap(),
-                        names: ASTVariableAccessNames {
-                            span: &pest::Span::new(expression_str, 4, 10).unwrap(),
-                            names: vec!["thing".into()],
-                        },
+                        names: vec!["thing".into()],
                         pointer_semantics: vec![],
                     }
                 )),
                 in_expression: ASTExpression::VariableAccess(Box::new(ASTVariableAccess {
                     span: &pest::Span::new(expression_str, 13, 22).unwrap(),
-                    names: ASTVariableAccessNames {
-                        span: &pest::Span::new(expression_str, 13, 22).unwrap(),
-                        names: vec!["thingies".into()],
-                    },
+                    names: vec!["thingies".into()],
                     pointer_semantics: vec![],
                 })),
                 body: ASTBlock {
@@ -125,19 +122,13 @@ mod tests {
                         name: ASTFunctionCallName::VariableAccess(ASTVariableAccess {
                             span: &pest::Span::new(expression_str, 24, 29).unwrap(),
                             pointer_semantics: vec![],
-                            names: ASTVariableAccessNames {
-                                span: &pest::Span::new(expression_str, 24, 29).unwrap(),
-                                names: vec!["print".into()],
-                            },
+                            names: vec!["print".into()],
                         }),
-                        generics: None,
-                        arguments: vec![CSTExpression::VariableAccess(Box::new(
+                        generics: vec![],
+                        arguments: vec![ASTExpression::VariableAccess(Box::new(
                             ASTVariableAccess {
                                 span: &pest::Span::new(expression_str, 30, 35).unwrap(),
-                                names: ASTVariableAccessNames {
-                                    span: &pest::Span::new(expression_str, 30, 35).unwrap(),
-                                    names: vec!["thing".into()],
-                                },
+                                names: vec!["thing".into()],
                                 pointer_semantics: vec![],
                             }
                         ))],

@@ -6,6 +6,7 @@ use super::{
     block::ASTBlock,
     elp_type::{ASTElpType, ASTPointerSemantics},
     export::ASTExport,
+    function::{ASTFunctionCall, ASTFunctionDef, ASTFunctionHeaderDef, ASTFunctionReturnValue},
     import::ASTImport,
     number::ASTNumber,
     object::ASTObject,
@@ -25,10 +26,10 @@ pub enum ASTExpression<'a> {
     Enum(Box<ASTEnum<'a>>),
     Number(Box<ASTNumber<'a>>),
     Export(Box<ASTExport<'a>>),
-    //    FunctionDef(Box<FunctionDef>),
-    //    FunctionHeaderDef(Box<FunctionHeaderDef>),
-    //    FunctionReturnValue(Box<FunctionReturnValue>),
-    //    Ident(Box<Ident>),
+    FunctionDef(Box<ASTFunctionDef<'a>>),
+    FunctionCall(Box<ASTFunctionCall<'a>>),
+    FunctionHeaderDef(Box<ASTFunctionHeaderDef<'a>>),
+    FunctionReturnValue(Box<ASTFunctionReturnValue<'a>>),
     Import(Box<ASTImport<'a>>),
     //    Interface(Box<Interface>),
     //    Match(Box<MatchTree>),
@@ -76,6 +77,18 @@ impl<'a> FromCST<'a, CSTExpression<'a>> for ASTExpression<'a> {
                 ASTExpression::VariableDeclaration(Box::new(ASTVariableDeclaration::from_cst(cst)))
             }
             CSTExpression::String(cst) => ASTExpression::String(Box::new(ASTString::from_cst(cst))),
+            CSTExpression::FunctionDef(func) => {
+                ASTExpression::FunctionDef(Box::new(ASTFunctionDef::from_cst(func)))
+            }
+            CSTExpression::FunctionCall(call) => {
+                ASTExpression::FunctionCall(Box::new(ASTFunctionCall::from_cst(call)))
+            }
+            CSTExpression::FunctionHeaderDef(header) => {
+                ASTExpression::FunctionHeaderDef(Box::new(ASTFunctionHeaderDef::from_cst(header)))
+            }
+            CSTExpression::FunctionReturnValue(ret) => {
+                ASTExpression::FunctionReturnValue(Box::new(ASTFunctionReturnValue::from_cst(ret)))
+            }
             _ => panic!("Invalid CST expression: {:#?}", cst),
         }
     }

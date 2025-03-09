@@ -4,6 +4,7 @@ pub(crate) mod r#enum;
 pub(crate) mod export;
 pub(crate) mod expression;
 pub(crate) mod for_loop;
+pub(crate) mod function;
 pub(crate) mod import;
 pub(crate) mod module;
 pub(crate) mod number;

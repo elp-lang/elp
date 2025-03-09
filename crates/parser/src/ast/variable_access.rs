@@ -1,8 +1,6 @@
 use pest::Span;
 
-use crate::cst::variable_access::{
-    CSTContextualVariableAccess, CSTVariableAccess, CSTVariableAccessNames,
-};
+use crate::cst::variable_access::{CSTContextualVariableAccess, CSTVariableAccess};
 
 use super::{
     elp_type::{ASTElpType, ASTPointerSemantics},
@@ -13,7 +11,7 @@ use super::{
 pub struct ASTVariableAccess<'a> {
     pub span: &'a Span<'a>,
     pub pointer_semantics: Vec<ASTPointerSemantics>,
-    pub names: ASTVariableAccessNames<'a>,
+    pub names: Vec<String>,
 }
 
 impl<'a> FromCST<'a, CSTVariableAccess<'a>> for ASTVariableAccess<'a> {
@@ -25,22 +23,7 @@ impl<'a> FromCST<'a, CSTVariableAccess<'a>> for ASTVariableAccess<'a> {
                 .iter()
                 .map(ASTPointerSemantics::from_cst)
                 .collect(),
-            names: ASTVariableAccessNames::from_cst(&cst.names),
-        }
-    }
-}
-
-#[derive(Debug, PartialEq, Clone)]
-pub struct ASTVariableAccessNames<'a> {
-    pub span: &'a Span<'a>,
-    pub names: Vec<String>,
-}
-
-impl<'a> FromCST<'a, CSTVariableAccessNames<'a>> for ASTVariableAccessNames<'a> {
-    fn from_cst(cst: &'a CSTVariableAccessNames<'a>) -> Self {
-        Self {
-            span: &cst.span,
-            names: cst.names.iter().map(|s| s.value.clone()).collect(),
+            names: cst.names.names.iter().map(|n| n.value.clone()).collect(),
         }
     }
 }
@@ -115,17 +98,14 @@ mod tests {
             ASTVariableAccess {
                 span: &pest::Span::new(expression_str, 0, 27).unwrap(),
                 pointer_semantics: vec![],
-                names: ASTVariableAccessNames {
-                    span: &pest::Span::new(expression_str, 0, 27).unwrap(),
-                    names: vec![
-                        "hello".to_string(),
-                        "world".to_string(),
-                        "my".to_string(),
-                        "name".to_string(),
-                        "is".to_string(),
-                        "dave".to_string(),
-                    ],
-                }
+                names: vec![
+                    "hello".to_string(),
+                    "world".to_string(),
+                    "my".to_string(),
+                    "name".to_string(),
+                    "is".to_string(),
+                    "dave".to_string(),
+                ],
             }
         )
     }
