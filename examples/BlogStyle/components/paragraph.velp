@@ -8,7 +8,7 @@ export fn Paragraph(text string) -> Component {
 
 Stylesheet {
     Text {
-        .fontFamily = "Cozette Nerd Font"
+        .fontFamily = "Cozette Nerd Font",
         .fontWeight = FontWeight.BOLD
     }
 }

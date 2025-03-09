@@ -335,4 +335,108 @@ mod tests {
             }
         )
     }
+
+    #[test]
+    fn external_function_def_cst_to_ast() {
+        let expression_str = "fn hello(name String) -> String";
+        let cst = CSTFunctionHeaderDef {
+            span: pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+            pointer_semantics: None,
+            name: CSTVariableAccess {
+                span: pest::Span::new(expression_str, 3, 8).unwrap(),
+                names: CSTVariableAccessNames {
+                    span: pest::Span::new(expression_str, 3, 8).unwrap(),
+                    names: vec![CSTIdent {
+                        span: pest::Span::new(expression_str, 3, 8).unwrap(),
+                        value: "hello".into(),
+                    }],
+                },
+                pointer_semantics: vec![],
+            },
+            generics: None,
+            arguments: CSTFunctionArguments {
+                span: pest::Span::new(expression_str, 8, 21).unwrap(),
+                arguments: vec![CSTFunctionArgument {
+                    span: pest::Span::new(expression_str, 9, 20).unwrap(),
+                    name: CSTIdent {
+                        span: pest::Span::new(expression_str, 9, 13).unwrap(),
+                        value: "name".into(),
+                    },
+                    pointer_semantics: None,
+                    type_annotation: Some(CSTElpType {
+                        span: pest::Span::new(expression_str, 14, 20).unwrap(),
+                        mutability: None,
+                        pointer_semantics: None,
+                        value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                            span: pest::Span::new(expression_str, 14, 20).unwrap(),
+                            name: CSTIdent {
+                                span: pest::Span::new(expression_str, 14, 20).unwrap(),
+                                value: "String".into(),
+                            },
+                            generics: None,
+                        }),
+                    }),
+                }],
+            },
+            return_type: CSTFunctionReturnType {
+                span: pest::Span::new(expression_str, 22, expression_str.len()).unwrap(),
+                type_annotations: vec![CSTElpType {
+                    span: pest::Span::new(expression_str, 25, expression_str.len()).unwrap(),
+                    mutability: None,
+                    pointer_semantics: None,
+                    value: CSTElpTypeValue::Parameter(CSTElpTypeParameter {
+                        span: pest::Span::new(expression_str, 25, expression_str.len()).unwrap(),
+                        name: CSTIdent {
+                            span: pest::Span::new(expression_str, 25, expression_str.len())
+                                .unwrap(),
+                            value: "String".into(),
+                        },
+                        generics: None,
+                    }),
+                }],
+            },
+        };
+        let ast = ASTFunctionHeaderDef::from_cst(&cst);
+
+        assert_eq!(
+            ast,
+            ASTFunctionHeaderDef {
+                pointer_semantics: None,
+                span: &pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
+                name: ASTVariableAccess {
+                    span: &pest::Span::new(expression_str, 3, 8).unwrap(),
+                    names: vec!["hello".into()],
+                    pointer_semantics: vec![],
+                },
+                generics: vec![],
+                arguments: ASTFunctionArguments {
+                    span: &pest::Span::new(expression_str, 8, 21).unwrap(),
+                    arguments: vec![ASTFunctionArgument {
+                        span: &pest::Span::new(expression_str, 9, 20).unwrap(),
+                        name: "name".into(),
+                        pointer_semantics: None,
+                        type_annotation: Some(ASTElpType {
+                            span: &pest::Span::new(expression_str, 14, 20).unwrap(),
+                            mutability: ASTMutability::Immutable,
+                            pointer_semantics: None,
+                            generic_parameters: vec![],
+                            name: "String".into(),
+                            type_constraints: vec![]
+                        }),
+                    }],
+                },
+                return_type: ASTFunctionReturnType {
+                    span: &pest::Span::new(expression_str, 22, 31).unwrap(),
+                    type_annotations: vec![ASTElpType {
+                        span: &pest::Span::new(expression_str, 25, 31).unwrap(),
+                        mutability: ASTMutability::Immutable,
+                        pointer_semantics: None,
+                        name: "String".into(),
+                        generic_parameters: vec![],
+                        type_constraints: vec![]
+                    }],
+                },
+            }
+        )
+    }
 }
