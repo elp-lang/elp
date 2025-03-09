@@ -289,7 +289,7 @@ mod tests {
                 span: &pest::Span::new(expression_str, 0, expression_str.len()).unwrap(),
                 name: ASTVariableAccess {
                     span: &pest::Span::new(expression_str, 3, 13).unwrap(),
-                    names: vec![],
+                    names: vec!["hello".into(), "name".into()],
                     pointer_semantics: vec![],
                 },
                 generics: vec![],
@@ -304,7 +304,7 @@ mod tests {
                             mutability: ASTMutability::Immutable,
                             pointer_semantics: None,
                             generic_parameters: vec![],
-                            name: "name".into(),
+                            name: "String".into(),
                             type_constraints: vec![]
                         }),
                     }],

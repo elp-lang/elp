@@ -48,7 +48,10 @@ impl<'a> FromCST<'a, CSTContextualVariableAccess<'a>> for ASTContextualVariableA
 
 #[cfg(test)]
 mod tests {
-    use crate::cst::{ident::CSTIdent, variable_access::CSTContextualVariableAccess};
+    use crate::cst::{
+        ident::CSTIdent,
+        variable_access::{CSTContextualVariableAccess, CSTVariableAccessNames},
+    };
 
     use super::*;
 
