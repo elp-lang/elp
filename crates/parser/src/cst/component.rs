@@ -40,7 +40,7 @@ mod tests {
     use pretty_assertions::assert_eq;
 
     #[test]
-    fn simple_function_def() {
+    fn simple_component_def() {
         let expression_str =
             "component hello.name(name String) -> String { return \"hello {name}\" }";
         let mut pairs = ElpParser::parse(Rule::component_def, expression_str).unwrap();

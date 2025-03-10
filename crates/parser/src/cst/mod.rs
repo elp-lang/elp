@@ -7,6 +7,7 @@ pub(crate) mod expression;
 pub(crate) mod for_loop;
 pub(crate) mod function;
 pub(crate) mod ident;
+pub(crate) mod if_tree;
 pub(crate) mod import;
 pub(crate) mod interface;
 pub(crate) mod r#match;

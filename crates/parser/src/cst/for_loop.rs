@@ -35,10 +35,10 @@ mod tests {
     fn test_for_loop() {
         let expression_str = "for thing in thingies { print(thing) }";
         let mut pairs = ElpParser::parse(Rule::for_loop, expression_str).unwrap();
-        let ast = CSTForLoop::from_pest(&mut pairs).unwrap();
+        let cst = CSTForLoop::from_pest(&mut pairs).unwrap();
 
         assert_eq!(
-            ast,
+            cst,
             CSTForLoop {
                 span: pest::Span::new(expression_str, 0, 38).unwrap(),
                 declaration_expression: CSTExpression::VariableAccess(Box::new(

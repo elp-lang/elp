@@ -132,17 +132,17 @@ pub struct CSTValueAssignment<'a> {
 #[derive(Debug, PartialEq, FromPest, Eq, Clone)]
 #[pest_ast(rule(Rule::OPERAND))]
 pub enum CSTOperand<'a> {
-    Plus(CSTPlus<'a>),
-    Minus(CSTMinus<'a>),
-    Multiply(CSTMultiply<'a>),
-    Divide(CSTDivide<'a>),
-    Modulo(CSTModulo<'a>),
-    Power(CSTPower<'a>),
-    EqualityNot(CSTEqualityNot<'a>),
-    EqualityBitNot(CSTEqualityBitNot<'a>),
-    Equals(CSTEquals<'a>),
-    EqualityEqual(CSTEqualityEqual<'a>),
     BitAnd(CSTBitAnd<'a>),
+    Divide(CSTDivide<'a>),
+    EqualityBitNot(CSTEqualityBitNot<'a>),
+    EqualityEqual(CSTEqualityEqual<'a>),
+    EqualityNot(CSTEqualityNot<'a>),
+    Equals(CSTEquals<'a>),
+    Minus(CSTMinus<'a>),
+    Modulo(CSTModulo<'a>),
+    Multiply(CSTMultiply<'a>),
+    Plus(CSTPlus<'a>),
+    Power(CSTPower<'a>),
 }
 
 #[cfg(test)]

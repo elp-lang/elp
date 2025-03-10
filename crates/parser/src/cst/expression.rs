@@ -1,5 +1,6 @@
 use super::{
     block::CSTBlock,
+    component::CSTComponentDef,
     elp_type::CSTElpType,
     export::CSTExport,
     function::{CSTFunctionCall, CSTFunctionDef, CSTFunctionHeaderDef, CSTFunctionReturnValue},
@@ -12,7 +13,7 @@ use super::{
     r#match::CSTMatchTree,
     string::CSTString,
     unary::CSTUnaryOperator,
-    value_assignment::CSTValueAssignment,
+    value_assignment::{CSTOperand, CSTValueAssignment},
     variable_access::{CSTPointerSemantics, CSTVariableAccess},
     variable_assignment::CSTVariableAssignment,
     variable_declaration::CSTVariableDeclaration,
@@ -24,11 +25,12 @@ use pest_ast::FromPest;
 #[pest_ast(rule(Rule::expression))]
 pub enum CSTExpression<'a> {
     Block(Box<CSTBlock<'a>>),
+    Component(Box<CSTComponentDef<'a>>),
     ElpType(Box<CSTElpType<'a>>),
     Enum(Box<CSTEnum<'a>>),
     Export(Box<CSTExport<'a>>),
-    FunctionDef(Box<CSTFunctionDef<'a>>),
     FunctionCall(Box<CSTFunctionCall<'a>>),
+    FunctionDef(Box<CSTFunctionDef<'a>>),
     FunctionHeaderDef(Box<CSTFunctionHeaderDef<'a>>),
     FunctionReturnValue(Box<CSTFunctionReturnValue<'a>>),
     Ident(Box<CSTIdent<'a>>),
@@ -37,13 +39,14 @@ pub enum CSTExpression<'a> {
     Match(Box<CSTMatchTree<'a>>),
     Number(Box<CSTNumber<'a>>),
     Object(Box<CSTObject<'a>>),
+    Operand(Box<CSTOperand<'a>>),
     PointerSemantics(Box<CSTPointerSemantics<'a>>),
     String(Box<CSTString<'a>>),
+    Unary(Box<CSTUnaryOperator<'a>>),
     ValueAssignment(Box<CSTValueAssignment<'a>>),
     VariableAccess(Box<CSTVariableAccess<'a>>),
     VariableAssignment(Box<CSTVariableAssignment<'a>>),
     VariableDeclaration(Box<CSTVariableDeclaration<'a>>),
-    Unary(Box<CSTUnaryOperator<'a>>),
 }
 
 // Hey! Where are my tests?

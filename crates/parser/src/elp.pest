@@ -12,6 +12,8 @@ expression = {
   | array
   | for_loop
   | if_tree
+  | elseif_tree
+  | else_block
   | logic_conditionals
   | interface_def
   | object_def
@@ -48,9 +50,9 @@ variable_assignment_target = { variable_declaration | variable_access }
 variable_assignment        = { variable_assignment_target ~ value_assignment }
 value_assignment           = { OPERAND ~ expression }
 variable_access            = { pointer_semantics* ~ variable_access_names }
-variable_access_names      = { IDENT ~ ("." ~ IDENT)* }
+variable_access_names      = { IDENT ~ ("." ~ KWIS_IDENT)* }
 pointer_semantics          = { POINTER | REFERENCE }
-contextual_variable_access = { "." ~ IDENT }
+contextual_variable_access = { "." ~ KWIS_IDENT }
 
 // Programming type info.
 mutability_selector         = { VAR | CONST }
@@ -101,10 +103,10 @@ object_value_spread         = { "..." ~ expression }
 component_def = { "component" ~ variable_access ~ elp_type_generic? ~ function_arguments? ~ function_return_type? ~ block }
 
 // If, elseif, else
-if_tree            = { "if" ~ expression ~ block ~ elseif_tree* ~ else_block? }
-elseif_tree        = { "elseif" ~ expression ~ block }
+if_tree            = { "if" ~ expression+ ~ "then"? ~ block }
+elseif_tree        = { "elseif" ~ expression+ ~ "then"? ~ block }
 else_block         = { "else" ~ block }
-logic_conditionals = { "or" | "not" | "is" }
+logic_conditionals = { OR | NOT | IS | AND }
 
 // Matches.
 match_tree        = { "match" ~ expression ~ "{" ~ match_arm+ ~ "}" }
@@ -139,8 +141,13 @@ number = @{
 }
 
 // Lexer tokens
-ARROW      = _{ "->" }
-IDENT      = @{ !number ~ (ASCII_ALPHANUMERIC+ | "_")+ }
+ARROW = _{ "->" }
+IDENT = @{ !KEYWORD ~ !number ~ (ASCII_ALPHANUMERIC+ | "_")+ }
+
+// In dot notation we can safely assume that keywords don't make a difference to the
+// change so we need a way to see identifiers that are keyword insensitive.
+// Key-Word-In-Sensitive
+KWIS_IDENT = @{ !number ~ (ASCII_ALPHANUMERIC+ | "_")+ }
 REFERENCE  =  { "&" }
 POINTER    =  { "*" }
 COMMENT    = _{ "//" ~ (!"\n" ~ ANY)* }
@@ -149,6 +156,31 @@ VAR        =  { "var" }
 CONST      =  { "const" }
 PUBLIC     =  { "public" }
 PRIVATE    =  { "private" }
+OR         =  { "or" }
+NOT        =  { "not" }
+IS         =  { "is" }
+AND        =  { "and" }
+KEYWORD    = @{
+    VAR
+  | CONST
+  | PUBLIC
+  | PRIVATE
+  | OR
+  | NOT
+  | IS
+  | AND
+  | "external"
+  | "then"
+  | "as"
+  | "if"
+  | "elseif"
+  | "else"
+  | "match"
+  | "component"
+  | "interface"
+  | "object"
+  | "implements"
+}
 
 // Everything below here is a mess and I'm in various states of confusion about what my head was doing but I'll come back round to this nonsense.
 
