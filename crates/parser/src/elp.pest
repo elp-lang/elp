@@ -98,7 +98,7 @@ object_instantiation_member = { (object_value_spread | ("." ~ IDENT ~ "=" ~ expr
 object_value_spread         = { "..." ~ expression }
 
 // Components
-component_def = { "component" ~ (IDENT ~ ("." ~ IDENT)*) ~ elp_type_generic? ~ function_arguments? ~ function_return_type? ~ block }
+component_def = { "component" ~ variable_access ~ elp_type_generic? ~ function_arguments? ~ function_return_type? ~ block }
 
 // If, elseif, else
 if_tree            = { "if" ~ expression ~ block ~ elseif_tree* ~ else_block? }
