@@ -1,6 +1,6 @@
-module = { SOI ~ expression* ~ EOI }
+module = { SOI ~ expressions* ~ EOI }
 
-expression = {
+expression               = {
     import
   | number
   | block
@@ -36,13 +36,16 @@ expression = {
   | OPERAND
   | UNARY_OPERATOR
 }
+parenthesised_expression = { "(" ~ expression* ~ ")" }
+
+expressions = _{ expression | parenthesised_expression }
 
 // Imports and exports in modules.
 import             = { "import" ~ "{" ~ (import_name ~ ("," ~ import_name)*)? ~ "}" ~ "from" ~ import_module_path }
 import_module_path = { string }
 import_name        = { IDENT ~ import_name_alias? }
 import_name_alias  = { "as" ~ IDENT }
-export             = { "export" ~ expression }
+export             = { "export" ~ expressions }
 
 // Variables.
 variable_declaration       = { mutability_selector ~ IDENT ~ elp_type? }
@@ -50,9 +53,9 @@ variable_assignment_target = { variable_declaration | variable_access }
 variable_assignment        = { variable_assignment_target ~ value_assignment }
 value_assignment           = { OPERAND ~ expression }
 variable_access            = { pointer_semantics* ~ variable_access_names }
-variable_access_names      = { IDENT ~ ("." ~ KWIS_IDENT)* }
+variable_access_names      = { !KEYWORD ~ IDENT ~ ("." ~ IDENT)* }
 pointer_semantics          = { POINTER | REFERENCE }
-contextual_variable_access = { "." ~ KWIS_IDENT }
+contextual_variable_access = { "." ~ IDENT }
 
 // Programming type info.
 mutability_selector         = { VAR | CONST }
@@ -83,46 +86,46 @@ function_return_type    = { ARROW ~ elp_type ~ ("," ~ elp_type)* }
 function_arguments      = { "(" ~ (function_argument ~ ("," ~ function_argument)*)? ~ ","? ~ ")" }
 function_argument       = { pointer_semantics? ~ IDENT ~ elp_type? }
 function_component_call = { function_call ~ block }
-function_call           = { function_call_name ~ elp_type_generic? ~ "(" ~ (expression ~ ("," ~ expression)*)? ~ ","? ~ ")" }
+function_call           = { function_call_name ~ elp_type_generic? ~ "(" ~ (expressions ~ ("," ~ expression)*)? ~ ","? ~ ")" }
 function_call_name      = { (variable_access | contextual_variable_access) }
-function_return_value   = { "return" ~ expression }
+function_return_value   = { "return" ~ expressions }
 
 // Objects.
 object_def               = { "object" ~ IDENT ~ elp_type_generic? ~ object_implements? ~ "{" ~ (object_member ~ ("," ~ object_member)* ~ ","?)? ~ "}" }
 object_implements        = { "implements" ~ elp_type ~ ("," ~ elp_type)* }
 object_member            = { visibility_selector? ~ mutability_selector? ~ "." ~ IDENT ~ elp_type? ~ object_key_default_value? ~ object_key_tags? }
-object_key_default_value = { "=" ~ expression }
+object_key_default_value = { "=" ~ expressions }
 object_key_tags          = { "`" ~ IDENT ~ ":" ~ string ~ ("," ~ IDENT ~ ":" ~ string)? ~ "`" }
 
 // Object instantiation
 object_instantiation        = { IDENT ~ "{" ~ object_instantiation_member ~ ("," ~ object_instantiation_member)* ~ ","? ~ "}" }
-object_instantiation_member = { (object_value_spread | ("." ~ IDENT ~ "=" ~ expression)) }
-object_value_spread         = { "..." ~ expression }
+object_instantiation_member = { (object_value_spread | ("." ~ IDENT ~ "=" ~ expressions)) }
+object_value_spread         = { "..." ~ expressions }
 
 // Components
 component_def = { "component" ~ variable_access ~ elp_type_generic? ~ function_arguments? ~ function_return_type? ~ block }
 
 // If, elseif, else
-if_tree            = { "if" ~ expression+ ~ "then"? ~ block }
-elseif_tree        = { "elseif" ~ expression+ ~ "then"? ~ block }
+if_tree            = { "if" ~ expressions+ ~ "then" ~ block }
+elseif_tree        = { "elseif" ~ expressions+ ~ "then" ~ block }
 else_block         = { "else" ~ block }
 logic_conditionals = { OR | NOT | IS | AND }
 
 // Matches.
-match_tree        = { "match" ~ expression ~ "{" ~ match_arm+ ~ "}" }
+match_tree        = { "match" ~ expressions ~ "{" ~ match_arm+ ~ "}" }
 match_arm_subject = { match_range | expression }
 match_arm         = { match_arm_subject ~ ARROW ~ match_arm_body ~ ","? }
-match_arm_body    = { block | expression }
-match_range       = { expression? ~ ".." ~ expression? }
+match_arm_body    = { block | expressions }
+match_range       = { expression? ~ ".." ~ expressions? }
 
 // Arrays.
-array = { "[" ~ expression ~ ("," ~ expression)* ~ ","? ~ "]" }
+array = { "[" ~ expressions ~ ("," ~ expressions)* ~ ","? ~ "]" }
 
 // Loops
-for_loop = { "for" ~ expression ~ "in" ~ expression ~ block }
+for_loop = { "for" ~ expressions ~ "in" ~ expressions ~ block }
 
 // Groups of expressions.
-block = { "{" ~ expression* ~ "}" }
+block = { "{" ~ expressions* ~ "}" }
 
 // Meta programming tooling.
 macro   = { "@" ~ IDENT ~ ("(" ~ elp_type ~ ")")? }
@@ -141,13 +144,8 @@ number = @{
 }
 
 // Lexer tokens
-ARROW = _{ "->" }
-IDENT = @{ !KEYWORD ~ !number ~ (ASCII_ALPHANUMERIC+ | "_")+ }
-
-// In dot notation we can safely assume that keywords don't make a difference to the
-// change so we need a way to see identifiers that are keyword insensitive.
-// Key-Word-In-Sensitive
-KWIS_IDENT = @{ !number ~ (ASCII_ALPHANUMERIC+ | "_")+ }
+ARROW      = _{ "->" }
+IDENT      = @{ !number ~ (ASCII_ALPHANUMERIC+ | "_")+ }
 REFERENCE  =  { "&" }
 POINTER    =  { "*" }
 COMMENT    = _{ "//" ~ (!"\n" ~ ANY)* }

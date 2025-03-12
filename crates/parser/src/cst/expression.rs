@@ -5,6 +5,7 @@ use super::{
     export::CSTExport,
     function::{CSTFunctionCall, CSTFunctionDef, CSTFunctionHeaderDef, CSTFunctionReturnValue},
     ident::CSTIdent,
+    if_tree::CSTIfTree,
     import::CSTImport,
     interface::CSTInterface,
     number_value::CSTNumber,
@@ -22,6 +23,12 @@ use crate::parser::Rule;
 use pest_ast::FromPest;
 
 #[derive(Debug, FromPest, PartialEq, Eq, Clone)]
+#[pest_ast(rule(Rule::parenthesised_expression))]
+pub struct CSTParenthesisedExpression<'a> {
+    pub expression: CSTExpression<'a>,
+}
+
+#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
 #[pest_ast(rule(Rule::expression))]
 pub enum CSTExpression<'a> {
     Block(Box<CSTBlock<'a>>),
@@ -35,6 +42,7 @@ pub enum CSTExpression<'a> {
     FunctionReturnValue(Box<CSTFunctionReturnValue<'a>>),
     Ident(Box<CSTIdent<'a>>),
     Import(Box<CSTImport<'a>>),
+    IfTree(Box<CSTIfTree<'a>>),
     Interface(Box<CSTInterface<'a>>),
     Match(Box<CSTMatchTree<'a>>),
     Number(Box<CSTNumber<'a>>),
@@ -47,6 +55,12 @@ pub enum CSTExpression<'a> {
     VariableAccess(Box<CSTVariableAccess<'a>>),
     VariableAssignment(Box<CSTVariableAssignment<'a>>),
     VariableDeclaration(Box<CSTVariableDeclaration<'a>>),
+}
+
+impl<'a> From<CSTParenthesisedExpression<'a>> for CSTExpression<'a> {
+    fn from(value: CSTParenthesisedExpression<'a>) -> Self {
+        value.expression
+    }
 }
 
 // Hey! Where are my tests?
