@@ -1,6 +1,7 @@
 pub enum LexerTokens {
     Identifier(String),
-    Number(i64),
+    Number(String),
+    Float(String),
     Plus,
     Minus,
     Multiply,
@@ -27,5 +28,9 @@ pub enum LexerTokens {
     Dot,
     String(String),
     Boolean(bool),
+    SOI,
     EOF,
+
+    // Keywords are tokens like import, export, for, etc.
+    Keyword(String),
 }
