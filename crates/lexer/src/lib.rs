@@ -37,6 +37,144 @@ impl<'a> ElpLexer<'a> {
         next_char
     }
 
+    fn consume_identifier(&mut self, start: usize) -> SpannedToken {
+        let mut value = String::new();
+        value.push(self.next().unwrap());
+        while let Some(&peeked_char) = self.peek() {
+            if UnicodeXID::is_xid_continue(peeked_char) || is_emoji_presentation(peeked_char) {
+                self.next();
+                value.push(peeked_char);
+            } else {
+                break;
+            }
+        }
+
+        SpannedToken {
+            span: CodeSpan {
+                start,
+                end: self.cursor,
+                line: self.line,
+            },
+            token: LexerTokens::Identifier(value),
+        }
+    }
+
+    fn consume_whitespace(&mut self) {
+        let start_char = self.next().unwrap();
+        if start_char == '\n' {
+            self.line += 1;
+        } else if start_char == '\r' {
+            if let Some('\n') = self.peek() {
+                self.next();
+            }
+            self.line += 1;
+        }
+    }
+
+    fn consume_numbers(&mut self, start: usize) -> SpannedToken {
+        let mut value = String::new();
+        value.push(self.next().unwrap());
+        while let Some(&peeked_char) = self.peek() {
+            if peeked_char.is_numeric() || peeked_char == '_' || peeked_char == '.' {
+                self.next();
+                value.push(peeked_char);
+            } else {
+                break;
+            }
+        }
+
+        SpannedToken {
+            span: CodeSpan {
+                start,
+                end: self.cursor,
+                line: self.line,
+            },
+            token: LexerTokens::Number(value),
+        }
+    }
+
+    fn consume_symbol(&mut self, start: usize) -> SpannedToken {
+        // Consume the character first, then match it.
+        let c = self.next().unwrap();
+
+        // Peek for multi-character symbols
+        if c == '=' {
+            if let Some(&peeked) = self.peek() {
+                if peeked == '=' {
+                    self.next();
+                    return SpannedToken {
+                        span: CodeSpan {
+                            start,
+                            end: self.cursor,
+                            line: self.line,
+                        },
+                        token: LexerTokens::Symbol(LexerSymbol::EqualEqual),
+                    };
+                }
+            }
+            return SpannedToken {
+                span: CodeSpan {
+                    start,
+                    end: self.cursor,
+                    line: self.line,
+                },
+                token: LexerTokens::Symbol(LexerSymbol::Equal),
+            };
+        }
+
+        // Now handle all other single-character symbols
+        match c {
+            '+' => SpannedToken {
+                span: CodeSpan {
+                    start,
+                    end: self.cursor,
+                    line: self.line,
+                },
+                token: LexerTokens::Symbol(LexerSymbol::Plus),
+            },
+            '-' => SpannedToken {
+                span: CodeSpan {
+                    start,
+                    end: self.cursor,
+                    line: self.line,
+                },
+                token: LexerTokens::Symbol(LexerSymbol::Minus),
+            },
+            '*' => SpannedToken {
+                span: CodeSpan {
+                    start,
+                    end: self.cursor,
+                    line: self.line,
+                },
+                token: LexerTokens::Symbol(LexerSymbol::Multiply),
+            },
+            '/' => SpannedToken {
+                span: CodeSpan {
+                    start,
+                    end: self.cursor,
+                    line: self.line,
+                },
+                token: LexerTokens::Symbol(LexerSymbol::Divide),
+            },
+            ';' => SpannedToken {
+                span: CodeSpan {
+                    start,
+                    end: self.cursor,
+                    line: self.line,
+                },
+                token: LexerTokens::Symbol(LexerSymbol::SemiColon),
+            },
+            _ => SpannedToken {
+                span: CodeSpan {
+                    start,
+                    end: self.cursor,
+                    line: self.line,
+                },
+                token: LexerTokens::Error(c.to_string()),
+            },
+        }
+    }
+
     pub fn scan(&mut self) -> Vec<SpannedToken> {
         let mut tokens = vec![SpannedToken {
             span: CodeSpan {
@@ -50,168 +188,22 @@ impl<'a> ElpLexer<'a> {
         while let Some(c) = self.peek().cloned() {
             let start = self.cursor;
 
-            // Handle whitespace
             if c.is_whitespace() {
-                let start_char = self.next().unwrap();
-                if start_char == '\n' {
-                    self.line += 1;
-                } else if start_char == '\r' {
-                    if let Some('\n') = self.peek() {
-                        self.next();
-                    }
-                    self.line += 1;
-                }
-
+                self.consume_whitespace();
                 continue;
             }
 
-            // Handle identifiers and keywords
             if UnicodeXID::is_xid_start(c) || is_emoji_presentation(c) {
-                let mut value = String::new();
-                value.push(self.next().unwrap());
-                while let Some(&peeked_char) = self.peek() {
-                    if UnicodeXID::is_xid_continue(peeked_char)
-                        || is_emoji_presentation(peeked_char)
-                    {
-                        self.next();
-                        value.push(peeked_char);
-                    } else {
-                        break;
-                    }
-                }
-
-                tokens.push(SpannedToken {
-                    span: CodeSpan {
-                        start,
-                        end: self.cursor,
-                        line: self.line,
-                    },
-                    token: LexerTokens::Identifier(value),
-                });
+                tokens.push(self.consume_identifier(self.cursor));
                 continue;
             }
 
-            // Handle numbers
             if c.is_numeric() {
-                let mut value = String::new();
-                value.push(self.next().unwrap());
-                while let Some(&peeked_char) = self.peek() {
-                    if peeked_char.is_numeric() || peeked_char == '_' || peeked_char == '.' {
-                        self.next();
-                        value.push(peeked_char);
-                    } else {
-                        break;
-                    }
-                }
-
-                tokens.push(SpannedToken {
-                    span: CodeSpan {
-                        start,
-                        end: self.cursor,
-                        line: self.line,
-                    },
-                    token: LexerTokens::Number(value),
-                });
+                tokens.push(self.consume_numbers(start));
                 continue;
             }
 
-            // Handle symbols
-            {
-                let start = self.cursor;
-                // Consume the character first, then match it.
-                let c = self.next().unwrap();
-
-                // Peek for multi-character symbols
-                if c == '=' {
-                    if let Some(&peeked) = self.peek() {
-                        if peeked == '=' {
-                            self.next();
-                            tokens.push(SpannedToken {
-                                span: CodeSpan {
-                                    start,
-                                    end: self.cursor,
-                                    line: self.line,
-                                },
-                                token: LexerTokens::Symbol(LexerSymbol::EqualEqual),
-                            });
-                            continue;
-                        }
-                    }
-                    tokens.push(SpannedToken {
-                        span: CodeSpan {
-                            start,
-                            end: self.cursor,
-                            line: self.line,
-                        },
-                        token: LexerTokens::Symbol(LexerSymbol::Equal),
-                    });
-                    continue;
-                }
-
-                // Now handle all other single-character symbols
-                match c {
-                    '+' => {
-                        tokens.push(SpannedToken {
-                            span: CodeSpan {
-                                start,
-                                end: self.cursor,
-                                line: self.line,
-                            },
-                            token: LexerTokens::Symbol(LexerSymbol::Plus),
-                        });
-                    }
-                    '-' => {
-                        tokens.push(SpannedToken {
-                            span: CodeSpan {
-                                start,
-                                end: self.cursor,
-                                line: self.line,
-                            },
-                            token: LexerTokens::Symbol(LexerSymbol::Minus),
-                        });
-                    }
-                    '*' => {
-                        tokens.push(SpannedToken {
-                            span: CodeSpan {
-                                start,
-                                end: self.cursor,
-                                line: self.line,
-                            },
-                            token: LexerTokens::Symbol(LexerSymbol::Multiply),
-                        });
-                    }
-                    '/' => {
-                        tokens.push(SpannedToken {
-                            span: CodeSpan {
-                                start,
-                                end: self.cursor,
-                                line: self.line,
-                            },
-                            token: LexerTokens::Symbol(LexerSymbol::Divide),
-                        });
-                    }
-                    ';' => {
-                        tokens.push(SpannedToken {
-                            span: CodeSpan {
-                                start,
-                                end: self.cursor,
-                                line: self.line,
-                            },
-                            token: LexerTokens::Symbol(LexerSymbol::SemiColon),
-                        });
-                    }
-                    _ => {
-                        tokens.push(SpannedToken {
-                            span: CodeSpan {
-                                start,
-                                end: self.cursor,
-                                line: self.line,
-                            },
-                            token: LexerTokens::Error(c.to_string()),
-                        });
-                    }
-                }
-            }
+            tokens.push(self.consume_symbol(start));
         }
         tokens
     }
