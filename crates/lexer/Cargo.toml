@@ -5,3 +5,5 @@ edition = "2024"
 
 [dependencies]
 pretty_assertions = "1.4.1"
+unicode-xid = "0.2.6"
+unic = "0.9.0"
