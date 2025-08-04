@@ -4,7 +4,7 @@ use crate::tokens::LexerTokens;
 pub struct CodeSpan {
     pub start: usize,
     pub end: usize,
-    pub source: String,
+    pub line: usize,
 }
 
 #[derive(Debug, PartialEq)]
