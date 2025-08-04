@@ -1,320 +1,393 @@
+use crate::{
+    span::SpannedToken,
+    tokens::{LexerSymbol, LexerTokens},
+};
 use span::CodeSpan;
-
-use crate::{span::SpannedToken, tokens::LexerTokens};
+use std::{iter::Peekable, str::Chars};
 
 pub mod span;
 pub mod tokens;
 
-pub struct ElpLexer {
-    input: String,
+pub struct ElpLexer<'a> {
+    chars: Peekable<Chars<'a>>,
     cursor: usize,
     line: usize,
 }
 
-impl ElpLexer {
-    pub fn new(input: String) -> Self {
+impl<'a> ElpLexer<'a> {
+    pub fn new(input: &'a str) -> Self {
         Self {
-            input,
+            chars: input.chars().peekable(),
             cursor: 0,
             line: 1,
         }
     }
 
-    fn is_at_end(&self) -> bool {
-        self.cursor >= self.input.len()
+    fn peek(&mut self) -> Option<&char> {
+        self.chars.peek()
     }
 
-    fn consume(&mut self) {
-        self.cursor += 1;
-    }
-
-    fn peek_next(&self) -> char {
-        if self.cursor + 1 >= self.input.len() {
-            return '\0';
+    fn next(&mut self) -> Option<char> {
+        let next_char = self.chars.next();
+        if let Some(c) = next_char {
+            self.cursor += c.len_utf8();
         }
-        self.input.chars().nth(self.cursor + 1).unwrap()
+        next_char
     }
 
-    fn consume_identifier(&mut self) -> SpannedToken {
-        let mut token = SpannedToken {
-            span: CodeSpan {
-                start: self.cursor,
-                end: self.cursor,
-                source: "".into(),
-            },
-            token: LexerTokens::Identifier("".into()),
-        };
-        let mut value: String = "".into();
-
-        loop {
-            if self.is_at_end() {
-                break;
-            }
-            let char = self.input.chars().nth(self.cursor).unwrap();
-            if self.is_at_end() || char.is_whitespace() || (!char.is_alphanumeric() && char != '_')
-            {
-                dbg!(self.is_at_end(), char);
-                self.consume();
-                break;
-            }
-
-            self.consume();
-            value.push(char);
-        }
-        token.span.end = self.cursor;
-        token.span.source = value.clone();
-        token.token = LexerTokens::Identifier(value);
-
-        token
-    }
-
-    fn consume_numeric(&mut self) -> SpannedToken {
-        let mut token = SpannedToken {
-            span: CodeSpan {
-                start: self.cursor,
-                end: self.cursor,
-                source: "".into(),
-            },
-            token: LexerTokens::Identifier("".into()),
-        };
-        let mut value: String = "".into();
-
-        loop {
-            if self.is_at_end() {
-                break;
-            }
-            let char = self.input.chars().nth(self.cursor).unwrap();
-            if self.is_at_end()
-                || char.is_whitespace()
-                || (!char.is_numeric() && char != '_' && char != '.')
-            {
-                break;
-            }
-
-            self.consume();
-            value.push(char);
-        }
-        token.span.end = self.cursor;
-        token.span.source = value.clone();
-        token.token = LexerTokens::Number(value);
-
-        token
-    }
-
-    fn consume_symbols(&mut self) -> SpannedToken {
-        let mut token = SpannedToken {
-            span: CodeSpan {
-                start: self.cursor,
-                end: self.cursor,
-                source: "".into(),
-            },
-            token: LexerTokens::Identifier("".into()),
-        };
-        let mut value: String = "".into();
-
-        loop {
-            let char = self.peek_next();
-            if self.is_at_end() || char.is_whitespace() || char.is_alphanumeric() {
-                break;
-            }
-
-            self.consume();
-            value.push(char);
-        }
-
-        token.span.end = self.cursor;
-        token.token = LexerTokens::Symbol(value);
-
-        token
-    }
-
-    fn scan(&mut self) -> Vec<SpannedToken> {
+    pub fn scan(&mut self) -> Vec<SpannedToken> {
         let mut tokens = vec![SpannedToken {
             span: CodeSpan {
                 start: 0,
                 end: 0,
-                source: "".into(),
+                line: 1,
             },
             token: LexerTokens::SOI,
         }];
 
-        while !self.is_at_end() {
-            let char = self.input.chars().nth(self.cursor).unwrap();
+        while let Some(c) = self.peek().cloned() {
+            let start = self.cursor;
 
-            if char == '\0' {
-                break;
-            }
-
-            if char.is_whitespace() {
-                if char == 0xA as char {
+            // Handle whitespace
+            if c.is_whitespace() {
+                if c == 0xA as char {
                     self.line += 1;
                 }
-                self.consume();
+                self.next();
                 continue;
-            } else if char.is_alphabetic() || char == '_' {
-                tokens.push(self.consume_identifier());
-            } else if char.is_numeric() {
-                tokens.push(self.consume_numeric());
-            } else {
-                tokens.push(self.consume_symbols());
+            }
+
+            // Handle identifiers and keywords
+            if c.is_alphabetic() || c == '_' {
+                let mut value = String::new();
+                value.push(self.next().unwrap());
+                while let Some(&peeked_char) = self.peek() {
+                    if peeked_char.is_alphanumeric() || peeked_char == '_' {
+                        self.next();
+                        value.push(peeked_char);
+                    } else {
+                        break;
+                    }
+                }
+
+                tokens.push(SpannedToken {
+                    span: CodeSpan {
+                        start,
+                        end: self.cursor,
+                        line: self.line,
+                    },
+                    token: LexerTokens::Identifier(value),
+                });
+                continue;
+            }
+
+            // Handle numbers
+            if c.is_numeric() {
+                let mut value = String::new();
+                value.push(self.next().unwrap());
+                while let Some(&peeked_char) = self.peek() {
+                    if peeked_char.is_numeric() || peeked_char == '_' || peeked_char == '.' {
+                        self.next();
+                        value.push(peeked_char);
+                    } else {
+                        break;
+                    }
+                }
+
+                tokens.push(SpannedToken {
+                    span: CodeSpan {
+                        start,
+                        end: self.cursor,
+                        line: self.line,
+                    },
+                    token: LexerTokens::Number(value),
+                });
+                continue;
+            }
+
+            // Handle symbols
+            {
+                let start = self.cursor;
+                self.next();
+                // Peek and match for multi-character symbols first
+                if let Some(&peeked) = self.peek() {
+                    if c == '=' && peeked == '=' {
+                        self.next();
+                        tokens.push(SpannedToken {
+                            span: CodeSpan {
+                                start,
+                                end: self.cursor,
+                                line: self.line,
+                            },
+                            token: LexerTokens::Symbol(LexerSymbol::EqualEqual),
+                        });
+                        continue;
+                    }
+                }
+
+                // Then, match for single-character symbols
+                match c {
+                    '=' => {
+                        tokens.push(SpannedToken {
+                            span: CodeSpan {
+                                start,
+                                end: self.cursor,
+                                line: self.line,
+                            },
+                            token: LexerTokens::Symbol(LexerSymbol::Equal),
+                        });
+                    }
+                    '+' => {
+                        tokens.push(SpannedToken {
+                            span: CodeSpan {
+                                start,
+                                end: self.cursor,
+                                line: self.line,
+                            },
+                            token: LexerTokens::Symbol(LexerSymbol::Plus),
+                        });
+                    }
+                    '-' => {
+                        tokens.push(SpannedToken {
+                            span: CodeSpan {
+                                start,
+                                end: self.cursor,
+                                line: self.line,
+                            },
+                            token: LexerTokens::Symbol(LexerSymbol::Minus),
+                        });
+                    }
+                    '*' => {
+                        tokens.push(SpannedToken {
+                            span: CodeSpan {
+                                start,
+                                end: self.cursor,
+                                line: self.line,
+                            },
+                            token: LexerTokens::Symbol(LexerSymbol::Multiply),
+                        });
+                    }
+                    '/' => {
+                        tokens.push(SpannedToken {
+                            span: CodeSpan {
+                                start,
+                                end: self.cursor,
+                                line: self.line,
+                            },
+                            token: LexerTokens::Symbol(LexerSymbol::Divide),
+                        });
+                    }
+                    ';' => {
+                        tokens.push(SpannedToken {
+                            span: CodeSpan {
+                                start,
+                                end: self.cursor,
+                                line: self.line,
+                            },
+                            token: LexerTokens::Symbol(LexerSymbol::SemiColon),
+                        });
+                    }
+                    _ => {
+                        // Handle an unexpected character or an error
+                        tokens.push(SpannedToken {
+                            span: CodeSpan {
+                                start,
+                                end: self.cursor,
+                                line: self.line,
+                            },
+                            token: LexerTokens::Error(c.to_string()),
+                        });
+                    }
+                }
             }
         }
-
         tokens
     }
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
 
-    #[test]
-    fn test_new() {
-        let input = String::from("hello");
-        let lexer = ElpLexer::new(input);
-        assert_eq!(lexer.input, "hello");
+    macro_rules! s_token_test {
+        ($start:expr, $end:expr, $line:expr, $token:expr) => {
+            SpannedToken {
+                span: CodeSpan {
+                    start: $start,
+                    end: $end,
+                    line: $line,
+                },
+                token: $token,
+            }
+        };
     }
 
     #[test]
-    fn test_is_at_end() {
-        let input = String::from("hello");
+    fn test_empty_input() {
+        let input = "";
         let mut lexer = ElpLexer::new(input);
-        assert!(!lexer.is_at_end());
-        while !lexer.is_at_end() {
-            lexer.consume();
-        }
-        assert!(lexer.is_at_end());
+        let tokens = lexer.scan();
+        assert_eq!(vec![s_token_test!(0, 0, 1, LexerTokens::SOI)], tokens);
     }
 
     #[test]
-    fn test_scan_identifier() {
-        let input = String::from("hello");
+    fn test_single_identifier() {
+        let input = "hello";
         let mut lexer = ElpLexer::new(input);
         let tokens = lexer.scan();
         assert_eq!(
             vec![
-                SpannedToken {
-                    span: CodeSpan {
-                        start: 0,
-                        end: 0,
-                        source: "".into()
-                    },
-                    token: LexerTokens::SOI
-                },
-                SpannedToken {
-                    span: CodeSpan {
-                        start: 0,
-                        end: 5,
-                        source: "hello".into()
-                    },
-                    token: LexerTokens::Identifier("hello".into())
-                }
+                s_token_test!(0, 0, 1, LexerTokens::SOI),
+                s_token_test!(0, 5, 1, LexerTokens::Identifier("hello".into())),
             ],
             tokens
-        )
+        );
     }
 
     #[test]
-    fn test_scan_numeric() {
-        let input_1 = String::from("1");
-        let mut lexer_1 = ElpLexer::new(input_1);
-        let tokens_1 = lexer_1.scan();
+    fn test_identifier_with_underscore() {
+        let input = "my_variable";
+        let mut lexer = ElpLexer::new(input);
+        let tokens = lexer.scan();
         assert_eq!(
             vec![
-                SpannedToken {
-                    span: CodeSpan {
-                        start: 0,
-                        end: 0,
-                        source: "".into()
-                    },
-                    token: LexerTokens::SOI
-                },
-                SpannedToken {
-                    span: CodeSpan {
-                        start: 0,
-                        end: 1,
-                        source: "1".into()
-                    },
-                    token: LexerTokens::Number("1".into())
-                }
+                s_token_test!(0, 0, 1, LexerTokens::SOI),
+                s_token_test!(0, 11, 1, LexerTokens::Identifier("my_variable".into())),
             ],
-            tokens_1
+            tokens
         );
+    }
 
-        let input_123 = String::from("123");
-        let mut lexer_123 = ElpLexer::new(input_123);
-        let tokens_123 = lexer_123.scan();
+    #[test]
+    fn test_single_numeric() {
+        let input = "123";
+        let mut lexer = ElpLexer::new(input);
+        let tokens = lexer.scan();
         assert_eq!(
             vec![
-                SpannedToken {
-                    span: CodeSpan {
-                        start: 0,
-                        end: 0,
-                        source: "".into()
-                    },
-                    token: LexerTokens::SOI
-                },
-                SpannedToken {
-                    span: CodeSpan {
-                        start: 0,
-                        end: 3,
-                        source: "123".into()
-                    },
-                    token: LexerTokens::Number("123".into())
-                }
+                s_token_test!(0, 0, 1, LexerTokens::SOI),
+                s_token_test!(0, 3, 1, LexerTokens::Number("123".into())),
             ],
-            tokens_123
+            tokens
         );
+    }
 
-        let input_float = String::from("123.123");
-        let mut lexer_float = ElpLexer::new(input_float);
-        let tokens_float = lexer_float.scan();
+    #[test]
+    fn test_float_numeric() {
+        let input = "3.14159";
+        let mut lexer = ElpLexer::new(input);
+        let tokens = lexer.scan();
         assert_eq!(
             vec![
-                SpannedToken {
-                    span: CodeSpan {
-                        start: 0,
-                        end: 0,
-                        source: "".into()
-                    },
-                    token: LexerTokens::SOI
-                },
-                SpannedToken {
-                    span: CodeSpan {
-                        start: 0,
-                        end: 7,
-                        source: "123.123".into()
-                    },
-                    token: LexerTokens::Number("123.123".into())
-                }
+                s_token_test!(0, 0, 1, LexerTokens::SOI),
+                s_token_test!(0, 7, 1, LexerTokens::Number("3.14159".into())),
             ],
-            tokens_float
+            tokens
         );
+    }
 
-        let input_formatted = String::from("123_123");
-        let mut lexer_formatted = ElpLexer::new(input_formatted);
-        let tokens_formatted = lexer_formatted.scan();
+    #[test]
+    fn test_formatted_numeric() {
+        let input = "1_000_000";
+        let mut lexer = ElpLexer::new(input);
+        let tokens = lexer.scan();
         assert_eq!(
             vec![
-                SpannedToken {
-                    span: CodeSpan {
-                        start: 0,
-                        end: 0,
-                        source: "".into()
-                    },
-                    token: LexerTokens::SOI
-                },
-                SpannedToken {
-                    span: CodeSpan {
-                        start: 0,
-                        end: 7,
-                        source: "123_123".into()
-                    },
-                    token: LexerTokens::Number("123_123".into())
-                }
+                s_token_test!(0, 0, 1, LexerTokens::SOI),
+                s_token_test!(0, 9, 1, LexerTokens::Number("1_000_000".into())),
             ],
-            tokens_formatted
-        )
+            tokens
+        );
+    }
+
+    #[test]
+    fn test_symbols() {
+        let input = "+-*/==";
+        let mut lexer = ElpLexer::new(input);
+        let tokens = lexer.scan();
+        assert_eq!(
+            vec![
+                s_token_test!(0, 0, 1, LexerTokens::SOI),
+                s_token_test!(0, 1, 1, LexerTokens::Symbol(LexerSymbol::Plus)),
+                s_token_test!(1, 2, 1, LexerTokens::Symbol(LexerSymbol::Minus)),
+                s_token_test!(2, 3, 1, LexerTokens::Symbol(LexerSymbol::Multiply)),
+                s_token_test!(3, 4, 1, LexerTokens::Symbol(LexerSymbol::Divide)),
+                s_token_test!(4, 6, 1, LexerTokens::Symbol(LexerSymbol::EqualEqual)),
+            ],
+            tokens
+        );
+    }
+
+    #[test]
+    fn test_mixed_tokens_with_whitespace() {
+        let input = "let x = 10;";
+        let mut lexer = ElpLexer::new(input);
+        let tokens = lexer.scan();
+        assert_eq!(
+            vec![
+                s_token_test!(0, 0, 1, LexerTokens::SOI),
+                s_token_test!(0, 3, 1, LexerTokens::Identifier("let".into())),
+                s_token_test!(4, 5, 1, LexerTokens::Identifier("x".into())),
+                s_token_test!(6, 7, 1, LexerTokens::Symbol(LexerSymbol::Equal)),
+                s_token_test!(8, 10, 1, LexerTokens::Number("10".into())),
+                s_token_test!(10, 11, 1, LexerTokens::Symbol(LexerSymbol::SemiColon)),
+            ],
+            tokens
+        );
+    }
+
+    #[test]
+    fn test_mixed_tokens_no_whitespace() {
+        let input = "x=10;y=20";
+        let mut lexer = ElpLexer::new(input);
+        let tokens = lexer.scan();
+        assert_eq!(
+            vec![
+                s_token_test!(0, 0, 1, LexerTokens::SOI),
+                s_token_test!(0, 1, 1, LexerTokens::Identifier("x".into())),
+                s_token_test!(1, 2, 1, LexerTokens::Symbol(LexerSymbol::Equal)),
+                s_token_test!(2, 4, 1, LexerTokens::Number("10".into())),
+                s_token_test!(4, 5, 1, LexerTokens::Symbol(LexerSymbol::SemiColon)),
+                s_token_test!(5, 6, 1, LexerTokens::Identifier("y".into())),
+                s_token_test!(6, 7, 1, LexerTokens::Symbol(LexerSymbol::Equal)),
+                s_token_test!(7, 9, 1, LexerTokens::Number("20".into())),
+            ],
+            tokens
+        );
+    }
+
+    #[test]
+    fn test_with_unicode_characters() {
+        let input = "привет_мир"; // "hello_world" in Russian
+        let mut lexer = ElpLexer::new(input);
+        let tokens = lexer.scan();
+        assert_eq!(
+            vec![
+                s_token_test!(0, 0, 1, LexerTokens::SOI),
+                s_token_test!(0, 19, 1, LexerTokens::Identifier("привет_мир".into())),
+            ],
+            tokens
+        );
+    }
+
+    #[test]
+    fn test_complex_program_like_input() {
+        let input = "let my_var = 123.45 + 50;";
+        let mut lexer = ElpLexer::new(input);
+        let tokens = lexer.scan();
+        assert_eq!(
+            vec![
+                s_token_test!(0, 0, 1, LexerTokens::SOI),
+                s_token_test!(0, 3, 1, LexerTokens::Identifier("let".into())),
+                s_token_test!(4, 10, 1, LexerTokens::Identifier("my_var".into())),
+                s_token_test!(11, 12, 1, LexerTokens::Symbol(LexerSymbol::Equal)),
+                s_token_test!(13, 19, 1, LexerTokens::Number("123.45".into())),
+                s_token_test!(20, 21, 1, LexerTokens::Symbol(LexerSymbol::Plus)),
+                s_token_test!(22, 24, 1, LexerTokens::Number("50".into())),
+                s_token_test!(24, 25, 1, LexerTokens::Symbol(LexerSymbol::SemiColon)),
+            ],
+            tokens
+        );
     }
 }
