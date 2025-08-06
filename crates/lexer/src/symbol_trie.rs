@@ -21,6 +21,7 @@ impl Default for SymbolTrie {
         trie.insert("/=", LexerSymbol::DivideEqual);
         trie.insert("+=", LexerSymbol::PlusEqual);
         trie.insert("-=", LexerSymbol::MinusEqual);
+        trie.insert("!=", LexerSymbol::NotEqual);
         trie.insert(";", LexerSymbol::SemiColon);
         Self { trie }
     }
@@ -30,7 +31,7 @@ impl SymbolTrie {
     pub fn insert(&mut self, s: &str, sym: LexerSymbol) {
         self.trie.insert(s, sym)
     }
-    pub fn match_longest(&self, chars: &mut Peekable<Chars>) -> Option<(LexerSymbol, usize)> {
+    pub fn match_longest(&self, chars: &mut Peekable<Chars>) -> Option<(LexerSymbol, String)> {
         self.trie.match_longest(chars)
     }
 }

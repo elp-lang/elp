@@ -14,6 +14,7 @@ pub enum LexerSymbol {
     DivideEqual,
     AmpersandEqual,
     PipeEqual,
+    NotEqual,
     #[default]
     Error,
 }
@@ -26,6 +27,7 @@ pub enum LexerTokens {
     Boolean(bool),
     Symbol(LexerSymbol),
     Error(String),
+    Unknown(String),
     SOI,
     EOI,
 }
