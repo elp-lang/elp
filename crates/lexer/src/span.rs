@@ -4,6 +4,7 @@ use crate::tokens::LexerTokens;
 pub struct CodeSpan {
     pub start: usize,
     pub end: usize,
+    pub column: usize,
     pub line: usize,
 }
 
