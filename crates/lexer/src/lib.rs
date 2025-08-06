@@ -114,9 +114,14 @@ impl<'a> ElpLexer<'a> {
     fn consume_symbol(&mut self, start: usize) -> SpannedToken {
         let column = self.column;
 
-        if let Some((token, len)) = self.symbols.match_longest(&mut self.chars) {
-            self.cursor += len;
-            self.column += len;
+        if let Some((token, str_match)) = self.symbols.match_longest(&mut self.chars) {
+            // We consumed `len` bytes from the iterator already, so update the cursor and column accordingly.
+            self.cursor += str_match.len();
+            self.column += str_match
+                .chars()
+                .map(|c| UnicodeWidthChar::width(c).unwrap_or(1))
+                .sum::<usize>();
+
             SpannedToken {
                 span: CodeSpan {
                     start,
@@ -127,12 +132,21 @@ impl<'a> ElpLexer<'a> {
                 token: LexerTokens::Symbol(token),
             }
         } else {
-            // TODO: All symbols should be matched to something, surely or the token type shouldnt be
-            // symbol and more likely identifier.
-            panic!(
-                "dang it Dave, fix this symbol in the trie lookup: '{:#?}'",
-                self.chars.nth(start)
-            )
+            // Couldn't match any known symbol. This is a lexer error: unknown token.
+            let unknown_char = self.next().unwrap();
+            let width = UnicodeWidthChar::width(unknown_char).unwrap_or(1);
+
+            self.column += width;
+
+            SpannedToken {
+                span: CodeSpan {
+                    start,
+                    end: self.cursor,
+                    line: self.line,
+                    column,
+                },
+                token: LexerTokens::Unknown(unknown_char.to_string()),
+            }
         }
     }
 
@@ -493,5 +507,128 @@ mod tests {
             ],
             tokens
         );
+    }
+
+    #[test]
+    fn test_column_tracking_scan_symbols() {
+        let input = "   != ==";
+        let mut lexer = ElpLexer::new(input);
+        let tokens = lexer.scan();
+
+        let expected = vec![
+            SpannedToken {
+                token: LexerTokens::SOI,
+                span: CodeSpan {
+                    start: 0,
+                    end: 0,
+                    column: 1,
+                    line: 1,
+                },
+            },
+            SpannedToken {
+                token: LexerTokens::Symbol(LexerSymbol::NotEqual),
+                span: CodeSpan {
+                    start: 3,
+                    end: 5,
+                    line: 1,
+                    column: 4,
+                },
+            },
+            SpannedToken {
+                token: LexerTokens::Symbol(LexerSymbol::EqualEqual),
+                span: CodeSpan {
+                    start: 6,
+                    end: 8,
+                    line: 1,
+                    column: 7,
+                },
+            },
+            SpannedToken {
+                token: LexerTokens::EOI,
+                span: CodeSpan {
+                    start: 8,
+                    end: 8,
+                    column: 9,
+                    line: 1,
+                },
+            },
+        ];
+
+        assert_eq!(tokens, expected);
+    }
+
+    #[test]
+    fn test_unicode_columns_in_elp_lexer() {
+        let input = "α + б + 😀";
+        let mut lexer = ElpLexer::new(input);
+        let tokens: Vec<SpannedToken> = lexer.scan(); // or whatever method returns the Vec
+
+        let expected = vec![
+            SpannedToken {
+                token: LexerTokens::SOI,
+                span: CodeSpan {
+                    start: 0,
+                    end: 0,
+                    column: 1,
+                    line: 1,
+                },
+            },
+            SpannedToken {
+                span: CodeSpan {
+                    start: 0,
+                    end: 2, // 'α' is 2 bytes
+                    line: 1,
+                    column: 1,
+                },
+                token: LexerTokens::Identifier("α".into()),
+            },
+            SpannedToken {
+                span: CodeSpan {
+                    start: 3,
+                    end: 4, // '+' is 1 byte, but preceded by 1 space
+                    line: 1,
+                    column: 3,
+                },
+                token: LexerTokens::Symbol(LexerSymbol::Plus),
+            },
+            SpannedToken {
+                span: CodeSpan {
+                    start: 5,
+                    end: 7,
+                    line: 1,
+                    column: 5,
+                },
+                token: LexerTokens::Identifier("б".into()),
+            },
+            SpannedToken {
+                span: CodeSpan {
+                    start: 8,
+                    end: 9, // '+' is 1 byte
+                    line: 1,
+                    column: 7,
+                },
+                token: LexerTokens::Symbol(LexerSymbol::Plus),
+            },
+            SpannedToken {
+                span: CodeSpan {
+                    start: 10,
+                    end: 14, // '😀' is 4 bytes
+                    line: 1,
+                    column: 9,
+                },
+                token: LexerTokens::Identifier("😀".into()),
+            },
+            SpannedToken {
+                token: LexerTokens::EOI,
+                span: CodeSpan {
+                    start: 14,
+                    end: 14,
+                    column: 11,
+                    line: 1,
+                },
+            },
+        ];
+
+        assert_eq!(tokens, expected);
     }
 }

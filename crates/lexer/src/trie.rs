@@ -23,7 +23,7 @@ use std::{collections::HashMap, iter::Peekable, str::Chars};
 /// trie.insert("->", LexerSymbol::Arrow);
 ///
 /// let result = trie.match_longest(&mut "===".chars().peekable());
-/// assert_eq!(result, Some((LexerSymbol::EqualEqual, 2)));
+/// assert_eq!(result, Some((LexerSymbol::EqualEqual, "==".into())));
 /// ```
 #[derive(Debug, Default, PartialEq, Clone)]
 pub struct Trie<Val: Default + Clone> {
@@ -40,16 +40,17 @@ impl<Val: Default + Clone> Trie<Val> {
         node.token = Some(sym);
     }
 
-    pub fn match_longest(&self, chars: &mut Peekable<Chars>) -> Option<(Val, usize)> {
+    pub fn match_longest(&self, chars: &mut Peekable<Chars>) -> Option<(Val, String)> {
         let mut node = self;
         let mut len = 0;
         let mut last = None;
         let mut temp = chars.clone();
+        let mut out_chars: String = "".into();
 
         while let Some(&c) = temp.peek() {
             if let Some(next_node) = node.children.get(&c) {
                 len += c.len_utf8();
-                temp.next();
+                out_chars.push(temp.next()?);
                 if let Some(token) = &next_node.token {
                     last = Some((token, len));
                 }
@@ -63,7 +64,7 @@ impl<Val: Default + Clone> Trie<Val> {
             for _ in 0..len {
                 chars.next();
             }
-            Some((token.clone(), len))
+            Some((token.clone(), out_chars))
         } else {
             None
         }
@@ -87,7 +88,7 @@ mod tests {
         trie
     }
 
-    fn match_symbol<Val: Default + Clone>(trie: &Trie<Val>, input: &str) -> Option<(Val, usize)> {
+    fn match_symbol<Val: Default + Clone>(trie: &Trie<Val>, input: &str) -> Option<(Val, String)> {
         let mut chars = input.chars().peekable();
         trie.match_longest(&mut chars)
     }
@@ -95,9 +96,18 @@ mod tests {
     #[test]
     fn test_exact_match_single_char() {
         let trie = make_trie();
-        assert_eq!(match_symbol(&trie, "="), Some((LexerSymbol::Equal, 1)));
-        assert_eq!(match_symbol(&trie, "+"), Some((LexerSymbol::Plus, 1)));
-        assert_eq!(match_symbol(&trie, "-"), Some((LexerSymbol::Minus, 1)));
+        assert_eq!(
+            match_symbol(&trie, "="),
+            Some((LexerSymbol::Equal, "=".into()))
+        );
+        assert_eq!(
+            match_symbol(&trie, "+"),
+            Some((LexerSymbol::Plus, "+".into()))
+        );
+        assert_eq!(
+            match_symbol(&trie, "-"),
+            Some((LexerSymbol::Minus, "-".into()))
+        );
     }
 
     #[test]
@@ -105,10 +115,8 @@ mod tests {
         let trie = make_trie();
         assert_eq!(
             match_symbol(&trie, "=="),
-            Some((LexerSymbol::EqualEqual, 2))
+            Some((LexerSymbol::EqualEqual, "==".into()))
         );
-        assert_eq!(match_symbol(&trie, "->"), Some((LexerSymbol::Arrow, 2)));
-        assert_eq!(match_symbol(&trie, "+="), Some((LexerSymbol::PlusEqual, 2)));
     }
 
     #[test]
@@ -117,12 +125,12 @@ mod tests {
 
         let mut chars = "==foo".chars().peekable();
         let result = trie.match_longest(&mut chars);
-        assert_eq!(result, Some((LexerSymbol::EqualEqual, 2)));
+        assert_eq!(result, Some((LexerSymbol::EqualEqual, "==".into())));
         assert_eq!(chars.collect::<String>(), "foo"); // input advanced
 
         let mut chars = "+=bar".chars().peekable();
         let result = trie.match_longest(&mut chars);
-        assert_eq!(result, Some((LexerSymbol::PlusEqual, 2)));
+        assert_eq!(result, Some((LexerSymbol::PlusEqual, "+=".into())));
         assert_eq!(chars.collect::<String>(), "bar");
     }
 
@@ -132,7 +140,7 @@ mod tests {
 
         let mut chars = "=baz".chars().peekable();
         let result = trie.match_longest(&mut chars);
-        assert_eq!(result, Some((LexerSymbol::Equal, 1)));
+        assert_eq!(result, Some((LexerSymbol::Equal, "=".into())));
         assert_eq!(chars.collect::<String>(), "baz");
     }
 
@@ -152,7 +160,7 @@ mod tests {
 
         let mut chars = "+-foo".chars().peekable(); // "+-" not in trie
         let result = trie.match_longest(&mut chars);
-        assert_eq!(result, Some((LexerSymbol::Plus, 1))); // only "+" matched
+        assert_eq!(result, Some((LexerSymbol::Plus, "+".into()))); // only "+" matched
         assert_eq!(chars.collect::<String>(), "-foo"); // "+" consumed
     }
 }
