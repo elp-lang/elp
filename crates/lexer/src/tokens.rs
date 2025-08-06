@@ -1,4 +1,4 @@
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Default, PartialEq, Clone)]
 pub enum LexerSymbol {
     Equal,
     Plus,
@@ -7,6 +7,15 @@ pub enum LexerSymbol {
     Divide,
     SemiColon,
     EqualEqual,
+    Arrow,
+    PlusEqual,
+    MinusEqual,
+    MultiplyEqual,
+    DivideEqual,
+    AmpersandEqual,
+    PipeEqual,
+    #[default]
+    Error,
 }
 
 #[derive(Debug, PartialEq)]
@@ -18,5 +27,5 @@ pub enum LexerTokens {
     Symbol(LexerSymbol),
     Error(String),
     SOI,
-    EOF,
+    EOI,
 }
