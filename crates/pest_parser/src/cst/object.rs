@@ -1,6 +1,6 @@
 use super::{
-    elp_type::CSTElpType, expression::CSTExpression, ident::CSTIdent, string::CSTString,
-    CSTVisibilitySelector,
+    CSTVisibilitySelector, elp_type::CSTElpType, expression::CSTExpression, ident::CSTIdent,
+    string::CSTString,
 };
 use crate::parser::Rule;
 use pest::Span;
@@ -58,11 +58,11 @@ mod tests {
     use super::*;
     use crate::{
         cst::{
+            CSTPrivateVisibility, CSTPublicVisibility,
             elp_type::{
                 CSTElpTypeGeneric, CSTElpTypeGenericParam, CSTElpTypeParameter, CSTElpTypeValue,
             },
             number_value::CSTNumber,
-            CSTPrivateVisibility, CSTPublicVisibility,
         },
         parser::ElpParser,
     };

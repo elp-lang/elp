@@ -4,22 +4,28 @@ import { Paragraph } from "$components/paragraph"
 
 @Screen
 export fn Blog() -> Component {
-    var aboutContent String
-    var error Error
+	// types are inferred by the right hand side.
+	const posts, loading, error = getBlogContent()
 
-	aboutContent, error = getAboutContent()
-
-    Column {
+    Column(lazy = true) {
         if error not None {
             Row(class = "error-row") {
                 Text(error.asString())
             }
-        } else {
-            Row {
-                Text(aboutContent.title, class="title")
-                Paragraph(aboutContent.body)
-            }
         }
+
+		if loading {
+			Row(animateOut = true) {
+				Loading(spin = true)
+			}
+		} else {
+			for post in posts {
+				Row(animateIn = true) {
+					Text(post.title, class="title")
+					Paragraph(post.excerpt)
+				}
+			}
+		}
     }
 }
 

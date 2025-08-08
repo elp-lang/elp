@@ -1,17 +1,7 @@
 [package]
-name = "elp_parser"
+name = "parser"
 version = "0.1.0"
-edition = "2021"
-authors = ["davemackintosh <me@dav3.co>"]
-license = "GNU version 3"
-repository = "https://github.com/elp-lang/elp/"
+edition = "2024"
 
 [dependencies]
-pest = { version = "2" }
-pest_derive = { version = "2" }
-pest-ast = { version = "0.3.5", features = ["trace"] }
-from-pest = "0.3.2"
-#llvm-sys = "180"
-
-[dev-dependencies]
-pretty_assertions = "1.4.1"
+lexer = { path = "../lexer" }

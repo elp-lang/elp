@@ -1,0 +1,14 @@
+[package]
+name = "elp_parser"
+version = "0.1.0"
+edition = "2021"
+authors = ["davemackintosh <me@dav3.co>"]
+license = "GNU version 3"
+repository = "https://github.com/elp-lang/elp/"
+
+[dependencies]
+lexer = { path = "../lexer" }
+#llvm-sys = "180"
+
+[dev-dependencies]
+pretty_assertions = "1.4.1"

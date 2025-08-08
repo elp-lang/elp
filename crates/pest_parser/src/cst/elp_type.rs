@@ -1,4 +1,4 @@
-use super::{ident::CSTIdent, variable_access::CSTPointerSemantics, CSTMutabilitySelector};
+use super::{CSTMutabilitySelector, ident::CSTIdent, variable_access::CSTPointerSemantics};
 use crate::parser::Rule;
 use pest::Span;
 use pest_ast::FromPest;

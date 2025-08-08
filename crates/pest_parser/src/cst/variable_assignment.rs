@@ -27,11 +27,11 @@ mod tests {
     use super::*;
     use crate::{
         cst::{
+            CSTMutabilitySelector, Const,
             expression::CSTExpression,
             ident::CSTIdent,
             string::CSTString,
             value_assignment::{CSTEquals, CSTOperand},
-            CSTMutabilitySelector, Const,
         },
         parser::ElpParser,
     };

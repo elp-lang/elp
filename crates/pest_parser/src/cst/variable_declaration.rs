@@ -1,4 +1,4 @@
-use super::{elp_type::CSTElpType, ident::CSTIdent, CSTMutabilitySelector};
+use super::{CSTMutabilitySelector, elp_type::CSTElpType, ident::CSTIdent};
 use crate::parser::Rule;
 use pest::Span;
 use pest_ast::FromPest;
@@ -18,9 +18,9 @@ mod tests {
     use super::*;
     use crate::{
         cst::{
+            CSTMutabilitySelector, Var,
             elp_type::{CSTElpTypeParameter, CSTElpTypeValue},
             ident::CSTIdent,
-            CSTMutabilitySelector, Var,
         },
         parser::ElpParser,
     };

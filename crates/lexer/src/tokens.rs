@@ -15,6 +15,7 @@ pub enum LexerSymbol {
     AmpersandEqual,
     PipeEqual,
     NotEqual,
+    SingleLineComment,
     #[default]
     Error,
 }

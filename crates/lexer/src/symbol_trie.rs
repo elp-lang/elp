@@ -22,6 +22,7 @@ impl Default for SymbolTrie {
         trie.insert("+=", LexerSymbol::PlusEqual);
         trie.insert("-=", LexerSymbol::MinusEqual);
         trie.insert("!=", LexerSymbol::NotEqual);
+        trie.insert("//", LexerSymbol::SingleLineComment);
         trie.insert(";", LexerSymbol::SemiColon);
         Self { trie }
     }
