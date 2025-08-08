@@ -1,11 +1,10 @@
-use std::{fmt::Debug, path::PathBuf};
+use std::{collections::HashMap, fmt::Debug, path::PathBuf};
 
 use lexer::span::CodeSpan;
 
-use crate::{declaration::Decl, expression::Expr};
+use crate::ast::{declaration::Decl, expression::Expr};
 
-pub mod declaration;
-pub mod expression;
+pub mod ast;
 
 #[derive(Debug, PartialEq)]
 pub struct Spanned<T: Debug + PartialEq> {
@@ -23,6 +22,7 @@ pub enum ElpItem {
 pub struct ElpModule {
     pub path: PathBuf,
     pub items: Vec<Spanned<ElpItem>>,
+    pub macros: HashMap<String, ElpItem>,
 }
 
 #[derive(Debug, PartialEq)]
