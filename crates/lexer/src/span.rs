@@ -1,6 +1,6 @@
 use crate::tokens::LexerTokens;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct CodeSpan {
     pub start: usize,
     pub end: usize,

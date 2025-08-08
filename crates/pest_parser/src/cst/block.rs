@@ -1,14 +1,10 @@
-use crate::parser::Rule;
-use pest::Span;
-use pest_ast::FromPest;
+use lexer::span::CodeSpan;
 
 use super::expression::CSTExpression;
 
-#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
-#[pest_ast(rule(Rule::block))]
+#[derive(Debug, PartialEq, Clone)]
 pub struct CSTBlock<'a> {
-    #[pest_ast(outer())]
-    pub span: Span<'a>,
+    pub span: CodeSpan,
     pub expressions: Vec<CSTExpression<'a>>,
 }
 
@@ -17,21 +13,19 @@ mod tests {
     use super::*;
     use crate::{
         cst::{
+            CSTMutabilitySelector, Const,
             elp_type::{CSTElpType, CSTElpTypeParameter},
             ident::CSTIdent,
             variable_declaration::CSTVariableDeclaration,
-            CSTMutabilitySelector, Const,
         },
         parser::ElpParser,
     };
-    use from_pest::FromPest;
-    use pest::Parser;
     use pretty_assertions::assert_eq;
 
     #[test]
     fn blocks() {
         let expression_str = "{ const hello String }";
-        let mut pairs = ElpParser::parse(Rule::block, expression_str).unwrap();
+        let mut pairs = ElpParser::parse(expression_str);
         let ast = CSTBlock::from_pest(&mut pairs).unwrap();
 
         assert_eq!(

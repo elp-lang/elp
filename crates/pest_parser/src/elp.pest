@@ -42,7 +42,7 @@ expressions = _{ expression | parenthesised_expression }
 
 // Imports and exports in modules.
 import             = { "import" ~ "{" ~ (import_name ~ ("," ~ import_name)*)? ~ "}" ~ "from" ~ import_module_path }
-import_module_path = { string }
+import_module_path = { IDENT ~ ("." ~ IDENT)* }
 import_name        = { IDENT ~ import_name_alias? }
 import_name_alias  = { "as" ~ IDENT }
 export             = { "export" ~ expressions }

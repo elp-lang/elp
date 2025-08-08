@@ -17,8 +17,8 @@ mod tests {
 
     use crate::{
         cst::{
-            ident::CSTIdent, variable_declaration::CSTVariableDeclaration, CSTMutabilitySelector,
-            Const,
+            CSTMutabilitySelector, Const, ident::CSTIdent,
+            variable_declaration::CSTVariableDeclaration,
         },
         parser::ElpParser,
     };

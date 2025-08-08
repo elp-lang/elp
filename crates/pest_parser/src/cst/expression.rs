@@ -2,16 +2,16 @@ use super::{
     block::CSTBlock,
     component::CSTComponentDef,
     elp_type::CSTElpType,
+    r#enum::CSTEnum,
     export::CSTExport,
     function::{CSTFunctionCall, CSTFunctionDef, CSTFunctionHeaderDef, CSTFunctionReturnValue},
     ident::CSTIdent,
     if_tree::CSTIfTree,
     import::CSTImport,
     interface::CSTInterface,
+    r#match::CSTMatchTree,
     number_value::CSTNumber,
     object::CSTObject,
-    r#enum::CSTEnum,
-    r#match::CSTMatchTree,
     string::CSTString,
     unary::CSTUnaryOperator,
     value_assignment::{CSTOperand, CSTValueAssignment},
@@ -19,17 +19,13 @@ use super::{
     variable_assignment::CSTVariableAssignment,
     variable_declaration::CSTVariableDeclaration,
 };
-use crate::parser::Rule;
-use pest_ast::FromPest;
 
-#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
-#[pest_ast(rule(Rule::parenthesised_expression))]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct CSTParenthesisedExpression<'a> {
     pub expression: CSTExpression<'a>,
 }
 
-#[derive(Debug, FromPest, PartialEq, Eq, Clone)]
-#[pest_ast(rule(Rule::expression))]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum CSTExpression<'a> {
     Block(Box<CSTBlock<'a>>),
     Component(Box<CSTComponentDef<'a>>),
