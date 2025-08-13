@@ -1,19 +1,20 @@
-import { AsyncQueue, String } from elp.types
 import { Animations } from elp.ui.animations
+import { Screen } from elp.app
+import { Component } from elp.ui
 
 import { getAboutContent } from .internal.api
 import { Paragraph } from .components.paragraph
 
 @Screen
-export fn Blog -> Component {
-	const posts, loading, error = getBlogContent()
+export fn BlogListing -> Component {
+	const result, loading = getBlogContent()
 
-    Column(lazy = true) {
-        if error not None {
-            Row(class = "error-row") {
-                Text(error.asString())
-            }
-        }
+	Column(lazy = true) {
+		if error not None {
+			Row(class = "error-row") {
+				Text(error.asString())
+			}
+		}
 
 		if loading {
 			Row(animationOut = .Fade) {

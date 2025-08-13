@@ -1,5 +1,7 @@
-import { String, Uuid } from elp.types
-import { getBlogPost } from .internal.api
+import { Uuid } from elp.types
+import { Screen } from elp.app
+import { Column, Row, Text } from elp.ui
+
 import { Paragraph } from .components.paragraph
 
 object BlogPostParams {
@@ -7,8 +9,8 @@ object BlogPostParams {
 }
 
 @Screen<BlogPostParams>
-export fn BlogPost({ params }) -> Component {
-	const post, error = getBlogPost(Uuid.from(params.postId))
+export fn BlogPost({ params }) {
+	const post, error = getBlogPost(params.postId)
 
     Column {
         if error not None {

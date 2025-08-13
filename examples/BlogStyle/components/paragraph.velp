@@ -1,6 +1,6 @@
 import { Component, Stylesheet } from elp.ui
 import { Text } from elp.ui.components
-import { FontWeight } fronm elp.app.components.Font
+import { FontWeight, Otf } fronm elp.app.components.Font
 
 export fn Paragraph(text string) -> Component {
 	Text(text)
@@ -8,7 +8,7 @@ export fn Paragraph(text string) -> Component {
 
 Stylesheet {
     Text {
-        .fontFamily = "Cozette Nerd Font",
+        .fontFamily = .Otf("Cozette Nerd Font"),
         .fontWeight = FontWeight.BOLD
     }
 }

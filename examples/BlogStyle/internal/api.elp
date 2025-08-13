@@ -1,14 +1,16 @@
 // Imports tree shake and only import the desired exports of a module.
+import { OBJC } from elp.interop
+import { AsyncQueue } from elp.ui.async
 import { Error, Either, From, FromTo, Uuid } from elp.types
-import { toString, toJSON, mergeable } from elp.macros
+import { toString, toJSON } from elp.macros
 import { Reactive } from elp.app
 import { Http, HttpError } from elp.net
 import { parse as fromJSON, JSONError } from elp.types.json
 
 // You can call C, C++ and Objective C code by defining it as external and it's signature.
-external fn OBJC_msgSend<T: OBJC_Obj + Send>(T, OBJC_Selector) -> T
+@external(.OBJC) fn OBJC_msgSend<T: OBJC_Obj + Send>(T, OBJC_Selector) -> T
 
-// Enums take types which are used in pattern matching.
+// Enums take data which can be used in pattern matching.
 @toString
 export enum ApiErrorType {
 	SERVER(string),
@@ -16,23 +18,21 @@ export enum ApiErrorType {
 	UNKNOWN,
 }
 
-// An exported (module) object with the name Content,
+// An exported object with the name Content,
 // objects can define their default values and types are inferred
 // or just define their type. Note the assignment and type declarations.
-// Also note the discrete, Go like tagged fields, these optional tokens enable safe metaprogramming and can be of any value.They are a build time feature similar to a @macro
-@mergeable
+// Also note the discrete, Go like tagged fields, these optional tokens enable safe metaprogramming and can be of any value.
+// They are a build time feature similar to a @macro
 export object Content implements FromTo<JSON> {
-    public id     = UUID.v4() `json: "id"`,
+    id     = UUID.v4() `json: "id"`,
 
     title  string      `json: "title"`,
     body   string      `json: "body"`,
 	calls  = 0,
 }
 
-// Note the use of pointer semantics here which also denotes the lifetime of the variable.
-// Returning a pointer to a value will transfer the ownership of the data to the call site.
-fn Content.fromJSON(json JSON) -> Either<Content, JSONError> {
-	return parseJSON<Content>(json)
+fn Content.from<JSON>(json JSON) -> Either<Self, JSONError> {
+	return parseJSON<Self>(json)
 }
 
 // Objects can implement multiple interfaces. Interfaces don't influence the runtime,
@@ -41,14 +41,13 @@ fn Content.fromJSON(json JSON) -> Either<Content, JSONError> {
 // also note the macro @toJSON, this is another build time feature, this macro generates the same code as the tagged object above.
 @toJSON
 export object ApiError implements Error, From<HttpError> {
-	.type ApiErrorType
+	type ApiErrorType
+	message string
 }
 
 // Note this function implementation doesn't take a self making it a static method.
 fn ApiError.new(type ApiErrorType) -> Self {
-	return Self {
-		.type = type
-	}
+	return Self { type }
 }
 
 // Define methods on the object. self here denotes that it is an instance method,
@@ -58,7 +57,7 @@ fn ApiError.toString(self) -> String {
 }
 
 // This method is a static method as it doesn't take a self parameter.
-fn ApiError.from(err HttpError) -> ApiError {
+fn ApiError.from<HttpError>(err HttpError) -> Self {
 	return match err.responseCode {
 		400..499 -> .new(.USER(err.toString())),
 		500..599 -> .new(.SERVER(err.toString())),
@@ -68,14 +67,14 @@ fn ApiError.from(err HttpError) -> ApiError {
 
 // This function returns a tagged enum called Either, which is a lot like a
 // Rust Result<>.
-export fn getBlogPost(id string) -> Either<Content, ApiError> {
+export async fn getBlogPost(id string) -> Either<Content, ApiError>, bool {
     return match Http.get<Content, ApiError>("https://jsonplaceholder.typicode.com/posts/{id}") {
 		Error(err) -> ApiError.from(err),
 		Response(postJSON) -> Content.fromJSON(postJSON)
 	}
 }
 
-export fn createBlogPost(content string) -> Either<Content, ApiError> {
+export async fn createBlogPost(content string) -> Either<Content, ApiError> {
 	const body HttpBody = .new()
 	const content Content = .new()
 
@@ -86,7 +85,10 @@ export fn createBlogPost(content string) -> Either<Content, ApiError> {
 		Response(postJSON) -> {
 			const created Content = .fromJSON(postJSON)
 
-			// The mergeable macro and associated type tells us that we can spread that type safely into a new one.
+			// Objects with the same type can be merged together
+			// using the spread operator, this is similar to the
+			// JavaScript spread operator.
+			// Note that the spread operator is a compile time feature.
 			return Content {
 				...content,
 				...created
