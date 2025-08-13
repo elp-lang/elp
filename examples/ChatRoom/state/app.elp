@@ -19,3 +19,5 @@ fn ChatState.new(user User) -> Self {
 		.messages = []
 	}
 }
+
+// vim: ft=kotlin

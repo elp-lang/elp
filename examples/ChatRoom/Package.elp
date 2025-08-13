@@ -1,12 +1,14 @@
 import { Package, Version } from "elp"
 
-export Package {
-	.name = "chat"
-	.version = Version(1, 0, 0, 0)
-	.entry = "main.elp"
-	.targets = [
+export @Package(
+	name = "chat",
+	version = .new(1, 0, 0, 0),
+	entry = "main.elp",
+	targets = [
 		.iOS,
 		.Android,
 		.Web,
-	]
-}
+	],
+)
+
+// vim: ft=kotlin

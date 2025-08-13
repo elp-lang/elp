@@ -1,0 +1,27 @@
+import { String, Uuid } from elp.types
+import { getBlogPost } from .internal.api
+import { Paragraph } from .components.paragraph
+
+object BlogPostParams {
+    postId string
+}
+
+@Screen<BlogPostParams>
+export fn BlogPost({ params }) -> Component {
+	const post, error = getBlogPost(Uuid.from(params.postId))
+
+    Column {
+        if error not None {
+            Row(class = "error-row") {
+                Text(error.asString())
+            }
+        } else {
+            Row {
+                Text(post.title, class = "title")
+                Paragraph(post.body)
+            }
+        }
+    }
+}
+
+// vim: ft=kotlin
