@@ -1,12 +1,14 @@
-import { Package, Version } from "elp"
+import { Package, Version } from elp.package
 
-export Package {
-	name = "hello_world"
-	version = .new(1, 0, 0, 0)
-	entry = "main.velp"
+export @Package(
+	name = "hello_world_blog".
+	version = .new(1, 0, 0, 0),
+	entry = "main.velp",
 	targets = [
 		.iOS,
 		.Android,
 		.Web,
-	]
-}
+	],
+)
+
+// vim: ft=kotlin

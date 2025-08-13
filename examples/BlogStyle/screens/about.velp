@@ -1,10 +1,10 @@
-import { Screen } from "elp/app"
-import { getAboutContent } from "$app/internal/api"
-import { Paragraph } from "$components/paragraph"
+import { Screen } from elp.app
+import { getAboutContent } from .internal.api
+import { Paragraph } from .components.paragraph
 
 @Screen
 export fn About() -> Component {
-    var aboutContent, err = getAboutContent()
+    const aboutContent, err = getAboutContent()
 
 	return Column {
 		if err not None {

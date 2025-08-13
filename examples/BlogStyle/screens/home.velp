@@ -1,12 +1,12 @@
-import { Column, Row, Text, Date } from "elp/app/elements"
-import { Stylesheet } from "elp/app/styling"
-import Paragraph from "$components/paragraph"
-import { FontWeight } from "elp/app/components/Text"
+import { Column, Row, Text, Date } from elp.app.ui.elements
+import { Stylesheet } from elp.app.ui.styling
+import { Paragraph } from .components.paragraph
+import { FontWeight } from elp.app.ui.elements.Text
+
+const NAME = "Dave"
 
 @Screen
 export fn Home -> Component {
-    const NAME = "Dave"
-
     return Column {
         Row(columns = 2) {
             Column {

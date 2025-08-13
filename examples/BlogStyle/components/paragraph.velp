@@ -1,6 +1,6 @@
-import { Component, Stylesheet } from "elp/app"
-import { Text } from "elp/app/components"
-import { FontWeight } fronm "elp/app/components/Text"
+import { Component, Stylesheet } from elp.ui
+import { Text } from elp.ui.components
+import { FontWeight } fronm elp.app.components.Font
 
 export fn Paragraph(text string) -> Component {
 	Text(text)
@@ -12,3 +12,5 @@ Stylesheet {
         .fontWeight = FontWeight.BOLD
     }
 }
+
+// vim: ft=kotlin

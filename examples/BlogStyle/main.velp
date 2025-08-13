@@ -1,11 +1,13 @@
-import { App, Window } from "elp"
-import { Home } from "$screens/home"
-import Styles from "$app/styles"
+import { App, Surface } from elp.app
+import { Styles } from .styles
 
+@App
 export fn HelloWorld -> App {
 	return App(globalStyles = Styles()) {
-		Window {
-			Home()
+		Surface {
+			Content()
 		}
 	}
 }
+
+// vim: ft=kotlin

@@ -1,10 +1,11 @@
-import { AsyncQueue, String } from "elp"
-import { getAboutContent } from "$app/internal/api"
-import { Paragraph } from "$components/paragraph"
+import { AsyncQueue, String } from elp.types
+import { Animations } from elp.ui.animations
+
+import { getAboutContent } from .internal.api
+import { Paragraph } from .components.paragraph
 
 @Screen
-export fn Blog() -> Component {
-	// types are inferred by the right hand side.
+export fn Blog -> Component {
 	const posts, loading, error = getBlogContent()
 
     Column(lazy = true) {
@@ -15,12 +16,12 @@ export fn Blog() -> Component {
         }
 
 		if loading {
-			Row(animateOut = true) {
+			Row(animationOut = .Fade) {
 				Loading(spin = true)
 			}
 		} else {
 			for post in posts {
-				Row(animateIn = true) {
+				Row(animationIn = .Fade) {
 					Text(post.title, class="title")
 					Paragraph(post.excerpt)
 				}

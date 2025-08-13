@@ -1,11 +1,9 @@
 // Imports tree shake and only import the desired exports of a module.
-import { Error } from "elp"
-import { toString, toJSON, mergeable } from "elp/macros"
-import { Either, From, FromTo } from "elp/types"
-import { Reactive } from "elp/app"
-import { Http, HttpError } from "elp/net"
-import { UUID } from "elp/uuid"
-import { parse as fromJSON, JSONError } from "elp/data/json"
+import { Error, Either, From, FromTo, Uuid } from elp.types
+import { toString, toJSON, mergeable } from elp.macros
+import { Reactive } from elp.app
+import { Http, HttpError } from elp.net
+import { parse as fromJSON, JSONError } from elp.types.json
 
 // You can call C, C++ and Objective C code by defining it as external and it's signature.
 external fn OBJC_msgSend<T: OBJC_Obj + Send>(T, OBJC_Selector) -> T
@@ -13,9 +11,9 @@ external fn OBJC_msgSend<T: OBJC_Obj + Send>(T, OBJC_Selector) -> T
 // Enums take types which are used in pattern matching.
 @toString
 export enum ApiErrorType {
-	.SERVER(Optional<string>),
-	.USER(Optional<string>),
-	.UNKNOWN,
+	SERVER(string),
+	USER(string),
+	UNKNOWN,
 }
 
 // An exported (module) object with the name Content,
@@ -24,19 +22,17 @@ export enum ApiErrorType {
 // Also note the discrete, Go like tagged fields, these optional tokens enable safe metaprogramming and can be of any value.They are a build time feature similar to a @macro
 @mergeable
 export object Content implements FromTo<JSON> {
-    public .id     = UUID.v4() `json: "id"`,
+    public id     = UUID.v4() `json: "id"`,
 
-    .title  string      `json: "title"`,
-    .body   string      `json: "body"`,
-	.calls  = 0,
+    title  string      `json: "title"`,
+    body   string      `json: "body"`,
+	calls  = 0,
 }
 
 // Note the use of pointer semantics here which also denotes the lifetime of the variable.
 // Returning a pointer to a value will transfer the ownership of the data to the call site.
 fn Content.fromJSON(json JSON) -> Either<Content, JSONError> {
-	var out Content
-
-	return parseJSON(json, &out)
+	return parseJSON<Content>(json)
 }
 
 // Objects can implement multiple interfaces. Interfaces don't influence the runtime,
@@ -98,3 +94,5 @@ export fn createBlogPost(content string) -> Either<Content, ApiError> {
 		}
 	}
 }
+
+// vim: ft=kotlin
