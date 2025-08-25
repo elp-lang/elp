@@ -7,14 +7,29 @@ import { Message as MessageView } from .components.message
 
 export enum AppActions {
 	AUTHENTICATED_ISH(bool),
+	LOADING(bool),
 	LOG_IN(string),
 	NEW_MESSAGE(string, string),
 }
 
-pure fn AppReducer(initialState ChatAppState, action AppActions) -> ChatAppState {
+// A pure function is a type-state limitation on the ability of this function.
+// It removes the lexical scoping ability of this function beyond it's body,
+// this guarantees that it cannot modify anything externally.
+// It also enforces all arguments immutable.
+// Other limitations of a pure function are that it has limited access to the
+// standard library so a pure function may not make external calls, external requests,
+// do any kind of asynchronous work. It is "pure", what goes in will produce the same output every time.
+// note that enums are always const as they cannot be changed at any point beyond creation.
+// It's worth noting that the type of a function is ImpureFn and a pure function is PureFn. These types are
+// type compatible.
+pure fn AppReducer(const initialState ChatAppState, action AppActions) -> ChatAppState {
+	// Note that this match is exhaustive so there's no catch-all at the end.
+	// Also note the shorthand assignment of values like authed, name and loading.
+	// If the name of the variable is the same as it's receiver then you can omit the = assignment.
 	return match action {
 		.AUTHENTICATED_ISH(authed) -> initialState.copyWith(authed),
 		.LOG_IN(name) -> initialState.copyWith(name),
+		.LOADING(loading) -> initialState.copyWith(loading)
 		.NEW_MESSAGE(userName, body) -> initialState.copyWith(messages = messages.copy().append(
 			Message(
 				user = User(displayName = name),
@@ -24,15 +39,42 @@ pure fn AppReducer(initialState ChatAppState, action AppActions) -> ChatAppState
 	}
 }
 
-async fn AppMiddleware(state ChatAppState, action AppActions, dispatch StateDispatch<AppActions>) -> Either<ChatAppState, Error> {
+// Async function definitions allow for calls to other async operations, waiting, pausing or not of said operations.
+// This async function doesn't require any specific async queue to be specified but an async function may specify the
+// _type_ of asynchronous it needs to operate in. I.E it needs to work in a background thread (IO operations, http requests)
+// and others might specify they need to join a thread-pool. ThreadQueue is the default queue for an async function.
+// the function header below is compiled to
+// ```elp
+// async<ThreadQueue> fn AppMiddleware(constant state ChatAppState, action AppActions) -> void
+// ```
+// and would generally be called like this (maybe not like this but spitballing...)
+// ```elp
+// ThreadQueue.Background.yield(
+//		AppMiddleware(currentState, loginAction("Elp Me"))
+// )
+// ```
+// Note that this match ISN'T exhaustive and we DO have a catch-all, noted by the unnamed variable _.
+async fn AppMiddleware(const state ChatAppState, action AppActions, dispatch StateDispatch<AppActions>) {
 	return match action {
 		.LOG_IN(name) -> {
+			dispatch(.LOADING(true))
+
+			// Anonymous objects can be useful and the type-system allows this as they conveniently overlap in compatible ways.
+			// The same wouldn't be possible if the generic for HttpRequestBody required another non-optional field, they may be
+			// compatible on the surface but the memory assigned to the expected type would be invalid.
+			// However, if the argument to .new contained extra fields, it would be a compiler warning but the extra fields would
+			// actually be truncated as the type on the left projects the values on the right.
 			const body HttpRequestBody<object{name string}> = .new(object{name})
 
 			return match Http.post<object{success bool}, Error>({body}).await {
-				Ok(res) ->
+				Ok(res) -> {
+					dispatch(.LOADING(false))
+					dispatch(.AUTHENTICATED_ISH(res.success))
+				}
+				_ -> dispatch(.LOADING(false))
 			}
-		}
+		},
+		_ -> nil
 	}
 }
 
@@ -50,7 +92,7 @@ fn ChatAppState.default -> Self {
 	)
 }
 
-@App<ChatApp>
+@App<ChatApp, @Reducer<AppReducer, AppMiddleware>>
 export fn ChatApp({state, dispatch}) {
 	var name string
 
