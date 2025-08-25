@@ -4,7 +4,11 @@ use crate::tokens::LexerTokens;
 pub struct CodeSpan {
     pub start: usize,
     pub end: usize,
-    pub column: usize,
+    pub display_column: usize,
+    // @TODO: Editors and other much more mature compiler products track
+    // the width of graphemes which I don't do right now because I'm
+    // lazy/not that smart.
+    // pub grapheme_column: usize
     pub line: usize,
 }
 

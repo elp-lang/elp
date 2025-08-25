@@ -51,8 +51,7 @@ impl<'a> ElpLexer<'a> {
         value.push(self.next().unwrap());
         while let Some(&peeked_char) = self.peek() {
             if UnicodeXID::is_xid_continue(peeked_char) || is_emoji_presentation(peeked_char) {
-                self.next();
-                value.push(peeked_char);
+                value.push(self.next().unwrap());
             } else {
                 break;
             }
@@ -63,7 +62,7 @@ impl<'a> ElpLexer<'a> {
                 start,
                 end: self.cursor,
                 line: self.line,
-                column,
+                display_column: column,
             },
             token: LexerTokens::Identifier(value),
         }
@@ -105,7 +104,7 @@ impl<'a> ElpLexer<'a> {
                 start,
                 end: self.cursor,
                 line: self.line,
-                column,
+                display_column: column,
             },
             token: LexerTokens::Number(value),
         }
@@ -127,7 +126,7 @@ impl<'a> ElpLexer<'a> {
                     start,
                     end: self.cursor,
                     line: self.line,
-                    column,
+                    display_column: column,
                 },
                 token: LexerTokens::Symbol(token),
             }
@@ -143,9 +142,9 @@ impl<'a> ElpLexer<'a> {
                     start,
                     end: self.cursor,
                     line: self.line,
-                    column,
+                    display_column: column,
                 },
-                token: LexerTokens::Unknown(unknown_char.to_string()),
+                token: LexerTokens::Illegal(unknown_char.to_string()),
             }
         }
     }
@@ -156,7 +155,7 @@ impl<'a> ElpLexer<'a> {
                 start: 0,
                 end: 0,
                 line: 1,
-                column: 1,
+                display_column: 1,
             },
             token: LexerTokens::SOI,
         }];
@@ -188,7 +187,7 @@ impl<'a> ElpLexer<'a> {
                 start: self.cursor,
                 end: self.cursor,
                 line: self.line,
-                column: self.column,
+                display_column: self.column,
             },
             token: LexerTokens::EOI,
         });
@@ -211,7 +210,7 @@ mod tests {
                     start: $start,
                     end: $end,
                     line: $line,
-                    column: $column,
+                    display_column: $column,
                 },
                 token: $token,
             }
@@ -521,7 +520,7 @@ mod tests {
                 span: CodeSpan {
                     start: 0,
                     end: 0,
-                    column: 1,
+                    display_column: 1,
                     line: 1,
                 },
             },
@@ -531,7 +530,7 @@ mod tests {
                     start: 3,
                     end: 5,
                     line: 1,
-                    column: 4,
+                    display_column: 4,
                 },
             },
             SpannedToken {
@@ -540,7 +539,7 @@ mod tests {
                     start: 6,
                     end: 8,
                     line: 1,
-                    column: 7,
+                    display_column: 7,
                 },
             },
             SpannedToken {
@@ -548,7 +547,7 @@ mod tests {
                 span: CodeSpan {
                     start: 8,
                     end: 8,
-                    column: 9,
+                    display_column: 9,
                     line: 1,
                 },
             },
@@ -569,7 +568,7 @@ mod tests {
                 span: CodeSpan {
                     start: 0,
                     end: 0,
-                    column: 1,
+                    display_column: 1,
                     line: 1,
                 },
             },
@@ -578,7 +577,7 @@ mod tests {
                     start: 0,
                     end: 2, // 'α' is 2 bytes
                     line: 1,
-                    column: 1,
+                    display_column: 1,
                 },
                 token: LexerTokens::Identifier("α".into()),
             },
@@ -587,7 +586,7 @@ mod tests {
                     start: 3,
                     end: 4, // '+' is 1 byte, but preceded by 1 space
                     line: 1,
-                    column: 3,
+                    display_column: 3,
                 },
                 token: LexerTokens::Symbol(LexerSymbol::Plus),
             },
@@ -596,7 +595,7 @@ mod tests {
                     start: 5,
                     end: 7,
                     line: 1,
-                    column: 5,
+                    display_column: 5,
                 },
                 token: LexerTokens::Identifier("б".into()),
             },
@@ -605,7 +604,7 @@ mod tests {
                     start: 8,
                     end: 9, // '+' is 1 byte
                     line: 1,
-                    column: 7,
+                    display_column: 7,
                 },
                 token: LexerTokens::Symbol(LexerSymbol::Plus),
             },
@@ -614,7 +613,7 @@ mod tests {
                     start: 10,
                     end: 14, // '😀' is 4 bytes
                     line: 1,
-                    column: 9,
+                    display_column: 9,
                 },
                 token: LexerTokens::Identifier("😀".into()),
             },
@@ -623,12 +622,300 @@ mod tests {
                 span: CodeSpan {
                     start: 14,
                     end: 14,
-                    column: 11,
+                    display_column: 11,
                     line: 1,
                 },
             },
         ];
 
         assert_eq!(tokens, expected);
+    }
+
+    #[test]
+    fn test_cjk_wide_characters() {
+        // Each CJK char is width 2, but column tracking may be off
+        let input = "你好吗";
+        let mut lexer = ElpLexer::new(input);
+        let tokens = lexer.scan();
+        assert_eq!(
+            vec![
+                SpannedToken {
+                    token: LexerTokens::SOI,
+                    span: CodeSpan {
+                        start: 0,
+                        end: 0,
+                        display_column: 1,
+                        line: 1,
+                    },
+                }, // CJK chars are 3 bytes each
+                SpannedToken {
+                    token: LexerTokens::Identifier("你好吗".into()),
+                    span: CodeSpan {
+                        start: 0,
+                        end: 9,
+                        display_column: 1,
+                        line: 1,
+                    },
+                },
+                SpannedToken {
+                    token: LexerTokens::EOI,
+                    span: CodeSpan {
+                        start: 9,
+                        end: 9,
+                        display_column: 7,
+                        line: 1,
+                    },
+                }
+            ],
+            tokens,
+        );
+    }
+
+    #[test]
+    fn test_wide_and_narrow_mixed() {
+        let input = "a你b";
+        let mut lexer = ElpLexer::new(input);
+        let tokens = lexer.scan();
+        assert_eq!(
+            tokens,
+            vec![
+                SpannedToken {
+                    span: CodeSpan {
+                        start: 0,
+                        end: 0,
+                        line: 1,
+                        display_column: 1,
+                    },
+                    token: LexerTokens::SOI,
+                },
+                SpannedToken {
+                    span: CodeSpan {
+                        start: 0,
+                        end: 5,
+                        line: 1,
+                        display_column: 1,
+                    },
+                    token: LexerTokens::Identifier("a你b".into()),
+                },
+                SpannedToken {
+                    span: CodeSpan {
+                        start: 5,
+                        end: 5,
+                        line: 1,
+                        display_column: 5,
+                    },
+                    token: LexerTokens::EOI,
+                }
+            ]
+        );
+    }
+
+    #[test]
+    fn test_emoji_single_and_double_width() {
+        let input = "a😀b👍🏽";
+        let mut lexer = ElpLexer::new(input);
+        let tokens = lexer.scan();
+        assert_eq!(
+            tokens,
+            vec![
+                SpannedToken {
+                    span: CodeSpan {
+                        start: 0,
+                        end: 0,
+                        line: 1,
+                        display_column: 1,
+                    },
+                    token: LexerTokens::SOI,
+                },
+                SpannedToken {
+                    span: CodeSpan {
+                        start: 0,
+                        end: 14,
+                        line: 1,
+                        display_column: 1,
+                    },
+                    token: LexerTokens::Identifier("a😀b👍🏽".into()),
+                },
+                SpannedToken {
+                    span: CodeSpan {
+                        start: 14,
+                        end: 14,
+                        line: 1,
+                        display_column: 9, // Check if emoji width is handled right
+                    },
+                    token: LexerTokens::EOI,
+                }
+            ]
+        );
+    }
+
+    #[test]
+    fn test_combining_mark() {
+        // 'a' + combining acute accent, should be one grapheme, width 1
+        let input = "a\u{0301}b";
+        let mut lexer = ElpLexer::new(input);
+        let tokens = lexer.scan();
+        assert_eq!(
+            tokens,
+            vec![
+                SpannedToken {
+                    span: CodeSpan {
+                        start: 0,
+                        end: 0,
+                        line: 1,
+                        display_column: 1,
+                    },
+                    token: LexerTokens::SOI,
+                },
+                SpannedToken {
+                    span: CodeSpan {
+                        start: 0,
+                        end: 4,
+                        line: 1,
+                        display_column: 1,
+                    },
+                    token: LexerTokens::Identifier("a\u{0301}b".into()),
+                },
+                SpannedToken {
+                    span: CodeSpan {
+                        start: 4,
+                        end: 4,
+                        line: 1,
+                        display_column: 3, // Column may be off due to combining mark
+                    },
+                    token: LexerTokens::EOI,
+                }
+            ]
+        );
+    }
+
+    #[test]
+    fn test_zero_width_joiner_sequence() {
+        // Woman technologist emoji: 👩‍💻 (woman + ZWJ + laptop)
+        let input = "👩‍💻";
+        let mut lexer = ElpLexer::new(input);
+        let tokens = lexer.scan();
+        assert_eq!(
+            tokens,
+            vec![
+                SpannedToken {
+                    span: CodeSpan {
+                        start: 0,
+                        end: 0,
+                        line: 1,
+                        display_column: 1,
+                    },
+                    token: LexerTokens::SOI,
+                },
+                SpannedToken {
+                    span: CodeSpan {
+                        start: 0,
+                        end: 11,
+                        line: 1,
+                        display_column: 1,
+                    },
+                    token: LexerTokens::Identifier("👩‍💻".into()),
+                },
+                SpannedToken {
+                    span: CodeSpan {
+                        start: 11,
+                        end: 11,
+                        line: 1,
+                        display_column: 5,
+                    },
+                    token: LexerTokens::EOI,
+                }
+            ]
+        );
+    }
+
+    #[test]
+    fn test_ambiguous_width_symbols() {
+        // '§' is ambiguous width (sometimes 1, sometimes 2)
+        let input = "§a";
+        let mut lexer = ElpLexer::new(input);
+        let tokens = lexer.scan();
+        dbg!(&tokens);
+        assert_eq!(
+            tokens,
+            vec![
+                SpannedToken {
+                    span: CodeSpan {
+                        start: 0,
+                        end: 0,
+                        line: 1,
+                        display_column: 1,
+                    },
+                    token: LexerTokens::SOI,
+                },
+                SpannedToken {
+                    span: CodeSpan {
+                        start: 0,
+                        end: 2,
+                        line: 1,
+                        display_column: 1,
+                    },
+                    token: LexerTokens::Illegal("§".into()),
+                },
+                SpannedToken {
+                    span: CodeSpan {
+                        start: 2,
+                        end: 3,
+                        line: 1,
+                        display_column: 3,
+                    },
+                    token: LexerTokens::Identifier("a".into()),
+                },
+                SpannedToken {
+                    span: CodeSpan {
+                        start: 3,
+                        end: 3,
+                        line: 1,
+                        display_column: 4,
+                    },
+                    token: LexerTokens::EOI,
+                }
+            ]
+        );
+    }
+
+    #[test]
+    fn test_mixed_grapheme_clusters() {
+        // "e\u{0301}" is é as 'e' + combining accent, then emoji, then CJK
+        let input = "e\u{0301}😀你";
+        let mut lexer = ElpLexer::new(input);
+        let tokens = lexer.scan();
+        assert_eq!(
+            tokens,
+            vec![
+                SpannedToken {
+                    span: CodeSpan {
+                        start: 0,
+                        end: 0,
+                        line: 1,
+                        display_column: 1,
+                    },
+                    token: LexerTokens::SOI,
+                },
+                SpannedToken {
+                    span: CodeSpan {
+                        start: 0,
+                        end: 10,
+                        line: 1,
+                        display_column: 1,
+                    },
+                    token: LexerTokens::Identifier("e\u{0301}😀你".into()),
+                },
+                SpannedToken {
+                    span: CodeSpan {
+                        start: 10,
+                        end: 10,
+                        line: 1,
+                        display_column: 6,
+                    },
+                    token: LexerTokens::EOI,
+                }
+            ]
+        );
     }
 }
