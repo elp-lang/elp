@@ -28,7 +28,7 @@ pub enum LexerTokens {
     Boolean(bool),
     Symbol(LexerSymbol),
     Error(String),
-    Unknown(String),
+    Illegal(String),
     SOI,
     EOI,
 }
