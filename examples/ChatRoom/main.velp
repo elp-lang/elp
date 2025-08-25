@@ -1,20 +1,49 @@
 import { App, Window } from elp.app
 import { State } from elp.app.state
-import { Form, Label, Input, Button } from "elp/app/elements"
-import { Message, User } from "$types/chat"
-import { Message as MessageView } from "$components/message"
+import { Form, Label, Input, Button } from elp.ui.elements
+import { Http, HttpError } from elp.net
+import { Message, User } from .types.chat
+import { Message as MessageView } from .components.message
 
-@State
+export enum AppActions {
+	AUTHENTICATED_ISH(bool),
+	LOG_IN(string),
+	NEW_MESSAGE(string, string),
+}
+
+pure fn AppReducer(initialState ChatAppState, action AppActions) -> ChatAppState {
+	return match action {
+		.AUTHENTICATED_ISH(authed) -> initialState.copyWith(authed),
+		.LOG_IN(name) -> initialState.copyWith(name),
+		.NEW_MESSAGE(userName, body) -> initialState.copyWith(messages = messages.copy().append(
+			Message(
+				user = User(displayName = name),
+				body
+			)
+		))
+	}
+}
+
+async fn AppMiddleware(state ChatAppState, action AppActions, dispatch StateDispatch<AppActions>) -> Either<ChatAppState, Error> {
+	return match action {
+		.LOG_IN(name) -> {
+			const body HttpRequestBody<object{name string}> = .new(object{name})
+
+			return match Http.post<object{success bool}, Error>({body}).await {
+				Ok(res) ->
+			}
+		}
+	}
+}
+
 export object ChatAppState implements Default {
-	name     string,
 	messages [Message],
 	members  [User],
-	loggedIn bool
+	loggedIn User?
 }
 
 fn ChatAppState.default -> Self {
 	return Self(
-		name = "user",
 		messages = [],
 		members = [],
 		loggedIn = false
@@ -22,20 +51,20 @@ fn ChatAppState.default -> Self {
 }
 
 @App<ChatApp>
-export fn ChatApp(state &ChatAppState) -> App {
-	if .name not Empty or not .loggedIn {
-		for message in .messages {
-			// We borrow the message to pass down which extends it's lifetime
-			// and allows for mutation and avoids copying.
-			MessageView(message = &message)
+export fn ChatApp({state, dispatch}) {
+	var name string
+
+	if state.loggedIn not Empty {
+		for message in state.messages {
+			MessageView(message)
 		}
 	} else {
-		Form(onSubmit={fn { self.loggedIn = true }}) {
+		Form(onSubmit={fn { dispatch(.LOG_IN(name)) }}) {
 			Label("Enter your display name") {
-				Input(name = "display-name", type = "text", value = .name)
-				Button {
-					Text("Log in")
-				}
+				Input(name = "display-name", type = "text", value = name)
+			}
+			Button {
+				Text("Log in")
 			}
 		}
 	}
