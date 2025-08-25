@@ -1,5 +1,5 @@
 // Imports tree shake and only import the desired exports of a module.
-import { OBJC } from elp.interop
+import { OBJC, OBJC_Obj } from elp.interop
 import { AsyncQueue } from elp.ui.async
 import { Error, Either, From, FromTo, Uuid } from elp.types
 import { toString, toJSON } from elp.macros
