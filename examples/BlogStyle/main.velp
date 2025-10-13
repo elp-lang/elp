@@ -1,4 +1,4 @@
-import { App, Surface } from elp.app
+import { App, Surface, Content } from elp.app
 import { Styles } from .styles
 
 @App

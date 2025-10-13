@@ -1,11 +1,11 @@
-import { FontFamily } from elp.ui.font
+import { FontFamily, GoogleFont } from elp.ui.font
 
 App {
-	.ignoreSafeAreas = .All
+	ignoreSafeAreas = .All
 }
 
 Text {
-    .fontFamily = .GoogleFont("Patua One")
+    fontFamily = .GoogleFont("Patua One")
 }
 
 // vim: ft=kotlin

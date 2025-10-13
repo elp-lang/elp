@@ -9,7 +9,7 @@ pub mod ast;
 #[derive(Debug, PartialEq)]
 pub struct Spanned<T: Debug + PartialEq> {
     pub node: T,
-    pub span: CodeSpan,
+    pub span: Vec<CodeSpan>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -19,7 +19,7 @@ pub enum ElpItem {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct ElpModule {
+pub struct ElpScript {
     pub path: PathBuf,
     pub items: Vec<Spanned<ElpItem>>,
     pub macros: HashMap<String, ElpItem>,
@@ -27,5 +27,5 @@ pub struct ElpModule {
 
 #[derive(Debug, PartialEq)]
 pub struct ElpParser {
-    pub modules: ElpModule,
+    pub scripts: ElpScript,
 }
