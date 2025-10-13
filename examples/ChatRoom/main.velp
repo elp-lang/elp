@@ -22,15 +22,15 @@ export enum AppActions {
 // note that enums are always const as they cannot be changed at any point beyond creation.
 // It's worth noting that the type of a function is ImpureFn and a pure function is PureFn. These types are
 // type compatible.
-pure fn AppReducer(const initialState ChatAppState, action AppActions) -> ChatAppState {
+pure fn AppReducer(const state ChatAppState, const action AppActions) -> ChatAppState {
 	// Note that this match is exhaustive so there's no catch-all at the end.
 	// Also note the shorthand assignment of values like authed, name and loading.
 	// If the name of the variable is the same as it's receiver then you can omit the = assignment.
 	return match action {
-		.AUTHENTICATED_ISH(authed) -> initialState.copyWith(authed),
-		.LOG_IN(name) -> initialState.copyWith(name),
-		.LOADING(loading) -> initialState.copyWith(loading)
-		.NEW_MESSAGE(userName, body) -> initialState.copyWith(messages = messages.copy().append(
+		.AUTHENTICATED_ISH(authed) -> state.copyWith(authed),
+		.LOG_IN(name) -> state.copyWith(name),
+		.LOADING(loading) -> state.copyWith(loading)
+		.NEW_MESSAGE(userName, body) -> state.copyWith(messages = state.messages.copy().append(
 			Message(
 				user = User(displayName = name),
 				body

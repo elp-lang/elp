@@ -1,4 +1,4 @@
-import { Column, Row, Text, Date } from elp.app.ui.elements
+import { Element, Column, Row, Text, Date } from elp.app.ui.elements
 import { Stylesheet } from elp.app.ui.styling
 import { Paragraph } from .components.paragraph
 import { FontWeight } from elp.app.ui.elements.Text
@@ -6,7 +6,7 @@ import { FontWeight } from elp.app.ui.elements.Text
 const NAME = "Dave"
 
 @Screen
-export fn Home -> Component {
+export fn Home -> Element {
     return Column {
         Row(columns = 2) {
             Column {
@@ -27,15 +27,15 @@ export fn Home -> Component {
 
 Stylesheet {
     Text, Date {
-        .padding = 16
+        padding = 16
     }
 
     Text {
-        .fontWeight = .SEMIBOLD
+        fontWeight = .SEMIBOLD
     }
 
     Date {
-        .fontWeight = .LIGHT
+        fontWeight = .LIGHT
     }
 }
 

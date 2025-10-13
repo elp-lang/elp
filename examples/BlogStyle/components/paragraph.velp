@@ -1,6 +1,14 @@
-import { Component, Stylesheet } from elp.ui
-import { Text } from elp.ui.components
-import { FontWeight, Otf } fronm elp.app.components.Font
+import {
+	Component,
+	Stylesheet,
+	components: {
+		Text,
+	},
+	font: {
+		FontWeight, Otf
+	}
+} from elp.ui
+import { FONT_COZETTE } from .constants
 
 export fn Paragraph(text string) -> Component {
 	Text(text)
@@ -8,7 +16,7 @@ export fn Paragraph(text string) -> Component {
 
 Stylesheet {
     Text {
-        .fontFamily = .Otf("Cozette Nerd Font"),
+        .fontFamily = .Otf(),
         .fontWeight = FontWeight.BOLD
     }
 }
