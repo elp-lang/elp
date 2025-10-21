@@ -1,6 +1,7 @@
 use std::{collections::HashMap, fmt::Debug, path::PathBuf};
 
-use lexer::span::CodeSpan;
+use anyhow::Result;
+use lexer::span::{CodeSpan, SpannedToken};
 
 use crate::ast::{declaration::Decl, expression::Expr};
 
@@ -28,4 +29,8 @@ pub struct ElpScript {
 #[derive(Debug, PartialEq)]
 pub struct ElpParser {
     pub scripts: ElpScript,
+}
+
+pub trait ItemFromTokens: PartialEq {
+    fn from_tokens(tokens: &mut Vec<SpannedToken>) -> Result<ElpItem>;
 }
