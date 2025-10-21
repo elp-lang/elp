@@ -5,3 +5,5 @@ edition = "2024"
 
 [dependencies]
 lexer = { path = "../lexer" }
+pretty_assertions = "1.4.1"
+anyhow = "1.0.100"
