@@ -9,6 +9,9 @@ export @Package(
 		.Android,
 		.Web,
 	],
+	dependencies = {
+		elp = "1.0.0"
+	}
 )
 
 // vim: ft=kotlin
