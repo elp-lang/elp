@@ -4,6 +4,7 @@ use std::{collections::HashMap, fmt::Debug, path::PathBuf};
 use crate::ast::{declaration::Decl, expression::Expr};
 
 pub mod ast;
+pub mod parser;
 
 #[derive(Debug, PartialEq)]
 pub struct Spanned<T: Debug + PartialEq> {
@@ -17,23 +18,26 @@ pub enum ElpItem {
     Expression(Expr),
 }
 
+pub enum ElpScriptType {
+    Script,
+    ViewScript,
+    Stylesheet,
+}
+
+impl ElpScriptType {
+    pub fn file_ext(&self) -> &str {
+        match self {
+            Self::Stylesheet => "selp",
+            Self::ViewScript => "velp",
+            Self::Script => "elp",
+        }
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub struct ElpScript {
     pub items: Vec<Spanned<ElpItem>>,
     pub macros: HashMap<String, ElpItem>,
-}
-
-#[derive(Debug, PartialEq)]
-pub struct ElpParser {
-    pub scripts: HashMap<String, ElpScript>,
-}
-
-impl ElpParser {
-    pub fn new(entry_path: String) -> Self {
-        let mut scripts: HashMap<String, ElpScript> = HashMap::new();
-
-        Self { scripts }
-    }
 }
 
 pub trait ItemFromTokens: PartialEq {
