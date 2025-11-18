@@ -1,6 +1,10 @@
-use crate::ast::r#macro::MacroNode;
+use crate::TokenCursor;
 
 #[derive(Debug, PartialEq)]
 pub enum Decl {
-    Macro(MacroNode),
+    Macro {},
+}
+
+impl From<&mut TokenCursor<'_>> for Decl {
+    fn from(value: &mut TokenCursor) -> Self {}
 }
