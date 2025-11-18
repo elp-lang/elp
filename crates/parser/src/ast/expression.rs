@@ -3,7 +3,7 @@ use lexer::{
     tokens::{LexerSymbol, LexerTokens},
 };
 
-use crate::{ElpItem, ItemFromTokens, TokenCursor};
+use crate::{ElpItem, TokenCursor};
 
 #[derive(Debug, PartialEq)]
 pub enum Expr {
@@ -25,21 +25,20 @@ pub enum Expr {
     Symbol {},
 }
 
-impl ItemFromTokens for Expr {
-    fn from_tokens(tokens: &mut Vec<SpannedToken>) -> anyhow::Result<ElpItem> {
-        let token = tokens.first().expect("Didn't find any tokens to pparse.");
-        let mut cursor = TokenCursor::new(tokens);
-        // We consume the first token to begin with.
-        cursor.position += 1;
-
-        match &token.token {
-            LexerTokens::Symbol(symbol) => Self::from_symbol_tokens(symbol.clone(), tokens),
-            LexerTokens::Identifier(ident) => Self::from_ident_tokens(ident.clone(), tokens),
-            LexerTokens::Number(num) => Self::from_number_tokens(num.clone(), tokens),
-            LexerTokens::String(string) => Self::from_string_tokens(string.clone(), tokens),
-            LexerTokens::Boolean(bool) => Self::from_boolean_tokens(bool.clone(), tokens),
-            LexerTokens::Error(err) => Self::from_error(err.clone(), tokens),
-            LexerTokens::Illegal(illegal) => Self::from_illegal_tokens(illegal.clone(), tokens),
+impl From<&mut TokenCursor<'_>> for Expr {
+    fn from(cursor: &mut TokenCursor) -> Self {
+        let lexer_token = cursor.peek();
+        if lexer_token.is_none() {
+            panic!("No token to peek at, this is a compiler bug");
+        }
+        match lexer_token.unwrap().token {
+            LexerTokens::Symbol(symbol) => Self::from_symbol_tokens(symbol.clone(), cursor),
+            LexerTokens::Identifier(ident) => Self::from_ident_tokens(ident.clone(), cursor),
+            LexerTokens::Number(num) => Self::from_number_tokens(num.clone(), cursor),
+            LexerTokens::String(string) => Self::from_string_tokens(string.clone(), cursor),
+            LexerTokens::Boolean(bool) => Self::from_boolean_tokens(bool.clone(), cursor),
+            LexerTokens::Error(err) => Self::from_error(err.clone(), cursor),
+            LexerTokens::Illegal(illegal) => Self::from_illegal_tokens(illegal.clone(), cursor),
             LexerTokens::SOI => todo!(),
             LexerTokens::EOI => todo!(),
         }
