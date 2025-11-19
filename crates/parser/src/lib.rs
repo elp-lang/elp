@@ -10,6 +10,7 @@ use crate::{
 };
 
 pub mod ast;
+pub mod error;
 pub mod parser;
 
 #[derive(Debug, PartialEq)]
@@ -50,7 +51,7 @@ impl ElpScript {
     fn from_tokens(
         parser_config: &ElpParserConfig,
         tokens: &mut Vec<SpannedToken>,
-    ) -> anyhow::Result<Self> {
+    ) -> Result<Self> {
         let mut cursor = TokenCursor::new(&mut tokens);
         let mut script = Self::default();
 
