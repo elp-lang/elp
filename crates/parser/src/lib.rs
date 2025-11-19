@@ -6,6 +6,7 @@ use std::{collections::HashMap, fmt::Debug};
 
 use crate::{
     ast::{declaration::Decl, expression::Expr},
+    error::ElpParserError,
     parser::ElpParserConfig,
 };
 
@@ -51,7 +52,7 @@ impl ElpScript {
     fn from_tokens(
         parser_config: &ElpParserConfig,
         tokens: &mut Vec<SpannedToken>,
-    ) -> Result<Self> {
+    ) -> Result<Self, ElpParserError> {
         let mut cursor = TokenCursor::new(&mut tokens);
         let mut script = Self::default();
 
@@ -65,17 +66,24 @@ impl ElpScript {
                     // language level macro.
                     match ident.as_str() {
                         "fn" | "var" | "const" | "import" | "object" | "interface" | "export" => {
-                            ElpItem::Declaration(Decl::from(&mut cursor))
+                            let parse_result = Decl::from_cursor(&mut cursor)?;
+
+                            script.items.push(ElpItem::Declaration(parse_result));
                         }
                     }
                 }
                 LexerTokens::Number(_)
                 | LexerTokens::String(_)
                 | LexerTokens::Boolean(_)
-                | LexerTokens::Symbol(_) => ElpItem::Expression(Expr::from(&mut cursor)),
+                | LexerTokens::Symbol(_) => {
+                    let parse_result = Expr::from_cursor(&mut cursor)?;
+                    script.items.push(ElpItem::Expression(parse_result));
+                }
                 LexerTokens::Error(_) => todo!(),
                 LexerTokens::Illegal(_) => todo!(),
-                LexerTokens::SOI | LexerTokens::EOI => cursor.next(),
+                LexerTokens::SOI | LexerTokens::EOI => {
+                    cursor.next();
+                }
             };
         }
 

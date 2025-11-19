@@ -1,10 +1,14 @@
-use crate::TokenCursor;
+use crate::{TokenCursor, error::ElpParserError, parser::ElpParserConfig};
 
 #[derive(Debug, PartialEq)]
 pub enum Decl {
     Macro {},
 }
 
-impl From<&mut TokenCursor<'_>> for Decl {
-    fn from(value: &mut TokenCursor) -> Self {}
+impl Decl {
+    fn from_cursor(
+        parser_config: &ElpParserConfig,
+        cursor: &mut TokenCursor,
+    ) -> Result<Self, ElpParserError> {
+    }
 }
