@@ -112,7 +112,12 @@ impl ElpParser {
 
                 ElpScript::from_tokens(&self.config, &mut tokens)
             }
-            Err(err) => Err(ElpParserError::FileSystemError(path, err.to_string())),
+            Err(err) => Err(ElpParserError::FileSystemError(
+                Some(path.clone()),
+                err.to_string(),
+            )),
         };
+
+        parse_result
     }
 }
