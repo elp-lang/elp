@@ -3,7 +3,11 @@ use lexer::{
     tokens::{LexerSymbol, LexerTokens},
 };
 
-use crate::{ElpItem, TokenCursor, error::ElpParserError, parser::ElpParserConfig};
+use crate::{
+    Spanned, TokenCursor,
+    error::{ElpParserError, ParsingError},
+    parser::ElpParserConfig,
+};
 
 #[derive(Debug, PartialEq)]
 pub enum Expr {
@@ -26,68 +30,77 @@ pub enum Expr {
 }
 
 impl Expr {
-    fn from_cursor(
-        parser_config: &ElpParserConfig,
+    pub fn from_cursor(
+        _parser_config: &ElpParserConfig,
         cursor: &mut TokenCursor,
-    ) -> Result<Self, ElpParserError> {
+    ) -> Result<Spanned<Self>, ElpParserError> {
         let lexer_token = cursor.peek();
         if lexer_token.is_none() {
-            return Err(ElpParserError::ScriptParsingError(
-                None,
+            return Err(ElpParserError::ScriptParsingError(ParsingError::Expected(
                 "No token to peek at, this is a compiler bug".into(),
-            ));
+            )));
         }
 
-        let item = match lexer_token.unwrap().token {
-            LexerTokens::Symbol(symbol) => Self::from_symbol_tokens(symbol.clone(), cursor)?,
-            LexerTokens::Identifier(ident) => Self::from_ident_tokens(ident.clone(), cursor)?,
-            LexerTokens::Number(num) => Self::from_number_tokens(num.clone(), cursor)?,
-            LexerTokens::String(string) => Self::from_string_tokens(string.clone(), cursor)?,
-            LexerTokens::Boolean(bool) => Self::from_boolean_tokens(bool.clone(), cursor)?,
-            LexerTokens::Error(err) => Self::from_error(err.clone(), cursor?),
-            LexerTokens::Illegal(illegal) => Self::from_illegal_tokens(illegal.clone(), cursor)?,
-            LexerTokens::SOI => todo!(),
-            LexerTokens::EOI => todo!(),
+        let item = match &lexer_token.unwrap().token {
+            LexerTokens::Symbol(symbol) => Some(Self::from_symbol_tokens(symbol.clone(), cursor)?),
+            LexerTokens::Identifier(ident) => Some(Self::from_ident_tokens(ident.clone(), cursor)?),
+            LexerTokens::Number(num) => Some(Self::from_number_tokens(num.clone(), cursor)?),
+            LexerTokens::String(string) => Some(Self::from_string_tokens(string.clone(), cursor)?),
+            LexerTokens::Boolean(bool) => Some(Self::from_boolean_tokens(bool.clone(), cursor)?),
+            LexerTokens::Error(err) => Some(Self::from_error(err.clone(), cursor)?),
+            LexerTokens::Illegal(illegal) => {
+                Some(Self::from_illegal_tokens(illegal.clone(), cursor)?)
+            }
+            _ => None,
         };
-    }
-}
 
-impl Expr {
-    fn from_symbol_tokens(
+        match item {
+            Some(item) => Ok(item),
+            None => Err(ElpParserError::ScriptParsingError(ParsingError::Expected(
+                "Expected an expression".into(),
+            ))),
+        }
+    }
+
+    pub fn from_symbol_tokens(
         symbol: LexerSymbol,
         cursor: &mut TokenCursor,
-    ) -> Result<ElpItem, ElpParserError> {
+    ) -> Result<Spanned<Self>, ElpParserError> {
     }
 
-    fn from_ident_tokens(
+    pub fn from_ident_tokens(
         symbol: String,
         cursor: &mut TokenCursor,
-    ) -> Result<ElpItem, ElpParserError> {
+    ) -> Result<Spanned<Self>, ElpParserError> {
     }
 
-    fn from_number_tokens(
+    pub fn from_number_tokens(
         symbol: String,
         cursor: &mut TokenCursor,
-    ) -> Result<ElpItem, ElpParserError> {
+    ) -> Result<Spanned<Self>, ElpParserError> {
     }
 
-    fn from_string_tokens(
+    pub fn from_string_tokens(
         symbol: String,
         cursor: &mut TokenCursor,
-    ) -> Result<ElpItem, ElpParserError> {
+    ) -> Result<Spanned<Self>, ElpParserError> {
     }
 
-    fn from_boolean_tokens(
+    pub fn from_boolean_tokens(
         symbol: bool,
         cursor: &mut TokenCursor,
-    ) -> Result<ElpItem, ElpParserError> {
+    ) -> Result<Spanned<Self>, ElpParserError> {
     }
 
-    fn from_error(symbol: String, cursor: &mut TokenCursor) -> Result<ElpItem, ElpParserError> {}
-
-    fn from_illegal_tokens(
+    pub fn from_error(
         symbol: String,
         cursor: &mut TokenCursor,
-    ) -> Result<ElpItem, ElpParserError> {
+    ) -> Result<Spanned<Self>, ElpParserError> {
+    }
+
+    pub fn from_illegal_tokens(
+        symbol: String,
+        cursor: &mut TokenCursor,
+    ) -> Result<Spanned<Self>, ElpParserError> {
     }
 }

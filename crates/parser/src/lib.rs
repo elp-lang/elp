@@ -64,19 +64,17 @@ impl ElpScript {
                     // first check for declaration keywords.
                     // TODO I wonder if Stylesheet counts as a declaration, it's basically a
                     // language level macro.
-                    match ident.as_str() {
-                        "fn" | "var" | "const" | "import" | "object" | "interface" | "export" => {
-                            let parse_result = Decl::from_cursor(&mut cursor)?;
+                    if Decl::matches_ident(ident.as_str()) {
+                        let parse_result = Decl::from_cursor(&mut cursor)?;
 
-                            script.items.push(ElpItem::Declaration(parse_result));
-                        }
+                        script.items.push(ElpItem::Declaration(parse_result));
                     }
                 }
                 LexerTokens::Number(_)
                 | LexerTokens::String(_)
                 | LexerTokens::Boolean(_)
                 | LexerTokens::Symbol(_) => {
-                    let parse_result = Expr::from_cursor(&mut cursor)?;
+                    let parse_result = Expr::from_cursor(&parser_config, &mut cursor)?;
                     script.items.push(ElpItem::Expression(parse_result));
                 }
                 LexerTokens::Error(_) => todo!(),
