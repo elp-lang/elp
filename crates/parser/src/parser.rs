@@ -33,15 +33,13 @@ impl ElpParser {
             panic!("There is no package at path {}", package_path.display());
         }
 
-        let instance = Self {
+        Self {
             config,
             package_root: package_path,
             scripts: HashMap::new(),
             view_scripts: HashMap::new(),
             stylesheets: HashMap::new(),
-        };
-
-        instance
+        }
     }
 
     fn parse_all_of_type(
@@ -63,11 +61,10 @@ impl ElpParser {
             };
         }
 
-        return if !self.config.permissive_mode && parsing_errors.len() > 0 {
-            Err(ElpParserError::Vec(parsing_errors))
-        } else {
-            Ok(parsed_scripts)
-        };
+        match !self.config.permissive_mode && !parsing_errors.is_empty() {
+            true => Err(ElpParserError::Vec(parsing_errors)),
+            false => Ok(parsed_scripts),
+        }
     }
 
     fn glob_for_scripts(
@@ -105,19 +102,17 @@ impl ElpParser {
     fn parse(&mut self, path: &PathBuf) -> Result<ElpScript, ElpParserError> {
         let read_result = fs::read_to_string(path);
 
-        let parse_result = match read_result {
+        match read_result {
             Ok(source) => {
                 let mut lexer = ElpLexer::new(&source);
                 let mut tokens = lexer.scan();
 
-                ElpScript::from_tokens(&self.config, &mut tokens)
+                ElpScript::from_tokens(&mut tokens)
             }
             Err(err) => Err(ElpParserError::FileSystemError(
                 Some(path.clone()),
                 err.to_string(),
             )),
-        };
-
-        parse_result
+        }
     }
 }

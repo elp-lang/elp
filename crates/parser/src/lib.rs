@@ -22,8 +22,8 @@ pub struct Spanned<T: Debug + PartialEq> {
 
 #[derive(Debug, PartialEq)]
 pub enum ElpItem {
-    Declaration(Decl),
-    Expression(Expr),
+    Declaration(Spanned<Decl>),
+    Expression(Spanned<Expr>),
 }
 
 pub enum ElpScriptType {
@@ -44,22 +44,19 @@ impl ElpScriptType {
 
 #[derive(Debug, PartialEq, Default)]
 pub struct ElpScript {
-    pub items: Vec<Spanned<ElpItem>>,
+    pub items: Vec<ElpItem>,
     pub macros: HashMap<String, ElpItem>,
 }
 
 impl ElpScript {
-    fn from_tokens(
-        parser_config: &ElpParserConfig,
-        tokens: &mut Vec<SpannedToken>,
-    ) -> Result<Self, ElpParserError> {
-        let mut cursor = TokenCursor::new(&mut tokens);
+    fn from_tokens(tokens: &mut Vec<SpannedToken>) -> Result<Self, ElpParserError> {
+        let mut cursor = TokenCursor::new(tokens);
         let mut script = Self::default();
 
         // I spent too long being stupid trying to work out why i didn't get the first token,
         // it was because i was consuming instead of peeking so we just peek at the next token.
         while let Some(token) = cursor.peek() {
-            let item = match token.token {
+            match &token.token {
                 LexerTokens::Identifier(ident) => {
                     // first check for declaration keywords.
                     // TODO I wonder if Stylesheet counts as a declaration, it's basically a
@@ -74,7 +71,7 @@ impl ElpScript {
                 | LexerTokens::String(_)
                 | LexerTokens::Boolean(_)
                 | LexerTokens::Symbol(_) => {
-                    let parse_result = Expr::from_cursor(&parser_config, &mut cursor)?;
+                    let parse_result = Expr::from_cursor(&mut cursor)?;
                     script.items.push(ElpItem::Expression(parse_result));
                 }
                 LexerTokens::Error(_) => todo!(),
@@ -90,7 +87,7 @@ impl ElpScript {
 }
 
 #[derive(Debug, PartialEq)]
-pub(crate) struct TokenCursor<'t> {
+pub struct TokenCursor<'t> {
     pub tokens: &'t Vec<SpannedToken>,
     pub position: usize,
 }
