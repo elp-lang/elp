@@ -1,4 +1,7 @@
-use crate::{Spanned, TokenCursor, error::ElpParserError, parser::ElpParserConfig};
+use crate::{
+    Spanned, TokenCursor,
+    error::{ElpParserError, ParsingError},
+};
 
 #[derive(Debug, PartialEq)]
 pub enum Decl {
@@ -13,10 +16,7 @@ pub enum Decl {
 }
 
 impl Decl {
-    pub fn from_cursor(
-        parser_config: &ElpParserConfig,
-        cursor: &mut TokenCursor,
-    ) -> Result<Spanned<Self>, ElpParserError> {
+    pub fn from_cursor(cursor: &mut TokenCursor) -> Result<Spanned<Self>, ElpParserError> {
         let lexer_token = cursor.peek();
         if lexer_token.is_none() {
             return Err(ElpParserError::ScriptParsingError(ParsingError::Expected(
@@ -24,8 +24,9 @@ impl Decl {
             )));
         }
 
-        let item = match &lexer_token.unwrap().token {}
-
+        Err(ElpParserError::ScriptParsingError(ParsingError::Expected(
+            "Finished too early".into(),
+        )))
     }
 
     pub fn matches_ident(ident: &str) -> bool {

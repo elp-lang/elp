@@ -1,12 +1,8 @@
-use lexer::{
-    span::SpannedToken,
-    tokens::{LexerSymbol, LexerTokens},
-};
+use lexer::span::SpannedToken;
 
 use crate::{
     Spanned, TokenCursor,
     error::{ElpParserError, ParsingError},
-    parser::ElpParserConfig,
 };
 
 #[derive(Debug, PartialEq)]
@@ -30,10 +26,7 @@ pub enum Expr {
 }
 
 impl Expr {
-    pub fn from_cursor(
-        _parser_config: &ElpParserConfig,
-        cursor: &mut TokenCursor,
-    ) -> Result<Spanned<Self>, ElpParserError> {
+    pub fn from_cursor(cursor: &mut TokenCursor) -> Result<Spanned<Self>, ElpParserError> {
         let lexer_token = cursor.peek();
         if lexer_token.is_none() {
             return Err(ElpParserError::ScriptParsingError(ParsingError::Expected(
@@ -42,7 +35,7 @@ impl Expr {
         }
 
         let item = match &lexer_token.unwrap().token {
-            LexerTokens::Symbol(symbol) => Some(Self::from_symbol_tokens(symbol.clone(), cursor)?),
+            /*LexerTokens::Symbol(symbol) => Some(Self::from_symbol_tokens(symbol.clone(), cursor)?),
             LexerTokens::Identifier(ident) => Some(Self::from_ident_tokens(ident.clone(), cursor)?),
             LexerTokens::Number(num) => Some(Self::from_number_tokens(num.clone(), cursor)?),
             LexerTokens::String(string) => Some(Self::from_string_tokens(string.clone(), cursor)?),
@@ -50,7 +43,7 @@ impl Expr {
             LexerTokens::Error(err) => Some(Self::from_error(err.clone(), cursor)?),
             LexerTokens::Illegal(illegal) => {
                 Some(Self::from_illegal_tokens(illegal.clone(), cursor)?)
-            }
+            }*/
             _ => None,
         };
 
@@ -62,6 +55,7 @@ impl Expr {
         }
     }
 
+    /*
     pub fn from_symbol_tokens(
         symbol: LexerSymbol,
         cursor: &mut TokenCursor,
@@ -103,4 +97,5 @@ impl Expr {
         cursor: &mut TokenCursor,
     ) -> Result<Spanned<Self>, ElpParserError> {
     }
+    */
 }
