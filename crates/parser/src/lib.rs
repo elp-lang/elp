@@ -7,7 +7,6 @@ use std::{collections::HashMap, fmt::Debug};
 use crate::{
     ast::{declaration::Decl, expression::Expr},
     error::ElpParserError,
-    parser::ElpParserConfig,
 };
 
 pub mod ast;
@@ -77,7 +76,7 @@ impl ElpScript {
                 LexerTokens::Error(_) => todo!(),
                 LexerTokens::Illegal(_) => todo!(),
                 LexerTokens::SOI | LexerTokens::EOI => {
-                    cursor.next();
+                    cursor.next_token();
                 }
             };
         }
@@ -100,7 +99,7 @@ impl<'t> TokenCursor<'t> {
         }
     }
 
-    pub fn next(&mut self) -> Option<&SpannedToken> {
+    pub fn next_token(&mut self) -> Option<&SpannedToken> {
         self.position += 1;
 
         self.tokens.get(self.position)

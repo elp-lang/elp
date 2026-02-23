@@ -9,18 +9,25 @@ use crate::{
 pub enum Expr {
     Identifier {
         name: String,
-        span: SpannedToken,
+    },
+    Float32 {
+        value: i32,
+    },
+    Float64 {
+        value: i64,
+    },
+    Int32 {
+        value: i32,
     },
     Int64 {
         value: i64,
-        span: SpannedToken,
     },
     Import {
+        // the import path split on the period.
         module_path: Vec<String>,
 
         // names are stored as tuples, Import name -> Alias
         names: Vec<(String, Option<String>)>,
-        span: SpannedToken,
     },
     Symbol {},
 }
