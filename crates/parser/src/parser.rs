@@ -4,7 +4,7 @@ use std::{collections::HashMap, fs, path::PathBuf};
 
 use crate::{ElpScript, ElpScriptType, error::ElpParserError};
 
-#[derive(Debug, PartialEq, Default)]
+#[derive(Debug, PartialEq, Default, Clone)]
 pub struct ElpParserConfig {
     pub permissive_mode: bool,
 }
@@ -15,13 +15,13 @@ pub struct ElpParser {
     config: ElpParserConfig,
 
     // Scripts are .elp files.
-    pub scripts: HashMap<String, ElpScript>,
+    pub scripts: HashMap<PathBuf, ElpScript>,
 
     // view scripts are .velp files.
-    pub view_scripts: HashMap<String, ElpScript>,
+    pub view_scripts: HashMap<PathBuf, ElpScript>,
 
     // stylesheets are .selp files.
-    pub stylesheets: HashMap<String, ElpScript>,
+    pub stylesheets: HashMap<PathBuf, ElpScript>,
 }
 
 impl ElpParser {
@@ -33,13 +33,54 @@ impl ElpParser {
             panic!("There is no package at path {}", package_path.display());
         }
 
-        Self {
-            config,
+        let mut parsing_errors: Vec<ElpParserError> = vec![];
+
+        let mut instance = Self {
+            config: config.clone(),
             package_root: package_path,
             scripts: HashMap::new(),
             view_scripts: HashMap::new(),
             stylesheets: HashMap::new(),
+        };
+
+        let scripts_result = instance.parse_all_of_type(ElpScriptType::Script);
+        let views_result = instance.parse_all_of_type(ElpScriptType::ViewScript);
+        let stylesheets_result = instance.parse_all_of_type(ElpScriptType::Stylesheet);
+
+        match scripts_result {
+            Ok(scripts) => instance.scripts = scripts,
+            Err(e) => {
+                if config.permissive_mode {
+                    parsing_errors.push(e);
+                } else {
+                    panic!("{}", e)
+                }
+            }
         }
+
+        match views_result {
+            Ok(scripts) => instance.view_scripts = scripts,
+            Err(e) => {
+                if config.permissive_mode {
+                    parsing_errors.push(e);
+                } else {
+                    panic!("{}", e)
+                }
+            }
+        }
+
+        match stylesheets_result {
+            Ok(scripts) => instance.view_scripts = scripts,
+            Err(e) => {
+                if config.permissive_mode {
+                    parsing_errors.push(e);
+                } else {
+                    panic!("{}", e)
+                }
+            }
+        }
+
+        instance
     }
 
     fn parse_all_of_type(
@@ -114,5 +155,26 @@ impl ElpParser {
                 err.to_string(),
             )),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::parser::{ElpParser, ElpParserConfig};
+    use pretty_assertions::assert_eq;
+
+    const FIXTURES_PATH: &str = "./test_projects";
+
+    #[test]
+    fn test_empty() {
+        let project_path = format!("{}/zero_ret", FIXTURES_PATH);
+        println!("{}", project_path);
+        let project_config = ElpParserConfig::default();
+
+        let project = ElpParser::new(project_path.into(), project_config);
+
+        assert_eq!(project.scripts.len(), 2);
+        assert_eq!(project.view_scripts.len(), 0);
+        assert_eq!(project.stylesheets.len(), 0);
     }
 }
