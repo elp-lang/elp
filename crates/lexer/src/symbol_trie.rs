@@ -24,6 +24,11 @@ impl Default for SymbolTrie {
         trie.insert("!=", LexerSymbol::NotEqual);
         trie.insert("//", LexerSymbol::SingleLineComment);
         trie.insert(";", LexerSymbol::SemiColon);
+        trie.insert("{", LexerSymbol::LCurley);
+        trie.insert("}", LexerSymbol::RCurley);
+        trie.insert(".", LexerSymbol::Period);
+        trie.insert(",", LexerSymbol::Comma);
+
         Self { trie }
     }
 }

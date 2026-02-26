@@ -1,10 +1,12 @@
-use lexer::span::CodeSpan;
+use lexer::span::{CodeSpan, SpannedToken};
 use std::{fmt::Display, path::PathBuf};
 
 #[derive(Debug)]
 pub enum ParsingError {
     Unexpected(Option<CodeSpan>, String),
+    UnexpectedToken(SpannedToken),
     Expected(String),
+    ExpectedGot(Option<CodeSpan>, String),
 }
 
 impl std::error::Error for ParsingError {}
@@ -19,11 +21,28 @@ impl Display for ParsingError {
                     msg, span.line, span.display_column
                 )
             }
+            ParsingError::UnexpectedToken(token) => {
+                write!(
+                    f,
+                    "unexpected {} at line {}, column {}",
+                    token.token, token.span.line, token.span.display_column
+                )
+            }
             ParsingError::Unexpected(None, msg) => {
                 write!(f, "unexpected {}", msg)
             }
             ParsingError::Expected(msg) => {
                 write!(f, "expected {}", msg)
+            }
+            ParsingError::ExpectedGot(None, msg) => {
+                write!(f, "expected {}", msg)
+            }
+            ParsingError::ExpectedGot(Some(span), msg) => {
+                write!(
+                    f,
+                    "expected {} at line {}, column {}",
+                    msg, span.line, span.display_column
+                )
             }
         }
     }

@@ -1,5 +1,3 @@
-use lexer::span::SpannedToken;
-
 use crate::{
     Spanned, TokenCursor,
     error::{ElpParserError, ParsingError},

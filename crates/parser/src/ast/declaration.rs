@@ -1,6 +1,7 @@
-use std::task::Wake;
-
-use lexer::tokens::LexerTokens;
+use lexer::{
+    span::SpannedToken,
+    tokens::{LexerSymbol, LexerTokens},
+};
 
 use crate::{
     Spanned, TokenCursor,
@@ -14,7 +15,7 @@ pub enum Decl {
     Constant {},
     Import {
         var_names: Vec<String>,
-        from_module: String,
+        from_module: Vec<String>,
     },
     Object {},
     Interface {},
@@ -31,18 +32,16 @@ impl Decl {
             )));
         }
 
-        let decl = match &lexer_token_opt.unwrap().token {
+        let token = lexer_token_opt.unwrap();
+
+        let decl = match &token.token {
             LexerTokens::Identifier(ident) => decl_from_ident(ident.clone(), cursor),
             _ => Err(ElpParserError::ScriptParsingError(
-                ParsingError::Unexpected(None, "Unexpected token".into()),
+                ParsingError::UnexpectedToken(token.clone()),
             )),
         };
 
-        println!("{:#?}", decl);
-
-        Err(ElpParserError::ScriptParsingError(ParsingError::Expected(
-            "Finished too early".into(),
-        )))
+        decl
     }
 
     pub fn matches_ident(ident: &str) -> bool {
@@ -53,28 +52,126 @@ impl Decl {
     }
 }
 
-fn decl_from_ident(ident: String, cursor: &mut TokenCursor) -> Result<Decl, ElpParserError> {
+fn decl_from_ident(
+    ident: String,
+    cursor: &mut TokenCursor,
+) -> Result<Spanned<Decl>, ElpParserError> {
     match ident.as_str() {
         "import" => import_from_cursor(cursor),
+        // TODO get the span for this error
         _ => Err(ElpParserError::ScriptParsingError(
             ParsingError::Unexpected(None, "Unexpected token".into()),
         )),
     }
 }
 
-fn import_from_cursor(cursor: &mut TokenCursor) -> Result<Decl, ElpParserError> {
+fn import_from_cursor(cursor: &mut TokenCursor) -> Result<Spanned<Decl>, ElpParserError> {
     let mut var_names: Vec<String> = vec![];
-    let mut from_module: String = "".into();
+    let mut from_module: Vec<String> = vec![];
+    // Skip import and {, we want the names. Collect their spans though.
+    let mut spans = vec![
+        cursor.next_token().unwrap().span,
+        cursor.next_token().unwrap().span,
+    ];
 
-	// We need to skip the opening brace.
-	cursor.next_token()?;
+    // Get all the imported variable nmes.
+    while let Some(token) = cursor.peek() {
+        match &token.token {
+            LexerTokens::Identifier(ident) => {
+                var_names.push(ident.to_owned());
+                cursor.next_token();
+            }
+            LexerTokens::Symbol(symbol) => match symbol {
+                LexerSymbol::RCurley => {
+                    cursor.next_token();
+                    break;
+                }
+                LexerSymbol::Comma => {
+                    cursor.next_token();
+                    continue;
+                }
+                _ => {
+                    return Err(ElpParserError::ScriptParsingError(
+                        ParsingError::Unexpected(
+                            Some(token.span.clone()),
+                            format!("unexpected token: '{:#?}'", token.token),
+                        ),
+                    ));
+                }
+            },
+            _ => {
+                return Err(ElpParserError::ScriptParsingError(
+                    ParsingError::Unexpected(Some(token.span.clone()), "unexpexted token".into()),
+                ));
+            }
+        }
+    }
 
-	while let Some(token) = cursor.peek() {
-		match token.token {
-			LexerTokens::Identifier(ident) => var_names.push(ident),
-			LexerTokens::Symbol(symbol) =>
-		}
-	}
+    // Check we got the "from".
+    // rust made me collapse this into an ugly if instead of nested ones. bit odd for readability
+    // personally but whatever. warnings be gone!
+    if let Some(t) = cursor.next_token()
+        && let LexerTokens::Identifier(i) = &t.token
+        && i.as_str() != "from"
+    {
+        return Err(ElpParserError::ScriptParsingError(
+            ParsingError::ExpectedGot(Some(t.span.clone()), "expected from".into()),
+        ));
+    }
 
-    Ok(Decl::Import { var_names, from_module })
+    // We should be left with the import path now. ident.ident
+    while let Some(token) = cursor.peek() {
+        match &token.token {
+            LexerTokens::Identifier(ident) => {
+                from_module.push(ident.to_owned());
+                cursor.next_token();
+            }
+            LexerTokens::Symbol(symbol) => match symbol {
+                LexerSymbol::Period => {
+                    cursor.next_token();
+                    continue;
+                }
+                _ => break,
+            },
+            LexerTokens::EOI => break,
+            _ => {
+                return Err(ElpParserError::ScriptParsingError(
+                    ParsingError::Unexpected(
+                        Some(token.span.clone()),
+                        format!("unexpected token: '{:#?}'", token.token),
+                    ),
+                ));
+            }
+        }
+    }
+
+    Ok(Decl::Import {
+        var_names,
+        from_module,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use lexer::ElpLexer;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn test_import_decl() {
+        let expr = "import { test } from my.module";
+        let mut lexer = ElpLexer::new(expr);
+        let tokens = lexer.scan();
+        let mut cursor = TokenCursor::new(&tokens);
+
+        let import = import_from_cursor(&mut cursor);
+
+        assert_eq!(
+            import.unwrap(),
+            Decl::Import {
+                var_names: vec!["test".into()],
+                from_module: vec!["my".into(), "module".into()]
+            }
+        )
+    }
 }

@@ -12,7 +12,7 @@ pub struct CodeSpan {
     pub line: usize,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct SpannedToken {
     pub span: CodeSpan,
     pub token: LexerTokens,
