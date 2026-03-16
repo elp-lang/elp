@@ -71,7 +71,7 @@ impl ElpScript {
                 }
                 LexerTokens::Error(_) => todo!(),
                 LexerTokens::Illegal(_) => todo!(),
-                LexerTokens::SOI | LexerTokens::EOI => {
+                LexerTokens::Newline | LexerTokens::SOI | LexerTokens::EOI => {
                     cursor.next_token();
                 }
             };
