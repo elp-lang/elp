@@ -95,6 +95,10 @@ fn import_from_cursor(cursor: &mut TokenCursor) -> Result<Spanned<Decl>, ElpPars
                     ));
                 }
             },
+            LexerTokens::Newline => {
+                cursor.next_token();
+                continue;
+            }
             _ => {
                 return Err(ElpParserError::ScriptParsingError(
                     ParsingError::Unexpected(Some(token.span.clone()), "unexpexted token".into()),
@@ -129,7 +133,7 @@ fn import_from_cursor(cursor: &mut TokenCursor) -> Result<Spanned<Decl>, ElpPars
                 }
                 _ => break,
             },
-            LexerTokens::EOI => break,
+            LexerTokens::Newline | LexerTokens::EOI => break,
             _ => {
                 return Err(ElpParserError::ScriptParsingError(
                     ParsingError::Unexpected(
@@ -180,5 +184,74 @@ mod tests {
                 }
             }
         )
+    }
+
+    #[test]
+    fn test_import_decl_group() {
+        let expr = "import { test } from my.module
+import { test } from my.module
+import { test } from my.module";
+        let mut lexer = ElpLexer::new(expr);
+        let tokens = lexer.scan();
+        let mut cursor = TokenCursor::new(&tokens);
+
+        let import1 = import_from_cursor(&mut cursor);
+        assert_eq!(
+            import1.unwrap(),
+            Spanned {
+                span: CodeSpan {
+                    display_column: 1,
+                    start: 0,
+                    end: 30,
+                    line: 1
+                },
+                node: Decl::Import {
+                    var_names: vec!["test".into()],
+                    from_module: vec!["my".into(), "module".into()]
+                }
+            }
+        );
+
+        let nl1 = cursor.next_token().unwrap();
+        assert_eq!(nl1.token, LexerTokens::Newline);
+        assert_eq!(nl1.span, CodeSpan { start: 30, end: 31, line: 1, display_column: 31 });
+
+        let import2 = import_from_cursor(&mut cursor);
+        assert_eq!(
+            import2.unwrap(),
+            Spanned {
+                span: CodeSpan {
+                    display_column: 1,
+                    start: 31,
+                    end: 61,
+                    line: 2
+                },
+                node: Decl::Import {
+                    var_names: vec!["test".into()],
+                    from_module: vec!["my".into(), "module".into()]
+                }
+            }
+        );
+
+        let nl2 = cursor.next_token().unwrap();
+        assert_eq!(nl2.token, LexerTokens::Newline);
+        assert_eq!(nl2.span, CodeSpan { start: 61, end: 62, line: 2, display_column: 31 });
+
+        let import3 = import_from_cursor(&mut cursor);
+        assert_eq!(
+            import3.unwrap(),
+            Spanned {
+                span: CodeSpan {
+                    display_column: 1,
+                    start: 62,
+                    end: 92,
+                    line: 3
+                },
+                node: Decl::Import {
+                    var_names: vec!["test".into()],
+                    from_module: vec!["my".into(), "module".into()]
+                }
+            }
+        );
     }
 }
