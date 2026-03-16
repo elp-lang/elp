@@ -163,9 +163,25 @@ impl<'a> ElpLexer<'a> {
         while let Some(c) = self.peek().cloned() {
             let start = self.cursor;
 
-            if c.is_whitespace() {
+            if c == '\n' || c == '\r' {
+                let nl_line = self.line;
+                let nl_col = self.column;
                 let start_char = self.next().unwrap();
                 self.consume_newline(start_char);
+                tokens.push(SpannedToken {
+                    span: CodeSpan {
+                        start,
+                        end: self.cursor,
+                        line: nl_line,
+                        display_column: nl_col,
+                    },
+                    token: LexerTokens::Newline,
+                });
+                continue;
+            }
+
+            if c.is_whitespace() {
+                self.next();
                 continue;
             }
 
@@ -436,6 +452,7 @@ mod tests {
             vec![
                 s_token_test!(0, 0, 1, 1, LexerTokens::SOI),
                 s_token_test!(0, 5, 1, 1, LexerTokens::Identifier("hello".into())),
+                s_token_test!(5, 6, 1, 6, LexerTokens::Newline),
                 s_token_test!(6, 11, 2, 1, LexerTokens::Identifier("world".into())),
                 s_token_test!(11, 11, 2, 6, LexerTokens::EOI),
             ],
@@ -452,6 +469,7 @@ mod tests {
             vec![
                 s_token_test!(0, 0, 1, 1, LexerTokens::SOI),
                 s_token_test!(0, 5, 1, 1, LexerTokens::Identifier("hello".into())),
+                s_token_test!(5, 6, 1, 6, LexerTokens::Newline),
                 s_token_test!(6, 11, 2, 1, LexerTokens::Identifier("world".into())),
                 s_token_test!(11, 11, 2, 6, LexerTokens::EOI),
             ],
@@ -468,6 +486,7 @@ mod tests {
             vec![
                 s_token_test!(0, 0, 1, 1, LexerTokens::SOI),
                 s_token_test!(0, 5, 1, 1, LexerTokens::Identifier("hello".into())),
+                s_token_test!(5, 7, 1, 6, LexerTokens::Newline),
                 s_token_test!(7, 12, 2, 1, LexerTokens::Identifier("world".into())),
                 s_token_test!(12, 12, 2, 6, LexerTokens::EOI),
             ],
@@ -484,6 +503,8 @@ mod tests {
             vec![
                 s_token_test!(0, 0, 1, 1, LexerTokens::SOI),
                 s_token_test!(0, 1, 1, 1, LexerTokens::Identifier("a".into())),
+                s_token_test!(1, 2, 1, 2, LexerTokens::Newline),
+                s_token_test!(2, 3, 2, 1, LexerTokens::Newline),
                 s_token_test!(3, 4, 3, 1, LexerTokens::Identifier("b".into())),
                 s_token_test!(4, 4, 3, 2, LexerTokens::EOI),
             ],
@@ -500,7 +521,12 @@ mod tests {
             vec![
                 s_token_test!(0, 0, 1, 1, LexerTokens::SOI),
                 s_token_test!(0, 6, 1, 1, LexerTokens::Identifier("token1".into())),
+                s_token_test!(6, 7, 1, 7, LexerTokens::Newline),
+                s_token_test!(7, 9, 2, 1, LexerTokens::Newline),
                 s_token_test!(9, 15, 3, 1, LexerTokens::Identifier("token2".into())),
+                s_token_test!(15, 16, 3, 7, LexerTokens::Newline),
+                s_token_test!(16, 18, 4, 1, LexerTokens::Newline),
+                s_token_test!(18, 19, 5, 1, LexerTokens::Newline),
                 s_token_test!(20, 26, 6, 2, LexerTokens::Identifier("token3".into())),
                 s_token_test!(26, 26, 6, 8, LexerTokens::EOI),
             ],

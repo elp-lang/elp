@@ -35,6 +35,7 @@ pub enum LexerTokens {
     Symbol(LexerSymbol),
     Error(String),
     Illegal(String),
+    Newline,
     SOI,
     EOI,
 }
@@ -49,6 +50,7 @@ impl Display for LexerTokens {
             LexerTokens::Symbol(lexer_symbol) => write!(f, "{:?}", lexer_symbol),
             LexerTokens::Error(e) => write!(f, "{}", e),
             LexerTokens::Illegal(i) => write!(f, "{}", i),
+            LexerTokens::Newline => write!(f, "Newline"),
             LexerTokens::SOI => write!(f, "SOI"),
             LexerTokens::EOI => write!(f, "EOI"),
         }
