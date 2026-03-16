@@ -7,17 +7,13 @@ use std::{collections::HashMap, fmt::Debug};
 use crate::{
     ast::{declaration::Decl, expression::Expr},
     error::ElpParserError,
+    span::Spanned,
 };
 
 pub mod ast;
 pub mod error;
 pub mod parser;
-
-#[derive(Debug, PartialEq)]
-pub struct Spanned<T: Debug + PartialEq> {
-    pub node: T,
-    pub span: Vec<CodeSpan>,
-}
+pub mod span;
 
 #[derive(Debug, PartialEq)]
 pub enum ElpItem {
@@ -107,5 +103,14 @@ impl<'t> TokenCursor<'t> {
 
     pub fn peek(&self) -> Option<&SpannedToken> {
         self.tokens.get(self.position + 1)
+    }
+
+    fn consume_span_into(&mut self, spans: &mut Vec<CodeSpan>) -> Option<&SpannedToken> {
+        let token = self.next_token();
+
+        if let Some(tok) = token {
+            spans.push(tok.span.clone());
+        }
+        token
     }
 }

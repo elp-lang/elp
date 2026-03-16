@@ -1,11 +1,9 @@
-use lexer::{
-    span::SpannedToken,
-    tokens::{LexerSymbol, LexerTokens},
-};
+use lexer::tokens::{LexerSymbol, LexerTokens};
 
 use crate::{
     Spanned, TokenCursor,
     error::{ElpParserError, ParsingError},
+    span::spans_extent,
 };
 
 #[derive(Debug, PartialEq)]
@@ -34,14 +32,12 @@ impl Decl {
 
         let token = lexer_token_opt.unwrap();
 
-        let decl = match &token.token {
+        match &token.token {
             LexerTokens::Identifier(ident) => decl_from_ident(ident.clone(), cursor),
             _ => Err(ElpParserError::ScriptParsingError(
                 ParsingError::UnexpectedToken(token.clone()),
             )),
-        };
-
-        decl
+        }
     }
 
     pub fn matches_ident(ident: &str) -> bool {
@@ -70,8 +66,8 @@ fn import_from_cursor(cursor: &mut TokenCursor) -> Result<Spanned<Decl>, ElpPars
     let mut from_module: Vec<String> = vec![];
     // Skip import and {, we want the names. Collect their spans though.
     let mut spans = vec![
-        cursor.next_token().unwrap().span,
-        cursor.next_token().unwrap().span,
+        cursor.next_token().unwrap().span.clone(),
+        cursor.next_token().unwrap().span.clone(),
     ];
 
     // Get all the imported variable nmes.
@@ -79,15 +75,15 @@ fn import_from_cursor(cursor: &mut TokenCursor) -> Result<Spanned<Decl>, ElpPars
         match &token.token {
             LexerTokens::Identifier(ident) => {
                 var_names.push(ident.to_owned());
-                cursor.next_token();
+                cursor.consume_span_into(&mut spans);
             }
             LexerTokens::Symbol(symbol) => match symbol {
                 LexerSymbol::RCurley => {
-                    cursor.next_token();
+                    cursor.consume_span_into(&mut spans);
                     break;
                 }
                 LexerSymbol::Comma => {
-                    cursor.next_token();
+                    cursor.consume_span_into(&mut spans);
                     continue;
                 }
                 _ => {
@@ -124,11 +120,11 @@ fn import_from_cursor(cursor: &mut TokenCursor) -> Result<Spanned<Decl>, ElpPars
         match &token.token {
             LexerTokens::Identifier(ident) => {
                 from_module.push(ident.to_owned());
-                cursor.next_token();
+                cursor.consume_span_into(&mut spans);
             }
             LexerTokens::Symbol(symbol) => match symbol {
                 LexerSymbol::Period => {
-                    cursor.next_token();
+                    cursor.consume_span_into(&mut spans);
                     continue;
                 }
                 _ => break,
@@ -145,16 +141,19 @@ fn import_from_cursor(cursor: &mut TokenCursor) -> Result<Spanned<Decl>, ElpPars
         }
     }
 
-    Ok(Decl::Import {
-        var_names,
-        from_module,
+    Ok(Spanned {
+        node: Decl::Import {
+            var_names,
+            from_module,
+        },
+        span: spans_extent(spans)?,
     })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use lexer::ElpLexer;
+    use lexer::{ElpLexer, span::CodeSpan};
     use pretty_assertions::assert_eq;
 
     #[test]
@@ -168,9 +167,17 @@ mod tests {
 
         assert_eq!(
             import.unwrap(),
-            Decl::Import {
-                var_names: vec!["test".into()],
-                from_module: vec!["my".into(), "module".into()]
+            Spanned {
+                span: CodeSpan {
+                    display_column: 1,
+                    start: 0,
+                    end: 30,
+                    line: 1
+                },
+                node: Decl::Import {
+                    var_names: vec!["test".into()],
+                    from_module: vec!["my".into(), "module".into()]
+                }
             }
         )
     }
