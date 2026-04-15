@@ -1,4 +1,7 @@
-use lexer::tokens::{LexerSymbol, LexerTokens};
+use lexer::{
+    span::SpannedToken,
+    tokens::{LexerSymbol, LexerTokens},
+};
 
 use crate::{
     Spanned, TokenCursor,
@@ -6,14 +9,38 @@ use crate::{
     span::spans_extent,
 };
 
+#[derive(Debug, PartialEq, Clone)]
+pub struct ImportName {
+    pub name: String,
+    pub alias: Option<String>,
+}
+
+impl ImportName {
+    pub fn plain(name: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            alias: None,
+        }
+    }
+
+    pub fn aliased(name: impl Into<String>, alias: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            alias: Some(alias.into()),
+        }
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub enum Decl {
     Function {},
     Variable {},
     Constant {},
     Import {
-        var_names: Vec<String>,
+        var_names: Vec<ImportName>,
         from_module: Vec<String>,
+        // True for a leading-dot relative import like `from .components.paragraph`.
+        relative: bool,
     },
     Object {},
     Interface {},
@@ -61,94 +88,191 @@ fn decl_from_ident(
     }
 }
 
-fn import_from_cursor(cursor: &mut TokenCursor) -> Result<Spanned<Decl>, ElpParserError> {
-    let mut var_names: Vec<String> = vec![];
-    let mut from_module: Vec<String> = vec![];
-    // Skip import and {, we want the names. Collect their spans though.
-    let mut spans = vec![
-        cursor.next_token().unwrap().span.clone(),
-        cursor.next_token().unwrap().span.clone(),
-    ];
+fn unexpected(token: &SpannedToken, ctx: &str) -> ElpParserError {
+    ElpParserError::ScriptParsingError(ParsingError::Unexpected(
+        Some(token.span.clone()),
+        format!("{ctx}: '{:?}'", token.token),
+    ))
+}
 
-    // Get all the imported variable nmes.
+fn expected_got(token: Option<&SpannedToken>, msg: &str) -> ElpParserError {
+    ElpParserError::ScriptParsingError(ParsingError::ExpectedGot(
+        token.map(|t| t.span.clone()),
+        msg.to_string(),
+    ))
+}
+
+fn import_from_cursor(cursor: &mut TokenCursor) -> Result<Spanned<Decl>, ElpParserError> {
+    let mut var_names: Vec<ImportName> = vec![];
+    let mut from_module: Vec<String> = vec![];
+    let mut relative = false;
+
+    // Consume `import` and `{`, collecting their spans.
+    let import_tok = cursor
+        .next_token()
+        .ok_or_else(|| expected_got(None, "'import' keyword"))?;
+    let mut spans = vec![import_tok.span.clone()];
+
+    let brace_tok = cursor
+        .next_token()
+        .ok_or_else(|| expected_got(None, "'{' after import"))?;
+    if !matches!(&brace_tok.token, LexerTokens::Symbol(LexerSymbol::LCurley)) {
+        return Err(expected_got(Some(brace_tok), "'{' after import"));
+    }
+    spans.push(brace_tok.span.clone());
+
+    // Collect `{ Name (as Alias)?, ... }`.
+    // State: after a name we may see `as`, `,`, or `}`. After `,` or `{` we expect a name.
+    let mut closed = false;
+    let mut expect_name = true;
     while let Some(token) = cursor.peek() {
         match &token.token {
             LexerTokens::Identifier(ident) => {
-                var_names.push(ident.to_owned());
+                if !expect_name {
+                    return Err(unexpected(token, "expected ',' or '}' between imports"));
+                }
+                let name = ident.to_owned();
                 cursor.consume_span_into(&mut spans);
+
+                // Peek past any newlines to see if there's an `as` alias.
+                let mut alias: Option<String> = None;
+                while let Some(next) = cursor.peek() {
+                    match &next.token {
+                        LexerTokens::Newline => {
+                            cursor.consume_span_into(&mut spans);
+                            continue;
+                        }
+                        LexerTokens::Identifier(maybe_as) if maybe_as == "as" => {
+                            cursor.consume_span_into(&mut spans); // consume `as`
+                            // Skip newlines between `as` and the alias identifier.
+                            loop {
+                                match cursor.peek() {
+                                    Some(t) if matches!(t.token, LexerTokens::Newline) => {
+                                        cursor.consume_span_into(&mut spans);
+                                    }
+                                    _ => break,
+                                }
+                            }
+                            let alias_tok = cursor
+                                .peek()
+                                .ok_or_else(|| expected_got(None, "alias identifier after 'as'"))?;
+                            if let LexerTokens::Identifier(a) = &alias_tok.token {
+                                alias = Some(a.to_owned());
+                                cursor.consume_span_into(&mut spans);
+                            } else {
+                                return Err(expected_got(
+                                    Some(alias_tok),
+                                    "alias identifier after 'as'",
+                                ));
+                            }
+                        }
+                        _ => {}
+                    }
+                    break;
+                }
+
+                var_names.push(ImportName { name, alias });
+                expect_name = false;
             }
             LexerTokens::Symbol(symbol) => match symbol {
                 LexerSymbol::RCurley => {
                     cursor.consume_span_into(&mut spans);
+                    closed = true;
                     break;
                 }
                 LexerSymbol::Comma => {
+                    if expect_name {
+                        return Err(unexpected(token, "unexpected ','"));
+                    }
                     cursor.consume_span_into(&mut spans);
+                    expect_name = true;
                     continue;
                 }
                 _ => {
-                    return Err(ElpParserError::ScriptParsingError(
-                        ParsingError::Unexpected(
-                            Some(token.span.clone()),
-                            format!("unexpected token: '{:#?}'", token.token),
-                        ),
-                    ));
+                    return Err(unexpected(token, "unexpected token in import list"));
                 }
             },
             LexerTokens::Newline => {
-                cursor.next_token();
+                cursor.consume_span_into(&mut spans);
                 continue;
             }
+            LexerTokens::EOI => {
+                return Err(expected_got(Some(token), "'}' to close import list"));
+            }
             _ => {
-                return Err(ElpParserError::ScriptParsingError(
-                    ParsingError::Unexpected(Some(token.span.clone()), "unexpexted token".into()),
-                ));
+                return Err(unexpected(token, "unexpected token in import list"));
             }
         }
     }
 
-    // Check we got the "from".
-    // rust made me collapse this into an ugly if instead of nested ones. bit odd for readability
-    // personally but whatever. warnings be gone!
-    if let Some(t) = cursor.next_token()
-        && let LexerTokens::Identifier(i) = &t.token
-        && i.as_str() != "from"
-    {
-        return Err(ElpParserError::ScriptParsingError(
-            ParsingError::ExpectedGot(Some(t.span.clone()), "expected from".into()),
-        ));
+    if !closed {
+        return Err(expected_got(None, "'}' to close import list"));
     }
 
-    // We should be left with the import path now. ident.ident
+    // Skip any newlines between `}` and `from`.
+    while let Some(t) = cursor.peek() {
+        if matches!(t.token, LexerTokens::Newline) {
+            cursor.consume_span_into(&mut spans);
+        } else {
+            break;
+        }
+    }
+
+    // Expect the `from` keyword.
+    let from_tok = cursor
+        .next_token()
+        .ok_or_else(|| expected_got(None, "'from' after import list"))?;
+    match &from_tok.token {
+        LexerTokens::Identifier(i) if i == "from" => {
+            spans.push(from_tok.span.clone());
+        }
+        _ => {
+            return Err(expected_got(Some(from_tok), "'from' after import list"));
+        }
+    }
+
+    // Optional leading `.` marks a relative import.
+    if let Some(t) = cursor.peek()
+        && matches!(t.token, LexerTokens::Symbol(LexerSymbol::Period))
+    {
+        relative = true;
+        cursor.consume_span_into(&mut spans);
+    }
+
+    // Collect the module path: ident (`.` ident)*
+    let mut expect_segment = true;
     while let Some(token) = cursor.peek() {
         match &token.token {
             LexerTokens::Identifier(ident) => {
+                if !expect_segment {
+                    break;
+                }
                 from_module.push(ident.to_owned());
                 cursor.consume_span_into(&mut spans);
+                expect_segment = false;
             }
-            LexerTokens::Symbol(symbol) => match symbol {
-                LexerSymbol::Period => {
-                    cursor.consume_span_into(&mut spans);
-                    continue;
+            LexerTokens::Symbol(LexerSymbol::Period) => {
+                if expect_segment {
+                    return Err(unexpected(token, "unexpected '.' in module path"));
                 }
-                _ => break,
-            },
-            LexerTokens::Newline | LexerTokens::EOI => break,
-            _ => {
-                return Err(ElpParserError::ScriptParsingError(
-                    ParsingError::Unexpected(
-                        Some(token.span.clone()),
-                        format!("unexpected token: '{:#?}'", token.token),
-                    ),
-                ));
+                cursor.consume_span_into(&mut spans);
+                expect_segment = true;
+                continue;
             }
+            LexerTokens::Newline | LexerTokens::EOI => break,
+            _ => break,
         }
+    }
+
+    if from_module.is_empty() {
+        return Err(expected_got(None, "module path after 'from'"));
     }
 
     Ok(Spanned {
         node: Decl::Import {
             var_names,
             from_module,
+            relative,
         },
         span: spans_extent(spans)?,
     })
@@ -157,101 +281,214 @@ fn import_from_cursor(cursor: &mut TokenCursor) -> Result<Spanned<Decl>, ElpPars
 #[cfg(test)]
 mod tests {
     use super::*;
-    use lexer::{ElpLexer, span::CodeSpan};
+    use lexer::ElpLexer;
     use pretty_assertions::assert_eq;
 
-    #[test]
-    fn test_import_decl() {
-        let expr = "import { test } from my.module";
-        let mut lexer = ElpLexer::new(expr);
+    fn parse_import(src: &str) -> Result<Spanned<Decl>, ElpParserError> {
+        let mut lexer = ElpLexer::new(src);
         let tokens = lexer.scan();
         let mut cursor = TokenCursor::new(&tokens);
+        import_from_cursor(&mut cursor)
+    }
 
-        let import = import_from_cursor(&mut cursor);
-
-        assert_eq!(
-            import.unwrap(),
-            Spanned {
-                span: CodeSpan {
-                    display_column: 1,
-                    start: 0,
-                    end: 30,
-                    line: 1
-                },
-                node: Decl::Import {
-                    var_names: vec!["test".into()],
-                    from_module: vec!["my".into(), "module".into()]
-                }
-            }
-        )
+    fn unwrap_import(decl: Decl) -> (Vec<ImportName>, Vec<String>, bool) {
+        match decl {
+            Decl::Import {
+                var_names,
+                from_module,
+                relative,
+            } => (var_names, from_module, relative),
+            other => panic!("expected Decl::Import, got {:?}", other),
+        }
     }
 
     #[test]
-    fn test_import_decl_group() {
-        let expr = "import { test } from my.module
-import { test } from my.module
-import { test } from my.module";
-        let mut lexer = ElpLexer::new(expr);
+    fn single_named_import() {
+        let result = parse_import("import { test } from my.module").unwrap();
+        let (names, path, relative) = unwrap_import(result.node);
+        assert_eq!(names, vec![ImportName::plain("test")]);
+        assert_eq!(path, vec!["my".to_string(), "module".to_string()]);
+        assert!(!relative);
+        assert_eq!(result.span.start, 0);
+        assert_eq!(result.span.end, 30);
+        assert_eq!(result.span.line, 1);
+    }
+
+    #[test]
+    fn multiple_named_imports() {
+        let result = parse_import("import { User, Message, Actions } from my.module").unwrap();
+        let (names, path, relative) = unwrap_import(result.node);
+        assert_eq!(
+            names,
+            vec![
+                ImportName::plain("User"),
+                ImportName::plain("Message"),
+                ImportName::plain("Actions"),
+            ]
+        );
+        assert_eq!(path, vec!["my".to_string(), "module".to_string()]);
+        assert!(!relative);
+    }
+
+    #[test]
+    fn import_with_alias() {
+        let result = parse_import("import { Message as MessageView } from my.module").unwrap();
+        let (names, _, _) = unwrap_import(result.node);
+        assert_eq!(names, vec![ImportName::aliased("Message", "MessageView")]);
+    }
+
+    #[test]
+    fn import_mixed_aliases() {
+        let result =
+            parse_import("import { User, Message as MessageView, Actions } from my.module")
+                .unwrap();
+        let (names, _, _) = unwrap_import(result.node);
+        assert_eq!(
+            names,
+            vec![
+                ImportName::plain("User"),
+                ImportName::aliased("Message", "MessageView"),
+                ImportName::plain("Actions"),
+            ]
+        );
+    }
+
+    #[test]
+    fn multiline_import_block() {
+        let src = "import {
+    OBJC,
+    OBJC_Obj,
+    Error,
+    Either
+} from elp.types";
+        let result = parse_import(src).unwrap();
+        let (names, path, _) = unwrap_import(result.node);
+        assert_eq!(
+            names,
+            vec![
+                ImportName::plain("OBJC"),
+                ImportName::plain("OBJC_Obj"),
+                ImportName::plain("Error"),
+                ImportName::plain("Either"),
+            ]
+        );
+        assert_eq!(path, vec!["elp".to_string(), "types".to_string()]);
+    }
+
+    #[test]
+    fn relative_import_leading_dot() {
+        let result = parse_import("import { Paragraph } from .components.paragraph").unwrap();
+        let (names, path, relative) = unwrap_import(result.node);
+        assert_eq!(names, vec![ImportName::plain("Paragraph")]);
+        assert_eq!(
+            path,
+            vec!["components".to_string(), "paragraph".to_string()]
+        );
+        assert!(relative);
+    }
+
+    #[test]
+    fn deep_dotted_module_path() {
+        let result = parse_import("import { Text } from elp.app.ui.elements.Text").unwrap();
+        let (_, path, relative) = unwrap_import(result.node);
+        assert_eq!(
+            path,
+            vec![
+                "elp".to_string(),
+                "app".to_string(),
+                "ui".to_string(),
+                "elements".to_string(),
+                "Text".to_string(),
+            ]
+        );
+        assert!(!relative);
+    }
+
+    #[test]
+    fn multiple_imports_with_newlines_between() {
+        let src = "import { a } from x.y
+import { b } from x.y
+import { c } from x.y";
+        let mut lexer = ElpLexer::new(src);
         let tokens = lexer.scan();
         let mut cursor = TokenCursor::new(&tokens);
 
-        let import1 = import_from_cursor(&mut cursor);
-        assert_eq!(
-            import1.unwrap(),
-            Spanned {
-                span: CodeSpan {
-                    display_column: 1,
-                    start: 0,
-                    end: 30,
-                    line: 1
-                },
-                node: Decl::Import {
-                    var_names: vec!["test".into()],
-                    from_module: vec!["my".into(), "module".into()]
+        for expected in ["a", "b", "c"] {
+            let result = import_from_cursor(&mut cursor).unwrap();
+            let (names, path, _) = unwrap_import(result.node);
+            assert_eq!(names, vec![ImportName::plain(expected)]);
+            assert_eq!(path, vec!["x".to_string(), "y".to_string()]);
+
+            // Advance past the trailing newline, if any.
+            if let Some(tok) = cursor.peek() {
+                if matches!(tok.token, LexerTokens::Newline) {
+                    cursor.next_token();
                 }
             }
+        }
+    }
+
+    #[test]
+    fn top_level_dispatches_to_import() {
+        let mut lexer = ElpLexer::new("import { a } from x.y");
+        let tokens = lexer.scan();
+        let mut cursor = TokenCursor::new(&tokens);
+        let result = Decl::from_cursor(&mut cursor).unwrap();
+        let (names, path, _) = unwrap_import(result.node);
+        assert_eq!(names, vec![ImportName::plain("a")]);
+        assert_eq!(path, vec!["x".to_string(), "y".to_string()]);
+    }
+
+    #[test]
+    fn error_missing_from() {
+        let err = parse_import("import { a } my.module").unwrap_err();
+        let msg = format!("{}", err);
+        assert!(msg.contains("from"), "unexpected error: {msg}");
+    }
+
+    #[test]
+    fn error_missing_module_path() {
+        let err = parse_import("import { a } from").unwrap_err();
+        let msg = format!("{}", err);
+        assert!(msg.contains("module path"), "unexpected error: {msg}");
+    }
+
+    #[test]
+    fn error_unclosed_brace() {
+        let err = parse_import("import { a, b").unwrap_err();
+        let msg = format!("{}", err);
+        assert!(msg.contains("'}'"), "unexpected error: {msg}");
+    }
+
+    #[test]
+    fn error_leading_comma() {
+        let err = parse_import("import { , a } from x.y").unwrap_err();
+        let msg = format!("{}", err);
+        assert!(msg.contains(","), "unexpected error: {msg}");
+    }
+
+    #[test]
+    fn error_two_names_without_comma() {
+        let err = parse_import("import { a b } from x.y").unwrap_err();
+        let msg = format!("{}", err);
+        assert!(
+            msg.contains("','") || msg.contains("}"),
+            "unexpected error: {msg}"
         );
+    }
 
-        let nl1 = cursor.next_token().unwrap();
-        assert_eq!(nl1.token, LexerTokens::Newline);
-        assert_eq!(nl1.span, CodeSpan { start: 30, end: 31, line: 1, display_column: 31 });
+    #[test]
+    fn error_missing_alias_after_as() {
+        let err = parse_import("import { a as } from x.y").unwrap_err();
+        let msg = format!("{}", err);
+        assert!(msg.contains("alias"), "unexpected error: {msg}");
+    }
 
-        let import2 = import_from_cursor(&mut cursor);
-        assert_eq!(
-            import2.unwrap(),
-            Spanned {
-                span: CodeSpan {
-                    display_column: 1,
-                    start: 31,
-                    end: 61,
-                    line: 2
-                },
-                node: Decl::Import {
-                    var_names: vec!["test".into()],
-                    from_module: vec!["my".into(), "module".into()]
-                }
-            }
-        );
-
-        let nl2 = cursor.next_token().unwrap();
-        assert_eq!(nl2.token, LexerTokens::Newline);
-        assert_eq!(nl2.span, CodeSpan { start: 61, end: 62, line: 2, display_column: 31 });
-
-        let import3 = import_from_cursor(&mut cursor);
-        assert_eq!(
-            import3.unwrap(),
-            Spanned {
-                span: CodeSpan {
-                    display_column: 1,
-                    start: 62,
-                    end: 92,
-                    line: 3
-                },
-                node: Decl::Import {
-                    var_names: vec!["test".into()],
-                    from_module: vec!["my".into(), "module".into()]
-                }
-            }
-        );
+    #[test]
+    fn trailing_comma_allowed() {
+        // Permissive behaviour: `{ a, b, }` parses as two names.
+        let result = parse_import("import { a, b, } from x.y").unwrap();
+        let (names, _, _) = unwrap_import(result.node);
+        assert_eq!(names, vec![ImportName::plain("a"), ImportName::plain("b")]);
     }
 }
