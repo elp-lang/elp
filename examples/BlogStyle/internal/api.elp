@@ -49,7 +49,7 @@ fn ApiError.new(type ApiErrorType) -> Self {
 
 // Define methods on the object. self here denotes that it is an instance method,
 // the .toString method is a requirement of the Error interface. Note that you can't create nested functions and instead should consider redesigning your API or using composition techniques.
-fn ApiError.toString(&self) -> String {
+fn ApiError.toString(&self) -> string {
     return self.message
 }
 
@@ -62,26 +62,26 @@ fn ApiError.from(err HttpError) -> Self {
 	}
 }
 
-// This function returns a tuple called Either (Content, Error). because there are two potential Error implementations in the return tree we just say this can return an error and atcall site we can match on it's type to work out whether it was an ApiError or a SerializationError.
-export async fn getBlogPost(id string) -> Either<Content, Error> {
+// This function returns an Either<Content, Error>. Because there are two potential Error implementations in the return tree we just say this can return an Error, and at the call site we can match on its type to work out whether it was an ApiError or a SerializationError.
+export fn getBlogPost(id string) -> Either<Content, Error> {
     return match Http.get<Content>("https://jsonplaceholder.typicode.com/posts/{id}") {
-		Error(err) -> nil, ApiError.from(err),
-		Response(postJSON) -> Content.fromJSON(postJSON), nil
+		Err(err) -> Err(ApiError.from(err))
+		Ok(postJSON) -> Ok(Content.fromJSON(postJSON))
 	}
 }
 
-export async fn createBlogPost(title string, body string) -> Either<Content, Error> {
-	const body HttpBody<Content> = .new(.new(
+export fn createBlogPost(title string, body string) -> Either<Content, Error> {
+	const payload HttpBody<Content> = .new(.new(
 		title,
 		body
 	))
 
-    return match Http.post<Content>("https://jsonplaceholder.typicode.com/posts/", { contentType: JSON, body) {
-		Error(err) -> nil, ApiError.from(err),
-		Response(postJSON) -> {
+    return match Http.post<Content>("https://jsonplaceholder.typicode.com/posts/", { contentType = JSON, body = payload }) {
+		Err(err) -> Err(ApiError.from(err))
+		Ok(postJSON) -> {
 			const created Content = .fromJSON(postJSON)
 
-			return created, nil
+			return Ok(created)
 		}
 	}
 }

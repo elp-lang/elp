@@ -3,13 +3,13 @@ import { getAboutContent } from .internal.api
 import { Paragraph } from .components.paragraph
 
 @Screen
-export fn About() -> Component {
+export fn About -> Component {
     const aboutContent, err = getAboutContent()
 
 	return Column {
-		if err not None {
+		if err != nil {
 			Row(class = "error-row") {
-				Text(error.asString())
+				Text(err.asString())
 			}
 		} else {
 			Row {

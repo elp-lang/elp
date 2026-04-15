@@ -1,8 +1,8 @@
-import { Column } from "elp/layout"
-import { Text, Component } from "elp/components"
-import { User, UserMessage } from "$types/chat"
+import { Column } from elp.layout
+import { Text, Component } from elp.components
+import { User, UserMessage } from .types.chat
 
-export component Message(from User, body string) {
+export fn Message(from User, body string) -> Component {
 	return match from {
 		None -> Column(class="from-me") {
 			Slot

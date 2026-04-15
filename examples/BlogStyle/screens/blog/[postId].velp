@@ -9,13 +9,13 @@ object BlogPostParams {
 }
 
 @Screen<BlogPostParams>
-export fn BlogPost({ params }) {
-	const post, error = getBlogPost(params.postId)
+export fn BlogPost({ params }) -> Component {
+	const post, err = getBlogPost(params.postId)
 
     Column {
-        if error not None {
+        if err != nil {
             Row(class = "error-row") {
-                Text(error.asString())
+                Text(err.asString())
             }
         } else {
             Row {

@@ -5,8 +5,8 @@ export object User {
 }
 
 export object Message {
-	body const string
-	user const User
+	body string
+	user User
 	reactions [string] = []
 }
 

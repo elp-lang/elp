@@ -7,12 +7,12 @@ import { Paragraph } from .components.paragraph
 
 @Screen
 export fn BlogListing -> Component {
-	const result, loading = getBlogContent()
+	const posts, loading, err = getBlogContent()
 
 	Column(lazy = true) {
-		if error not None {
+		if err != nil {
 			Row(class = "error-row") {
-				Text(error.asString())
+				Text(err.asString())
 			}
 		}
 

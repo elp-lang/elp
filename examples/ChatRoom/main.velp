@@ -32,29 +32,17 @@ pure fn AppReducer(const state ChatAppState, const action AppActions) -> ChatApp
 		.LOADING(loading) -> state.copyWith(loading)
 		.NEW_MESSAGE(userName, body) -> state.copyWith(messages = state.messages.copy().append(
 			Message(
-				user = User(displayName = name),
+				user = User(displayName = userName),
 				body
 			)
 		))
 	}
 }
 
-// Async function definitions allow for calls to other async operations, waiting, pausing or not of said operations.
-// This async function doesn't require any specific async queue to be specified but an async function may specify the
-// _type_ of asynchronous it needs to operate in. I.E it needs to work in a background thread (IO operations, http requests)
-// and others might specify they need to join a thread-pool. ThreadQueue is the default queue for an async function.
-// the function header below is compiled to
-// ```elp
-// async<ThreadQueue> fn AppMiddleware(constant state ChatAppState, action AppActions) -> void
-// ```
-// and would generally be called like this (maybe not like this but spitballing...)
-// ```elp
-// ThreadQueue.Background.yield(
-//		AppMiddleware(currentState, loginAction("Elp Me"))
-// )
-// ```
+// Middleware runs side-effects driven by actions. Long-running work is handed off to
+// a coroutine (Go-style) rather than marked async — the runtime owns the coroutine's lifetime.
 // Note that this match ISN'T exhaustive and we DO have a catch-all, noted by the unnamed variable _.
-async fn AppMiddleware(const state ChatAppState, action AppActions, dispatch StateDispatch<AppActions>) {
+fn AppMiddleware(const state ChatAppState, action AppActions, dispatch StateDispatch<AppActions>) {
 	return match action {
 		.LOG_IN(name) -> {
 			dispatch(.LOADING(true))
@@ -66,7 +54,7 @@ async fn AppMiddleware(const state ChatAppState, action AppActions, dispatch Sta
 			// actually be truncated as the type on the left projects the values on the right.
 			const body HttpRequestBody<object{name string}> = .new(object{name})
 
-			return match Http.post<object{success bool}, Error>({body}).await {
+			return match Http.post<object{success bool}, Error>({body}) {
 				Ok(res) -> {
 					dispatch(.LOADING(false))
 					dispatch(.AUTHENTICATED_ISH(res.success))
@@ -85,18 +73,18 @@ export object ChatAppState implements Default {
 }
 
 fn ChatAppState.default -> Self {
-	return Self(
+	return Self {
 		messages = [],
 		members = [],
-		loggedIn = false
-	)
+		loggedIn = None
+	}
 }
 
 @App<ChatApp, @Reducer<AppReducer, AppMiddleware>>
 export fn ChatApp({state, dispatch}) {
 	var name string
 
-	if state.loggedIn not Empty {
+	if state.loggedIn != None {
 		for message in state.messages {
 			MessageView(message)
 		}
