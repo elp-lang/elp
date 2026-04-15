@@ -17,7 +17,7 @@ export fn Home -> Element {
             }
         }
         Row {
-            Text("hello {name}")
+            Text("hello {NAME}")
             Link(to = "about") {
                 Text("Read about Ellipsis")
             }
