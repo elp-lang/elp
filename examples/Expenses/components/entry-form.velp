@@ -1,0 +1,70 @@
+import { Column, Row } from elp.layout
+import { Form, TextInput, Picker, Button } from elp.forms
+import { Text } from elp.components
+import { Expense, Category, Money } from .types.expense
+import { Styles } from .styles
+
+// Parsing "12.34" into integer cents. A view-layer concern only because the
+// platform gives us a string; the arithmetic is the same integer discipline
+// the rest of the package uses.
+pure fn parseAmount(input string) -> Optional<Money> {
+	const parts = input.trim().split(".")
+
+	return match parts.length() {
+		1 -> match parts[0].toInt() {
+			nil    -> nil
+			whole  -> Money { cents = whole * 100 }
+		}
+		2 -> match (parts[0].toInt(), parts[1].padEnd(2, "0").toInt()) {
+			(nil, _)           -> nil
+			(_, nil)           -> nil
+			(whole, fraction)  -> Money { cents = whole * 100 + fraction }
+		}
+		_ -> nil
+	}
+}
+
+export component EntryForm(draft Binding<string>) {
+	export *fn onAdd(expense Expense)
+
+	var note string
+	var category = Category.OTHER
+	var err Optional<string> = nil
+
+	fn handleSubmit() {
+		return match parseAmount(draft) {
+			nil -> err = "Enter an amount like 12.34"
+			amount -> {
+				if note.trim().length() == 0 {
+					err = "Give it a name"
+					return nil
+				}
+
+				onAdd(Expense { note, amount, category })
+
+				note = ""
+				draft = ""
+				err = nil
+			}
+		}
+	}
+
+	return Form(onSubmit = handleSubmit, style = Styles.composer) {
+		if err != nil {
+			Text(err)
+		}
+
+		Row(style = Styles.row) {
+			TextInput(&note, placeholder = "What was it?")
+			TextInput(&draft, placeholder = "0.00", keyboard = .Decimal)
+		}
+
+		Picker(&category, options = Category.all(), label = fn (c) { c.label() })
+
+		Button(type = .FORM_SUBMIT) {
+			Text("Add")
+		}
+	}
+}
+
+// vim: ft=kotlin

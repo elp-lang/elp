@@ -1,0 +1,40 @@
+import { Error, Codec, UUID } from elp.types
+import { CodeGen } from elp.macros
+
+@CodeGen(Codec<JSON>)
+export object Link {
+	const code      string `json: "code"`,
+	const target    string `json: "target"`,
+	var   hits      = 0    `json: "hits"`,
+}
+
+export enum StoreError {
+	NOT_FOUND { code string },
+	CODE_TAKEN { code string },
+	BAD_TARGET { url string },
+}
+
+StoreError implements Error
+
+fn StoreError.toString(&self) -> string {
+	return match self {
+		.NOT_FOUND(code)   -> "no link with code {code}"
+		.CODE_TAKEN(code)  -> "code {code} is already in use"
+		.BAD_TARGET(url)   -> "{url} is not an absolute http(s) url"
+	}
+}
+
+// A code is six url-safe characters derived from a fresh uuid.
+export fn Link.generateCode() -> string {
+	return UUID.v4().toString().replace("-", "").slice(0, 6)
+}
+
+export fn Link.validate(target string) -> Either<string, Error> {
+	if target.startsWith("http://") || target.startsWith("https://") {
+		return Ok(target)
+	}
+
+	throw StoreError.BAD_TARGET(target)
+}
+
+// vim: ft=kotlin

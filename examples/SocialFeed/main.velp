@@ -1,0 +1,13 @@
+import { App, Surface, Content } from elp.app
+import { Styles } from .styles
+
+@App
+export fn SocialFeed -> App {
+	return App(globalStyles = Styles()) {
+		Surface {
+			Content()
+		}
+	}
+}
+
+// vim: ft=kotlin

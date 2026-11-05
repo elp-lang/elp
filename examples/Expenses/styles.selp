@@ -1,0 +1,39 @@
+import { FontFamily } from elp.ui.font
+
+// A `stylesheet { }` block evaluates to a StyleSheet, which is what the
+// components below pass around via `style =`.
+export stylesheet {
+	screen {
+		padding = 16,
+		gap = 12,
+	}
+
+	totalRow {
+		gap = 8,
+		alignItems = .Center,
+	}
+
+	bar {
+		height = 8,
+		radius = 4,
+		background = .Accent,
+	}
+
+	barTrack {
+		height = 8,
+		radius = 4,
+		background = .Muted,
+	}
+
+	row {
+		gap = 8,
+		paddingVertical = 6,
+	}
+
+	composer {
+		gap = 8,
+		paddingTop = 12,
+	}
+}
+
+// vim: ft=css

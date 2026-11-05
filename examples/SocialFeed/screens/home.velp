@@ -1,0 +1,67 @@
+import { Screen } from elp.app
+import { Column, Row } from elp.layout
+import { Text, Loading } from elp.components
+
+import { getFeed } from .internal.api
+import { Composer } from .components.composer
+import { FeedItem } from .components.feeditem
+import { Post } from .types.post
+
+@Screen
+export fn Feed -> Component {
+	var posts [Post] = []
+	var loading = true
+	var err Error
+
+	fn loadFeed() {
+		loading = true
+
+		return match getFeed() {
+			Ok(fetched) -> {
+				loading = false
+				posts = fetched
+			}
+			Err(apiErr) -> {
+				loading = false
+				err = apiErr
+			}
+		}
+	}
+
+	// The body runs once at mount, on the cell thread. Calling loadFeed()
+	// directly would block that thread for the whole fetch and settle
+	// `loading` back to false before the first render, making the spinner
+	// below unreachable. `effect` is the component-scoped coroutine, so a
+	// blocking call belongs in one.
+	effect {
+		loadFeed()
+	}
+
+	fn handlePosted(post Post) {
+		posts = posts.copy().prepend(post)
+	}
+
+	return Column(lazy = true) {
+		Composer(onPosted = handlePosted)
+
+		if err != nil {
+			Row(class = "error-row") {
+				Text(err.asString())
+			}
+		}
+
+		if loading {
+			Row(animationOut = .Fade) {
+				Loading(spin = true)
+			}
+		} else {
+			for post in posts {
+				Row(animationIn = .Fade) {
+					FeedItem(post)
+				}
+			}
+		}
+	}
+}
+
+// vim: ft=kotlin

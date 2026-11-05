@@ -1,0 +1,76 @@
+import { Error, UUID, Codec } from elp.types
+import { CodeGen } from elp.macros
+
+// Money is integer minor units throughout. Floating point currency is a bug
+// waiting to happen, and it keeps the arithmetic in this package honest.
+export object Money {
+	const cents int,
+}
+
+Money implements Copy + Add + Equatable + Comparable
+
+export fn Money.zero() -> Self {
+	return Self { cents = 0 }
+}
+
+// `+` on Money is this conformance. Before operators were interface-driven
+// this had to be a `plus` method, and every total in the package read as a
+// chain of calls.
+export fn Money.add(&self, other &Self) -> Self {
+	return Self { cents = self.cents + other.cents }
+}
+
+export fn Money.equals(&self, other &Self) -> bool {
+	return self.cents == other.cents
+}
+
+// `<`, `<=`, `>` and `>=` on Money all route through this one method, so
+// there is no way to write a Money where `a < b` and `b >= a` disagree.
+export fn Money.compareTo(&self, other &Self) -> Ordering {
+	if self.cents < other.cents {
+		return .LESS
+	}
+
+	if self.cents > other.cents {
+		return .GREATER
+	}
+
+	return .EQUAL
+}
+
+// Integer division and modulo, formatted to two places. `padStart` is doing
+// the work that a format-string would do in most languages.
+export fn Money.toString(&self) -> string {
+	const whole = self.cents / 100
+	const part  = self.cents % 100
+
+	return "{whole}.{part.toString().padStart(2, "0")}"
+}
+
+export enum Category {
+	FOOD,
+	TRANSPORT,
+	HOUSING,
+	FUN,
+	OTHER,
+}
+
+export fn Category.label(&self) -> string {
+	return match self {
+		.FOOD      -> "Food"
+		.TRANSPORT -> "Transport"
+		.HOUSING   -> "Housing"
+		.FUN       -> "Fun"
+		.OTHER     -> "Other"
+	}
+}
+
+@CodeGen(Codec<JSON>)
+export object Expense {
+	const id       = UUID.v4() `json: "id"`,
+	const note     string      `json: "note"`,
+	const amount   Money       `json: "amount"`,
+	const category Category    `json: "category"`,
+}
+
+// vim: ft=kotlin

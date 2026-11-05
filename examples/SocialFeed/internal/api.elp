@@ -1,0 +1,62 @@
+import { Error, Either, From, Codec } from elp.types
+import { CodeGen } from elp.macros
+import { Http, HttpError } from elp.net
+import { Post } from .types.post
+
+@CodeGen(ToJSON, Default)
+export enum ApiErrorType {
+	SERVER { message string },
+	USER { message string },
+	@default
+	UNKNOWN,
+}
+
+@CodeGen(ToJSON, Default)
+export object ApiError {
+	type ApiErrorType
+	message string
+}
+
+ApiError implements Error + From<HttpError>
+
+fn ApiError.new(type ApiErrorType) -> Self {
+	return Self { type }
+}
+
+fn ApiError.toString(&self) -> string {
+	return self.message
+}
+
+fn ApiError.from(value HttpError) -> Self {
+	return match value.responseCode {
+		400..499 -> .USER(value.toString()),
+		500..599 -> .SERVER(value.toString()),
+		_ -> .new(.UNKNOWN),
+	}
+}
+
+// Returns the most recent posts in the feed.
+export fn getFeed() -> Either<[Post], Error> {
+	return match Http.get<[Post]>("https://jsonplaceholder.typicode.com/posts") {
+		Err(err) -> Err(ApiError.from(err))
+		Ok(postsJSON) -> Ok(Post.fromJSON(postsJSON))
+	}
+}
+
+// Creates a new post. imagePath is the on-device path of an image the user
+// picked with ImagePicker, or nil for a text-only post. The request is sent
+// as multipart so the image bytes travel alongside the text body.
+export fn createPost(body string, imagePath Optional<string>) -> Either<Post, Error> {
+	const payload HttpBody<object{body string, image Optional<string>}> = .new(object{body, image = imagePath})
+
+	return match Http.post<Post>("https://jsonplaceholder.typicode.com/posts", { contentType = .Multipart, body = payload }) {
+		Err(err) -> Err(ApiError.from(err))
+		Ok(postJSON) -> {
+			const created Post = .fromJSON(postJSON)
+
+			return Ok(created)
+		}
+	}
+}
+
+// vim: ft=kotlin

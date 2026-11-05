@@ -4,7 +4,7 @@ import { User, UserMessage } from .types.chat
 
 export fn Message(from User, body string) -> Component {
 	return match from {
-		None -> Column(class="from-me") {
+		nil -> Column(class="from-me") {
 			Slot
 		}
 		Some(user) -> Column(class="to-me") {

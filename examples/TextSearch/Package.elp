@@ -1,0 +1,10 @@
+import { Package, Version } from elp.package
+
+@Package(
+	name = "text_search",
+	version = .new(0, 1, 0, 0),
+	entry = "search.elp",
+	kind = .Library,
+)
+
+// vim: ft=kotlin
