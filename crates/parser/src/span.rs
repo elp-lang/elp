@@ -40,6 +40,15 @@ mod tests {
     use pretty_assertions::assert_eq;
 
     #[test]
+    fn test_spans_extent_empty_errors_cleanly() {
+        let err = spans_extent(vec![]).unwrap_err();
+        assert!(
+            format!("{err}").contains("Any tokens"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
     fn test_spans_extent() {
         assert_eq!(
             spans_extent(vec![CodeSpan {
