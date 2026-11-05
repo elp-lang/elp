@@ -1,0 +1,92 @@
+// The link store, as a channel-driven actor.
+//
+// Every ratified statement about shared mutable state in elp is phrased in
+// terms of the UI thread: cells are confined to one logical thread, which is
+// the platform UI thread on all three targets. A server has no UI thread, so
+// that confinement has nothing to attach to. The actor below sidesteps the
+// question rather than answering it — one task owns the Map, and everyone
+// else sends it messages.
+
+import { Error, Sendable } from elp.types
+import { Channel } from elp.concurrent
+import { Link, StoreError } from .types.link
+
+// A reply channel is how a request-shaped message gets an answer back out of
+// an actor. Capacity 1 so the actor never blocks handing the reply over.
+export enum StoreMsg {
+	PUT { link Link, reply Channel<Either<Link, Error>> },
+	RESOLVE { code string, reply Channel<Either<Link, Error>> },
+	LIST { reply Channel<[Link]> },
+	SHUTDOWN,
+}
+
+StoreMsg implements Sendable
+
+export object Store {
+	const inbox Channel<StoreMsg>,
+}
+
+Store implements Sendable
+
+export fn Store.start() -> Self {
+	const inbox Channel<StoreMsg> = .new(capacity = 32)
+
+	background(fn {
+		var links Map<string, Link> = .new()
+
+		for msg in inbox {
+			match msg {
+				.PUT { link, reply } -> {
+					if links.has(link.code) {
+						reply.send(Err(StoreError.CODE_TAKEN(link.code)))
+					} else {
+						links.set(link.code, link)
+						reply.send(Ok(link))
+					}
+				}
+
+				.RESOLVE { code, reply } -> {
+					match links.get(code) {
+						nil     -> reply.send(Err(StoreError.NOT_FOUND(code)))
+						link    -> {
+							// Mutating a value pulled out of a Map: does `link`
+							// alias the stored Link, or is it a copy that must be
+							// written back? The corpus's `.copy().append()` idiom
+							// suggests the latter.
+							link.hits += 1
+							links.set(code, link)
+							reply.send(Ok(link))
+						}
+					}
+				}
+
+				.LIST(reply) -> reply.send(links.values())
+
+				.SHUTDOWN -> return nil
+			}
+		}
+	})
+
+	return Self { inbox }
+}
+
+fn Store.ask<T>(&self, build fn(Channel<T>) -> StoreMsg) -> T {
+	const reply Channel<T> = .new(capacity = 1)
+	self.inbox.send(build(reply))
+
+	return reply.receive()
+}
+
+export fn Store.put(&self, link Link) -> Either<Link, Error> {
+	return self.ask<Either<Link, Error>>(fn (reply) { .PUT { link, reply } })
+}
+
+export fn Store.resolve(&self, code string) -> Either<Link, Error> {
+	return self.ask<Either<Link, Error>>(fn (reply) { .RESOLVE { code, reply } })
+}
+
+export fn Store.list(&self) -> [Link] {
+	return self.ask<[Link]>(fn (reply) { .LIST(reply) })
+}
+
+// vim: ft=kotlin

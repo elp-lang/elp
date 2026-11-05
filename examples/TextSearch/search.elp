@@ -1,0 +1,120 @@
+// Boyer-Moore-Horspool substring search.
+//
+// A deliberately computational library: no I/O, no view, no reactivity.
+// It exists to put pressure on the parts of elp the original corpus never
+// touched — indexing, integer arithmetic, comparison and logical operators,
+// conditional loops, and Map.
+//
+// Leans on undesigned constructs: `while`, `char`, `Map`, index expressions,
+// `==` / `<` / `&&` / `||`, `-` and `*`, `??`. See docs/core-language-probes.md.
+
+import { Error } from elp.types
+
+// A compiled pattern. Compiling once and searching many times is the whole
+// point of the algorithm, so the skip table is built in `new` and the object
+// is immutable afterwards.
+export object Pattern {
+	const needle [char],
+	const skip   Map<char, int>,
+}
+
+export enum PatternError {
+	EMPTY_NEEDLE,
+}
+
+PatternError implements Error
+
+fn PatternError.toString(&self) -> string {
+	return match self {
+		.EMPTY_NEEDLE -> "a pattern needs at least one character"
+	}
+}
+
+// The bad-character table: for each character in the needle except the last,
+// how far the pattern can safely jump when that character is the mismatch.
+// Characters absent from the table skip the needle's whole length.
+export fn Pattern.new(needle string) -> Either<Self, Error> {
+	const chars = needle.chars()
+	const n = chars.length()
+
+	if n == 0 {
+		throw PatternError.EMPTY_NEEDLE
+	}
+
+	var skip Map<char, int> = .new()
+
+	for i in 0..n - 1 {
+		skip.set(chars[i], n - 1 - i)
+	}
+
+	return Ok(Self { needle = chars, skip })
+}
+
+fn Pattern.skipFor(&self, c char) -> int {
+	return self.skip.get(c) ?? self.needle.length()
+}
+
+// Returns the index of the first match, or nil.
+//
+// The outer loop is the reason this file exists: `offset` advances by a
+// computed amount rather than by one, so a counted `for` cannot express it.
+export fn Pattern.find(&self, haystack string) -> Optional<int> {
+	const text = haystack.chars()
+	const h = text.length()
+	const n = self.needle.length()
+
+	if n > h {
+		return nil
+	}
+
+	var offset = 0
+
+	while offset <= h - n {
+		var j = n - 1
+
+		while j >= 0 && text[offset + j] == self.needle[j] {
+			j -= 1
+		}
+
+		if j < 0 {
+			return offset
+		}
+
+		offset += self.skipFor(text[offset + n - 1])
+	}
+
+	return nil
+}
+
+// Non-overlapping matches, left to right.
+export fn Pattern.findAll(&self, haystack string) -> [int] {
+	const text = haystack.chars()
+	const h = text.length()
+	const n = self.needle.length()
+
+	var found [int] = []
+	var offset = 0
+
+	while offset <= h - n {
+		var j = n - 1
+
+		while j >= 0 && text[offset + j] == self.needle[j] {
+			j -= 1
+		}
+
+		if j < 0 {
+			found.append(offset)
+			offset += n
+		} else {
+			offset += self.skipFor(text[offset + n - 1])
+		}
+	}
+
+	return found
+}
+
+export fn Pattern.contains(&self, haystack string) -> bool {
+	return self.find(haystack) != nil
+}
+
+// vim: ft=kotlin

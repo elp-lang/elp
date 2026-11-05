@@ -1,0 +1,70 @@
+// Routing by pattern-matching the request.
+//
+// The interesting construct here is matching on method and path together.
+// Written as a tuple pattern, which the language does not have: the corpus
+// matches a single scrutinee every time. The alternative is a nested match
+// on method with a path match inside each arm, which triples the line count
+// and buries the route table.
+
+import { Error } from elp.types
+import { Server, Request, Response, Status } from elp.http
+import { Link } from .types.link
+import { Store } from .internal.store
+
+const PORT = 8080
+
+export fn main() {
+	const store = Store.start()
+
+	Server.listen(PORT, fn (req) { route(req, store) })
+}
+
+fn route(req Request, store Store) -> Response {
+	return match (req.method, req.path) {
+		(.GET,  "/")       -> Response.text(.OK, "link shortener")
+		(.GET,  "/health") -> Response.text(.OK, "ok")
+		(.GET,  "/links")  -> Response.json(.OK, store.list())
+		(.POST, "/links")  -> createLink(req, store)
+		(.GET,  path)      -> followLink(path, store)
+		_                  -> Response.text(.METHOD_NOT_ALLOWED, "method not allowed")
+	}
+}
+
+fn createLink(req Request, store Store) -> Response {
+	return match req.body.decode<Link>() {
+		Err(e) -> Response.text(.BAD_REQUEST, e.toString())
+		Ok(submitted) -> match Link.validate(submitted.target) {
+			Err(e) -> Response.text(.BAD_REQUEST, e.toString())
+			Ok(target) -> {
+				const link = Link {
+					code = Link.generateCode(),
+					target,
+				}
+
+				return match store.put(link) {
+					Err(e)      -> Response.text(.CONFLICT, e.toString())
+					Ok(created) -> Response.json(.CREATED, created)
+				}
+			}
+		}
+	}
+}
+
+// `/abc123` -> look up `abc123`. Stripping the leading slash is a string
+// operation on a value the router already matched, which is the shape every
+// path-parameter route takes and the reason a real router wants `:code`
+// patterns rather than a catch-all arm.
+fn followLink(path string, store Store) -> Response {
+	const code = path.slice(1, path.length())
+
+	if code.length() == 0 || code.contains("/") {
+		return Response.text(.NOT_FOUND, "not found")
+	}
+
+	return match store.resolve(code) {
+		Err(e)   -> Response.text(.NOT_FOUND, e.toString())
+		Ok(link) -> Response.redirect(.FOUND, link.target)
+	}
+}
+
+// vim: ft=kotlin

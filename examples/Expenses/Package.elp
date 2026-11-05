@@ -1,0 +1,13 @@
+import { Package, Version } from elp.package
+
+@Package(
+	name = "expenses",
+	version = .new(0, 1, 0, 0),
+	entry = "main.velp",
+	targets = [.iOS, .Android, .Web],
+	dependencies = [
+		.stdlib("1.0.0"),
+	],
+)
+
+// vim: ft=kotlin

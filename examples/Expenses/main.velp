@@ -1,0 +1,53 @@
+import { App, Column } from elp.app
+import { Text } from elp.components
+import { Storage } from elp.storage
+import { Expense } from .types.expense
+import { largest } from .internal.stats
+import { EntryForm } from .components.entry-form
+import { Breakdown } from .components.breakdown
+import { Styles } from .styles
+
+const SAVE_KEY = "expenses.v1"
+
+export component Main() {
+	var expenses [Expense] = []
+	var amountDraft string
+
+	// Load once at mount. `effect` with no key never restarts.
+	effect {
+		match Storage.read<[Expense]>(SAVE_KEY) {
+			Err(_)    -> expenses = []
+			Ok(saved) -> expenses = saved
+		}
+	}
+
+	// Persist on change. The key is the dependency: this restarts whenever
+	// `expenses` changes, and the previous run is cancelled — which is the
+	// debounce, for free.
+	effect(expenses) {
+		Storage.write<[Expense]>(SAVE_KEY, expenses)
+	}
+
+	fn handleAdd(expense Expense) {
+		expenses.append(expense)
+	}
+
+	fn headline() -> string {
+		return match largest(expenses) {
+			nil      -> "Nothing yet"
+			biggest  -> "Biggest: {biggest.note}"
+		}
+	}
+
+	return App(textStyle = .Body) {
+		Column(style = Styles.screen) {
+			Text(headline(), variant = .Heading1)
+
+			Breakdown(expenses)
+
+			EntryForm(&amountDraft, onAdd = handleAdd)
+		}
+	}
+}
+
+// vim: ft=kotlin

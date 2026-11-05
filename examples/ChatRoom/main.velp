@@ -6,10 +6,10 @@ import { Message, User } from .types.chat
 import { Message as MessageView } from .components.message
 
 export enum AppActions {
-	AUTHENTICATED_ISH(bool),
-	LOADING(bool),
-	LOG_IN(string),
-	NEW_MESSAGE(string, string),
+	AUTHENTICATED_ISH { authed bool },
+	LOADING { loading bool },
+	LOG_IN { name string },
+	NEW_MESSAGE { userName string, body string },
 }
 
 // A pure function is a type-state limitation on the ability of this function.
@@ -30,7 +30,7 @@ pure fn AppReducer(const state ChatAppState, const action AppActions) -> ChatApp
 		.AUTHENTICATED_ISH(authed) -> state.copyWith(authed),
 		.LOG_IN(name) -> state.copyWith(name),
 		.LOADING(loading) -> state.copyWith(loading)
-		.NEW_MESSAGE(userName, body) -> state.copyWith(messages = state.messages.copy().append(
+		.NEW_MESSAGE { userName, body } -> state.copyWith(messages = state.messages.copy().append(
 			Message(
 				user = User(displayName = userName),
 				body
@@ -66,17 +66,19 @@ fn AppMiddleware(const state ChatAppState, action AppActions, dispatch StateDisp
 	}
 }
 
-export object ChatAppState implements Default {
+export object ChatAppState {
 	messages [Message],
 	members  [User],
 	loggedIn User?
 }
 
+ChatAppState implements Default
+
 fn ChatAppState.default -> Self {
 	return Self {
 		messages = [],
 		members = [],
-		loggedIn = None
+		loggedIn = nil
 	}
 }
 
@@ -84,7 +86,7 @@ fn ChatAppState.default -> Self {
 export fn ChatApp({state, dispatch}) {
 	var name string
 
-	if state.loggedIn != None {
+	if state.loggedIn != nil {
 		for message in state.messages {
 			MessageView(message)
 		}

@@ -1,23 +1,39 @@
 import { Stateful } from elp.state
 import { User, Message, Actions } from .types.chat
 
+// Interfaces declare methods only — a field requirement becomes a required
+// method, and the implementing type decides how to satisfy it internally.
 export interface State {
-	usersInRoom [User]
-	messages [Message]
+	fn usersInRoom() -> [User]
+	fn messages() -> [Message]
 
-	fn new -> Self
+	fn new(user User) -> Self
 }
 
-export object ChatState implements State {
+export object ChatState {
 	usersInRoom [User] = []
 	messages [Message] = []
 }
+
+ChatState implements State
 
 fn ChatState.new(user User) -> Self {
 	Self {
 		usersInRoom = [user],
 		messages = []
 	}
+}
+
+// State's field requirements became method requirements, so ChatState
+// satisfies them with accessors. A method may share a name with a field —
+// `self.usersInRoom` and `self.usersInRoom()` are different expressions, so
+// the type keeps control of what callers get at that name.
+fn ChatState.usersInRoom(&self) -> [User] {
+	return self.usersInRoom
+}
+
+fn ChatState.messages(&self) -> [Message] {
+	return self.messages
 }
 
 // vim: ft=kotlin

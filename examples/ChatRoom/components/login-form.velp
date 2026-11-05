@@ -10,8 +10,8 @@ import { Text } from elp.components
 import { User, UserMessage } from .types.chat
 
 export interface LoginProps {
-	email Optional<string>
-	password Optional<Protected<string>>
+	fn email() -> Optional<string>
+	fn password() -> Optional<Protected<string>>
 }
 
 // This enum has the error macro which implements the Error interface.
@@ -19,8 +19,8 @@ export interface LoginProps {
 export enum LoginError {
 	NO_HANDLER,
 	BAD_CREDENTIALS,
-	BAD_REQUEST(string),
-	SERVER_ERROR(string),
+	BAD_REQUEST { message string },
+	SERVER_ERROR { message string },
 }
 
 // Components are a visual element that can be presented to the user.
@@ -31,7 +31,7 @@ export fn LoginForm -> Component {
 	// Similarly to the way that React and Svelte have props and SwiftUI has
 	// struct properties. Exporting is the same as marking as "public".
 	export var email Optional<string>
-	export *fn onSubmit(username string, password Protected<string>) -> None
+	export *fn onSubmit(username string, password Protected<string>)
 
 	// They also have their own private variables as this is a block/lexical scope.
 	// Note that a variable is just that, it's variable in nature so it is mutable.
@@ -41,13 +41,13 @@ export fn LoginForm -> Component {
 	var attempts = 0
 
 	// Functions can be declared in a block and are only available here unless returned (moved.)
-	// Functions that are declared here and are throwing will have an error boundary applied to them,
-	// the default behavior of the default error boundary is to continue throwing upwards to the default
-	// root error boundary (at the runtime error boundary.)
+	// `throw` here is sugar for `return Err(...)` — nothing more. It doesn't bubble past
+	// this function and there's no boundary catching it; whoever calls handleSubmit gets
+	// back an ordinary Either and matches it like any other function result.
 	fn handleSubmit() {
 		attempts += 1
 
-		if onSubmit.notNil() {
+		if onSubmit.isNil() {
 			throw LoginError.NO_HANDLER
 		}
 

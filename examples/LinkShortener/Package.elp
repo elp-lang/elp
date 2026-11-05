@@ -1,0 +1,14 @@
+import { Package, Version } from elp.package
+
+@Package(
+	name = "link_shortener",
+	version = .new(0, 1, 0, 0),
+	entry = "main.elp",
+	kind = .Binary,
+	targets = [.macOS, .Linux],
+	dependencies = [
+		.stdlib("1.0.0"),
+	],
+)
+
+// vim: ft=kotlin

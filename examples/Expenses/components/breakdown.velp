@@ -1,0 +1,41 @@
+import { Column, Row, Spacer } from elp.layout
+import { Text } from elp.components
+import { Expense } from .types.expense
+import { CategoryTotal, breakdown, total } from .internal.stats
+import { Styles } from .styles
+
+// A derived value is a function, not a stored variable — reading `rows()`
+// inside the markup is what subscribes this component to `expenses`.
+export component Breakdown(expenses [Expense]) {
+	fn rows() -> [CategoryTotal] {
+		return breakdown(expenses)
+	}
+
+	fn grand() -> string {
+		return total(expenses).toString()
+	}
+
+	return Column(style = Styles.screen) {
+		Row(style = Styles.totalRow) {
+			Text("Total", variant = .Body)
+			Spacer()
+			Text(grand(), variant = .Heading2)
+		}
+
+		for row in rows() by row.category {
+			Column(style = Styles.row) {
+				Row {
+					Text(row.category.label(), variant = .Body)
+					Spacer()
+					Text("{row.total.toString()}  {row.share}%", variant = .Caption)
+				}
+
+				Row(style = Styles.barTrack) {
+					Row(style = Styles.bar, width = .percent(row.share))
+				}
+			}
+		}
+	}
+}
+
+// vim: ft=kotlin

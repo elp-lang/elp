@@ -1,0 +1,15 @@
+import { Package, Version } from elp.package
+
+export @Package(
+	name = "social_feed",
+	version = .new(1, 0, 0, 0),
+	entry = "main.velp",
+	screens = "./screens",
+	targets = [
+		.iOS,
+		.Android,
+		.Web,
+	],
+)
+
+// vim: ft=kotlin

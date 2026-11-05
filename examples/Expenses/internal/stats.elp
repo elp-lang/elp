@@ -1,0 +1,75 @@
+// Aggregation over a list of expenses. Everything here is `pure fn` — no
+// reactivity, no I/O — so it is the part of the app that can be reasoned
+// about and tested in isolation.
+//
+// This is where the app needs Map, sorting, and percentage arithmetic.
+
+import { Expense, Category, Money } from .types.expense
+
+export object CategoryTotal {
+	const category Category,
+	const total    Money,
+	const share    int,
+}
+
+export pure fn total(expenses [Expense]) -> Money {
+	var sum = Money.zero()
+
+	for expense in expenses {
+		sum = sum + expense.amount
+	}
+
+	return sum
+}
+
+// Grouping is the single most common thing an app does to a list and elp
+// currently has no vocabulary for it. Written out longhand with a Map, which
+// also raises the question of what makes `Category` a valid key.
+export pure fn byCategory(expenses [Expense]) -> Map<Category, Money> {
+	var totals Map<Category, Money> = .new()
+
+	for expense in expenses {
+		const running = totals.get(expense.category) ?? Money.zero()
+		totals.set(expense.category, running + expense.amount)
+	}
+
+	return totals
+}
+
+// Percentage of the grand total, rounded to whole points, largest first.
+// Integer-only: `share` is 0..100 and the rounding is explicit.
+export pure fn breakdown(expenses [Expense]) -> [CategoryTotal] {
+	const grand = total(expenses)
+
+	if grand.cents == 0 {
+		return []
+	}
+
+	var rows [CategoryTotal] = []
+
+	for { key as category, value as amount } in byCategory(expenses) {
+		rows.append(CategoryTotal {
+			category,
+			total = amount,
+			share = (amount.cents * 100 + grand.cents / 2) / grand.cents,
+		})
+	}
+
+	// Descending by total. Reversing the operands is the whole trick, and
+	// it reads as one because the return value is three-valued and named.
+	return rows.sorted(fn (a, b) { b.total.compareTo(a.total) })
+}
+
+export pure fn largest(expenses [Expense]) -> Optional<Expense> {
+	var biggest Optional<Expense> = nil
+
+	for expense in expenses {
+		if biggest == nil || expense.amount > biggest.amount {
+			biggest = expense
+		}
+	}
+
+	return biggest
+}
+
+// vim: ft=kotlin

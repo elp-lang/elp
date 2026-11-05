@@ -1,0 +1,11 @@
+import { FontFamily, GoogleFont } from elp.ui.font
+
+App {
+	ignoreSafeAreas = .All
+}
+
+Text {
+	fontFamily = .GoogleFont("Inter")
+}
+
+// vim: ft=kotlin

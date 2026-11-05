@@ -1,0 +1,19 @@
+import { UUID } from elp.types
+
+export object Author {
+	displayName string
+	avatarUrl   Optional<string>
+}
+
+// A single feed entry. imageUrl is nil for a text-only post, or the URL
+// the server returned for an image the author attached from their device.
+@CodeGen(Codec<JSON>)
+export object Post {
+	id       = UUID.v4()     `json: "id"`,
+	author   Author          `json: "author"`,
+	body     string          `json: "body"`,
+	imageUrl Optional<string> `json: "imageUrl"`,
+	likes    = 0,
+}
+
+// vim: ft=kotlin

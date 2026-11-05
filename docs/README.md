@@ -2,96 +2,61 @@
 
 This directory holds the language specification artifacts. None of these
 files are consumed by the compiler — the production lexer and parser are
-hand-written in `crates/lexer` and `crates/parser`. These docs exist to
-drive diagrams, test rigs, and (eventually) a human-readable reference.
+hand-written in `crates/lexer` and `crates/parser`, and they are the
+final authority on what the language is. These docs are the design
+record behind them.
 
 ## Files
 
 | File | What it is | When to use it |
 |---|---|---|
-| `grammar-script.g4` | ANTLR4 grammar, script dialect (`.elp`) | Railroad diagrams, `grun` test rig, ambiguity reports |
-| `grammar-script-notes.md` | Language-design notes: intentional gaps, use-site rules, semantic constraints | Read before arguing with a parse result |
+| `grammar-script-notes.md` | Language-design notes: intentional gaps, use-site rules, semantic constraints, open questions | Read before arguing with a parse result |
+| `memory-model.md` | How elp's ownership constructs (`var`/`const`/`&type`/`&self`, closures/`Copy`/`Move`) elaborate to Rust, validated by hand-porting a real file | Read before designing the typechecker's ownership tracking or the Rust-transpiler codegen |
+| `interfaces.md` | Interface model: method-only, nominal conformance, interface dependencies, why `Copy`/`Move` don't get default implementations | Read before implementing interface conformance checking, or before designing the macro engine |
+| `macros.md` | Macro model: a macro is a `pure fn` run at compile time via direct AST evaluation, elp data (incl. interfaces/types) is uniformly first-class | Read before implementing `Copy`/`Move` codegen or any compile-time evaluation |
+| `reactivity.md` | Reactivity model: the component body runs once, reads subscribe, writes patch; how a reactive value crosses a prop boundary | Read before implementing component lowering, markup control flow, or prop passing |
+| `generics.md` | Generics and overloading: mandatory type arguments, overload resolution on parameter types and names, conditional conformance, variance, and the two `<>` parsing problems | Read before implementing type arguments, interface conformance with generics, or method resolution |
+| `name-resolution.md` | Modules and name resolution: packages, the two import path forms, one-file-per-module-path, global conformances, the atmospheric-type criterion for the prelude, the no-cycles rule, and the dependency manifest | Read before implementing the module loader, import resolution, or the package manifest |
+| `core-language-probes.md` | Three probe programs (Boyer-Moore, an HTTP server, an aggregating app) and the gap log of constructs they exposed — operators, loops, `Map`, `char`, tuples now resolved; optional ergonomics, function values and interpolation still open | Read to see which core-language gaps remain, and which probe demanded each |
+| `functions.md` | Functions, methods and the call model: a method belongs to its receiver's package, no extension methods on foreign types, the extension-interface route, and why there is no `|>` | Read before implementing method resolution, or before adding any call-syntax sugar |
+| `strings.md` | Strings and characters: `string` as UTF-8 scalar sequence, `char` as one scalar value, scalar-wise `==` with no implicit normalization, literal and escape syntax, and why `s[i]` does not exist | Read before implementing string literals, `char`, interpolation, or any string stdlib |
+| `patterns.md` | Patterns and destructuring: why there is no tuple type, `(a, b)` as a `match`-scrutinee form only, named destructuring with `as`, Optional narrowing by binding, and the collected pattern grammar | Read before implementing `match`, `for` bindings, or pattern parsing |
+| `dispatch.md` | What an interface name in a type position *means*: existential vs universal quantification, what each promises a caller, the three deliberate existential sites, associated types for `Iterable`, and the representation questions deliberately deferred to the backend | Read before designing the type checker's handling of interface-typed values, or before choosing a dispatch representation |
+| `collections.md` | Collections: `Hashable` and the hasher, insertion-ordered `Map`, trapping `[]` vs `Optional`-returning `get`, `&var self` for mutating methods, the iteration protocol, and `_` as the only catch-all | Read before implementing `Map`/`Array`, `for` lowering, or mutating method receivers |
+| `operators.md` | Operators as interface methods: the interface table, what cannot be overloaded and why, `==` with no `===`, the precedence table, and narrowing through `&&`/`||` | Read before implementing expression parsing, operator lowering, or flow-sensitive typing |
+| `diagnostics.md` | Diagnostic model: noisy-by-default and filtered by configuration, the soundness floor that keeps errors non-configurable, named lints, where levels are set, and compile-time vs runtime diagnostics | Read before adding any compiler warning, or designing the lint configuration surface |
+| `error-handling.md` | Error model: `Either<T, E>` values only, no throw/catch/boundary mechanism, `throw` is sugar for `return Err(...)` | Read before implementing `Either` consumption-checking or any `.velp` `throw` lowering |
 
-## Working with the ANTLR grammar
+## There is no formal grammar file
 
-### One-time install
+An ANTLR4 spec grammar (`Elp.g4`, plus `ElpStyle.g4` / `ElpView.g4` for
+the `.selp` and `.velp` dialects) lived here briefly, along with a
+`Makefile` test rig that drove `grun` against the example corpus. All of
+it has been deleted, deliberately.
 
-```bash
-pip install antlr4-tools
-```
+The reasoning: a spec grammar that nothing consumes has to be kept in
+sync with the real parser by hand, and it never is. In practice it
+diverged in eight documented ways within a single session, and the
+divergences generated design questions that were really just artifacts
+of the spec grammar's own simplifications — time spent resolving
+problems the language doesn't have. The parser is hand-written and
+always was; a second, lossy description of it was a liability, not a
+safety net.
 
-That gets you `antlr4` (the generator) and `grun` (the test rig). Both
-pull a pinned ANTLR jar on first use, so no separate Java install step.
+The genuinely language-level questions that surfaced while writing it
+were preserved in `grammar-script-notes.md` under "Open questions"
+before deletion.
 
-### Generate a throwaway parser
+If a machine-checkable grammar is ever wanted again, the thing to build
+is one the compiler actually consumes (parser-generator-driven, or a
+grammar extracted *from* the hand-written parser), not a parallel
+document that chases it.
 
-```bash
-antlr4 -Dlanguage=Java docs/grammar-script.g4 -o /tmp/elp-grammar
-```
+## Workflow when changing the language
 
-This produces a Java parser under `/tmp/elp-grammar/`. You never use the
-generated code directly — it exists only so `grun` has something to run
-against. Regenerate whenever `grammar-script.g4` changes.
-
-### Test a real `.elp` file
-
-```bash
-# Parse tree as an s-expression
-grun Elp script -tree < examples/BlogStyle/internal/api.elp
-
-# Parse tree in a Swing window (needs a display)
-grun Elp script -gui < examples/BlogStyle/internal/api.elp
-
-# Ambiguity + unreachable-alternative reports while parsing
-grun Elp script -diagnostics < examples/BlogStyle/internal/api.elp
-
-# Token stream only, no parsing
-grun Elp script -tokens < examples/BlogStyle/internal/api.elp
-```
-
-`-diagnostics` is the most useful flag day-to-day. It runs ANTLR's
-adaptive-prediction with extra instrumentation and reports any point in
-the input where the grammar had to resolve an ambiguity. Those reports
-translate directly to "your hand-written parser will also have to make
-a choice here — make sure it's the right one".
-
-You can also combine flags: `-tree -diagnostics` prints the tree and any
-ambiguity warnings to stderr.
-
-`grun` reads from stdin by default. Pass a filename as a trailing argument
-if you prefer.
-
-### Railroad diagrams
-
-**IntelliJ / Android Studio ANTLR plugin.** Open `grammar-script.g4`,
-right-click any rule in the editor gutter, choose "Test Rule" → "Show
-Railroad Diagram". Best experience by a wide margin. Also shows live
-parse trees as you type input in the plugin's tool window.
-
-If you want a throwaway diagram without installing the plugin, the
-`antlr4-tools` package includes a `pygrun` command with a `-gui` flag,
-and `antlr4-parse` can emit diagram SVGs — both run off the same `.g4`.
-
-### Typical workflow when changing the grammar
-
-1. Edit `crates/parser/src/...` (the production change).
-2. Edit `docs/grammar-script.g4` to match.
-3. Run `cargo test -p parser` to catch parser regressions.
-4. Run `grun Elp script -diagnostics < examples/BlogStyle/...` on the
-   example corpus to confirm the spec grammar still accepts it.
-5. If the two diverge, pick one as the intended shape and fix the other.
-   The hand-written parser is the final authority; the `.g4` is a spec
-   that chases it.
-
-The divergence check is not yet automated. A later chore ticket: wire up
-a test that invokes `grun` on every file in `examples/` and asserts a
-clean parse.
-
-## Caveats
-
-Before spending time on an unexpected parse failure, skim the "Caveats"
-section at the bottom of `grammar-script.g4`. The spec grammar is a
-deliberate simplification of the real language — it hides `NEWLINE`,
-treats strings as opaque (no interpolation), reserves `from` and `as`
-fully, and uses ASCII-only identifiers. Eight known divergences are
-documented there. The prose companion is `grammar-script-notes.md`.
+1. Edit `crates/lexer` / `crates/parser` (the production change).
+2. Run `cargo test -p parser` to catch regressions against the example
+   corpus in `crates/parser/test_projects/`.
+3. Record the *decision* — not the syntax — in the relevant doc above.
+   These files explain why the language is shaped the way it is; the
+   code explains what it accepts.

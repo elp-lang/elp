@@ -1,0 +1,24 @@
+import { Column, Row } from elp.layout
+import { Text, Image } from elp.components
+
+import { Post } from .types.post
+
+export fn FeedItem(post Post) -> Component {
+	return Column(class = "feed-item") {
+		Row {
+			Text(post.author.displayName, class = "author")
+		}
+
+		Row {
+			Text(post.body)
+		}
+
+		if post.imageUrl != nil {
+			Row {
+				Image(source = post.imageUrl, class = "post-image")
+			}
+		}
+	}
+}
+
+// vim: ft=kotlin

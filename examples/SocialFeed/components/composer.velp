@@ -1,0 +1,59 @@
+import { Column, Row } from elp.layout
+import { Form, TextArea, ImagePicker, Button } from elp.forms
+import { Text, Image } from elp.components
+
+import { createPost } from .internal.api
+import { Post } from .types.post
+
+// Lets the user write a text post and optionally attach a photo already
+// stored on their device, picked via the OS's native file/photo picker.
+export fn Composer -> Component {
+	export *fn onPosted(post Post)
+
+	var body string
+	var imagePath Optional<string>
+	var posting = false
+	var err Error
+
+	fn handleSubmit() {
+		posting = true
+		err = nil
+
+		return match createPost(body, imagePath) {
+			Ok(post) -> {
+				posting = false
+				body = ""
+				imagePath = nil
+				onPosted(post)
+			}
+			Err(apiErr) -> {
+				posting = false
+				err = apiErr
+			}
+		}
+	}
+
+	return Form(onSubmit=handleSubmit) {
+		if err != nil {
+			Row(class = "error-row") {
+				Text(err.asString())
+			}
+		}
+
+		TextArea(&body, placeholder="What's on your mind?")
+
+		ImagePicker(&imagePath, placeholder="Attach a photo")
+
+		if imagePath != nil {
+			Row(class = "image-preview") {
+				Image(source = imagePath)
+			}
+		}
+
+		Button(type=.FORM_SUBMIT, disabled=posting) {
+			Text(if posting { "Posting..." } else { "Post" })
+		}
+	}
+}
+
+// vim: ft=kotlin
