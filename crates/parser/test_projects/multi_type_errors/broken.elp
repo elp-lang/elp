@@ -1,0 +1,1 @@
+@external(.OBJC) fn OBJC_msgSend<T>(T, OBJC_Selector) -> T
