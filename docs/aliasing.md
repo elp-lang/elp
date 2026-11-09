@@ -198,7 +198,18 @@ any type holding one is not `Copy` either, transitively, all the way up.
 `examples/Sheet` has four levels of it — `Style` → `Cell` → `Row` →
 `Sheet` — and no rule says so four times. One rule applies four times.
 
-Three precisions, because each one catches somebody:
+Four precisions, because each one catches somebody:
+
+**A field may not hold a borrow.** `&T` is unconditionally `Copy`
+(`memory-model.md` Finding 6), which is harmless inside a call and not
+harmless in a field: the field outlives the call and is freely copyable,
+so a `&T` field is a duplication route field-wise approves of without
+looking at `T` at all.
+
+A borrow is bounded by the call that receives it; a field is not, and
+there is nothing to bound it against. `examples/SqliteBinding` had the only
+two `&` fields in the corpus and both were the bug, so the rule costs
+nothing today and keeps Finding 6 unconditional rather than caveated.
 
 **It blocks only the implicit tier.** A type holding a `Confined` field
 is not `Copy`; it can still be `Duplicate`. Explicit duplication is fine
@@ -326,18 +337,132 @@ This replaces the table in `memory-model.md`, "Fields carry `var`".
 hatch and there is no safe-Rust-style `unsafe` block for ordinary code.
 
 That decision is what makes everything above inferable. Mutable aliasing
-is obtainable only from `Confined<T>`, `Synchronized<T>`, or a closure
-that captured one, all of which field-wise conformance already sees. A
-user type cannot invent interior mutability, so the compiler never has to
-ask.
+is obtainable only from `Confined<T>`, `Synchronized<T>`, a closure that
+captured one, or **a borrow of a type whose mutators elp cannot see** —
+and the first three are what field-wise conformance already sees. A user
+type cannot invent interior mutability, so the compiler never has to ask.
 
-FFI is the exception, and it is the *only* exception. An opaque handle
-behind an `@external` declaration — a `sqlite3*`, a `CURL*` — has
-duplication semantics the compiler cannot see, so the declaration must
-state them:
+The fourth is FFI's, and it is worth stating exactly, because an earlier
+draft of this document claimed the compiler simply *could not see* an
+external handle's semantics. It sees them; it gets them wrong. `&T` is
+`Copy` because `T`'s only mutators are elp code honouring the borrow, so
+two holders of a `&T` have nothing to observe about each other. An
+`@external` type's mutators are in C: `sqlite3_close(db &Sqlite3)`
+destroys the pointee **through a read-only borrow**. The rule that makes
+`&T` free is the rule FFI breaks.
 
-- is duplicating the handle independent, aliasing, or illegal?
-- may it cross a thread, and under what discipline?
+### Three parts, and no new vocabulary
+
+**1. A field may not hold a borrow** — the precision above, which is the
+general form of the problem rather than an FFI special case.
+
+**2. A foreign handle is a value, not a borrow** — whatever the library's
+own ownership story is. There is no owned `Sqlite3` anywhere in the
+program for a borrow to borrow *from*: SQLite owns the pointee and elp
+owns the pointer. So the field is `handle Sqlite3`, and `&Sqlite3` has no
+referent in elp's model. Borrows stay legal at a *parameter*, where the
+call bounds them.
+
+This holds for the handles elp never releases too, which is the larger
+class — see "Three kinds of foreign pointer" below. What varies between
+them is the **tier**, not whether they are values.
+
+**3. An `@external type` must declare its tier, and silence is an
+error.** An external type has no fields, so field-wise is *vacuously*
+satisfied and the derivation's answer is `Copy` — the dangerous one for a
+`sqlite3*`. But no default in the other direction works either: `Move`
+would mis-describe a `time_t`, a C enum, a POD struct, and most of
+Vulkan. The tiers genuinely differ per handle, which is the whole argument
+for making the declaration mandatory rather than picking a side.
+
+```elp
+@external(.C, library = "sqlite3") {
+	export type Sqlite3
+	export type Sqlite3Stmt
+}
+
+Sqlite3     implements Move
+Sqlite3Stmt implements Move
+```
+
+**And then nothing above it needs extending.** `Connection` holds a
+`Move` field, so field-wise forces `Connection implements Move` — a
+conclusion, exactly as `Style implements Move` is a conclusion from
+holding a `Confined<StyleValues>`. One type at the boundary whose
+semantics the compiler is *told*, everything above it derived, which is
+the same shape stdlib already uses.
+
+That is also what makes it legitimate rather than a hole. stdlib declares
+`Confined<T> implements Move` and the compiler trusts it; `@external` is
+the one place a *user* gets the same privilege. Not an exception to the
+rules — the same trust, scoped to the marked surface.
+
+### The three questions, answered by conformances that exist
+
+| | answer |
+|---|---|
+| is duplicating the handle independent, aliasing, or illegal? | the **conformance**: `Copy`, `Duplicate`, `Move` already mean exactly those three |
+| may it cross a thread? | **`Sendable`**, declared rather than derived |
+| who releases it, and is exactly-once guaranteed? | **open** — elp has no destructors, no `defer`, nothing at scope exit |
+
+So two of the three need no new syntax, which retires a strawman
+`examples/SqliteBinding` was carrying:
+
+```elp
+@external(.C, library = "sqlite3", duplication = .aliasing, threads = .confined)
+```
+
+That invented `.aliasing`/`.independent`/`.illegal` for precisely what
+`Move`/`Copy`/`Duplicate` say. A parallel vocabulary for a distinction the
+language already draws is worth deleting rather than designing.
+
+The thread question is answered in *form* and still blocked in *fact*:
+SQLite's discipline is a runtime value (`sqlite3_threadsafe()`) against a
+static conformance, which no part of this language covers.
+
+### Three kinds of foreign pointer, and only one is a handle you release
+
+`sqlite3*` is the easy case and generalising from it alone would be a
+mistake. GLFW and Vulkan hand back pointers to resources *they* own and
+never expect back, and they are the common shape rather than the exotic
+one:
+
+| | you release it? | tier | examples |
+|---|---|---|---|
+| **owned handle** | yes, exactly once | **`Move`** | `sqlite3*`, `sqlite3_stmt*`, `GLFWwindow*`, `VkInstance`, `VkDevice` |
+| **borrowed handle** | no — it dies with its parent | **`Copy`** | `VkQueue`, `VkPhysicalDevice`, `GLFWmonitor*` |
+| **transient view** | no — invalidated by the next call | *none fits* | `const char*` from `sqlite3_column_text`, `const GLFWvidmode*` |
+
+The first two are both handled by rule 3 with no further machinery, and
+they land on *different* tiers — which is the clearest evidence that a
+mandatory declaration beats a default. `Move` is right for a `VkDevice`
+because you call `vkDestroyDevice` once; `Copy` is right for a `VkQueue`
+because you never destroy it, duplicating it is free, and two copies of it
+have nothing to observe about each other that matters.
+
+**What the second row does *not* get is validity.** A `VkQueue` is valid
+only while its `VkDevice` lives, and nothing in the tier says so.
+`Copy`/`Duplicate`/`Move` answer *may I duplicate this, and how?*; they do
+not answer *is this still alive?*. Those are orthogonal, and elp has a
+mechanism for the first and none for the second.
+
+That gap was already recorded from `Statement`/`Connection`, and Vulkan
+makes it much worse than one pair suggested: its handles form a strict
+ownership **tree** — instance → physical device → device → queue, buffer,
+image → view — and every edge is a constraint elp cannot express. Rust
+cannot either without a hand-written lifetime, and `ash` declines to,
+making its handle types `Copy` and leaving use-after-free to the
+programmer. So the honest statement is that elp's binding would be exactly
+as unsound as Rust's here, and the tier is not the thing that fixes it.
+
+**The third row is the one nothing covers.** A transient view is not a
+handle: its validity is measured in *calls*, not in the lifetime of a
+parent. No tier can express "you may read this and may not keep it",
+because `Move` still permits storing. What every real binding does instead
+is copy at the boundary and never expose the pointer — which is what
+`Statement.textAt` returning `Optional<string>` does — and that is a
+discipline at the wrapper rather than a guarantee from the language. It is
+also why the `@external` declarations belong in `internal/`.
 
 **The mechanism already exists and is not a keyword.** `@external(.OBJC)`
 is in the corpus (`BlogStyle/internal/api.elp`) and the parser already
@@ -345,15 +470,16 @@ accepts body-less declarations for it; `name-resolution.md` adds `links`
 on `@Package` as the allow-list bounding what it may reach. There is no
 `unsafe` marker and no `extern` keyword, because `@external` is the
 marker and `reactivity.md` rejects new lowercase intrinsic keywords as a
-matter of policy. `examples/SqliteBinding` is the probe, and the
-arguments `@external` needs to carry are open — see below.
+matter of policy. `examples/SqliteBinding` is the probe.
 
-**Where they are written is settled, though.** A macro receives the AST of
-what follows it, which may be a block of declarations (`macros.md`), so a
-library's handles are declared under one `@external(...)` header and the
-semantics are stated once for all of them. That is the right granularity rather than a
-convenience: "duplicating this aliases, and it may not cross a thread" is
-a property of *this library's handles*, not of each symbol separately.
+**And `@external` carries no duplication arguments at all**, which is
+where the three parts above land. A macro receives the AST of what follows
+it, and that may be a block of declarations (`macros.md`), so one
+`@external(...)` header covers a library's handles — but what each handle
+*means* is an ordinary conformance written under the block, not an
+argument inside it. The attribute says where the symbol comes from; the
+conformance says how the value behaves. Those were conflated in the first
+draft and they are different questions.
 
 ## What this corrects
 
@@ -422,11 +548,17 @@ while `.copy()` would have had one that looked identical in both cases.
   amendment says any call may yield, so the "a call ends the turn"
   reasoning that governs narrowing has to govern this too. It currently
   does not.
-- **What arguments `@external` carries for an imported handle.** What
-  states a foreign handle's duplication and thread semantics, and what the
-  default is when the declaration is silent — on a block header, per the
-  section above, so the question is what the arguments *are* rather than
-  where they go. Worse, SQLite's thread
+- **`string`'s tier is not stated anywhere.** It is not in the table
+  above and `strings.md` does not say. It decides whether an ordinary
+  record of strings is `Copy` or `Duplicate`, which is most of the corpus,
+  so it is a bigger hole than its size suggests. Found while working out
+  whether `Connection { handle, path string }` was `Copy`-eligible.
+- **Exactly-once release for a foreign handle.** `Move` gives at most
+  once and never at least once, so a dropped handle leaks with nothing to
+  notice. The candidates are a `Drop`-shaped interface, a scoped `with ...
+  as x { }` form, or lint-only. Narrowed from the old "what arguments
+  `@external` carries", the rest of which is now answered by ordinary
+  conformances. Worse, SQLite's thread
   discipline is a *runtime* value (`sqlite3_threadsafe()`) while
   `Confined`/`Synchronized` is a static distinction — a capability that is
   real but not statically known, which nothing in this language covers.

@@ -16,12 +16,15 @@ import {
 // lifetime question in `internal/external.elp` GAP 5 is not academic.
 
 export object Statement {
-	const handle &Sqlite3Stmt,
+	const handle Sqlite3Stmt,
 	const sql    string,
 }
 
-// `Move`, for the same reason `Connection` is: `sqlite3_finalize` must run
-// exactly once.
+// A conclusion, not a promise: `Sqlite3Stmt implements Move` is declared at
+// the boundary and field-wise `Copy` forces this. The handle is held by value
+// rather than as `&Sqlite3Stmt` because nothing in the program owns a
+// `Sqlite3Stmt` to borrow from, and `aliasing.md` forbids a borrow in a field
+// — `&T` being unconditionally `Copy` makes one a free duplication route.
 //
 // And a second reason the connection did not have: a statement is only valid
 // while its connection is open. That is an ordering constraint between two

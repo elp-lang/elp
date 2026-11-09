@@ -655,16 +655,20 @@ the field, not the object".
 | `&x` at a call site | Borrow, no ownership change, `&T`/`&mut T` per Finding 4 | **Decided** |
 | `*x` at a call site (`x` itself a reference) | Deref-and-copy the referent; legal iff referent type is `Copy` | **Decided** (Finding 6); `*` prefix parses today, `Copy`-gating is Phase 2 |
 | A value read out of a collection | A **copy**; mutating it does not touch the collection, and a write-back (`map.set(k, v)`) is required and explicit | **Decided** (`core-language-probes.md`, `store.elp`) |
-| `&T` itself (the reference, not its referent) | Unconditionally `Copy` for any `T`, compiler-intrinsic — same "free" tier as primitives, not ordinary nominal conformance | **Decided** (Finding 6) |
+| `&T` itself (the reference, not its referent) | Unconditionally `Copy` for any `T`, compiler-intrinsic — same "free" tier as primitives, not ordinary nominal conformance. **Amended:** a *field* may not hold a borrow (`aliasing.md`), because a field outlives the call that bounds a borrow and this row then makes it a free duplication route | **Decided** (Finding 6), amended by `aliasing.md` |
 | `Shared<T>` (immutable alias) | Refcounted handle, `Copy` for any `T` — the owning form of the row above | **Decided** (`aliasing.md`) |
 | `Confined<T>` / `Synchronized<T>` (mutable alias) | Refcounted handle, `Move`; a second handle via `.alias()`, never `Copy` — so any type holding one is not `Copy`, field-wise | **Decided** (`aliasing.md`) |
 
 Every row in this table is now decided in rule; nothing here is left
-genuinely open. Two rows were reopened after this sentence was first
+genuinely open. Three rows were reopened after this sentence was first
 written and are now closed again by `aliasing.md` — the capture/
 pass-by-value rows said `Copy`/`Move` when the tier they needed was
 `Duplicate`, and the two aliasing rows above did not exist because the
-types did not. What remains is implementation, not design: `Copy`/`Move`
+types did not. The third was the `&T` row, and it was a soundness bug
+rather than an omission: `&T` is `Copy` because `T`'s only mutators are
+elp code honouring the borrow, which stops being true at an `@external`
+type whose mutators are in C. A borrow is bounded by its call, so the
+amendment is that a field may not hold one. What remains is implementation, not design: `Copy`/`Move`
 depend on `interfaces.md`'s open questions (nominal-conformance syntax,
 whether default methods can depend on other interfaces) being settled
 first; the `var`/`&mut` usage-inference rule needs the same callee-body

@@ -36,38 +36,52 @@
 // program. They are the generator's input. What reaches this module is the
 // macro's output — ordinary module-level declarations.
 
-// GAP 1 — an opaque handle has no declarable duplication semantics.
+// GAP 1, RESOLVED — an opaque handle's duplication semantics are an
+// ordinary conformance, declared rather than derived.
 //
-// `sqlite3*` is a pointer to a struct the C library owns. Three questions
-// have to be answered and elp has no syntax for any of them:
+// The draft of this file asked three questions and proposed a strawman that
+// put all three in `@external`'s arguments:
 //
-//   - duplicating the handle: independent, aliasing, or illegal?
-//     (For SQLite: aliasing. Two `sqlite3*` of equal value are one
-//     connection, and closing through either invalidates both.)
-//   - may it cross a thread?
-//   - who releases it, and is exactly-once guaranteed?
+//   @external(.C, library = "sqlite3", duplication = .aliasing, threads = .confined)
 //
-// A strawman, written to be argued with rather than adopted. It reuses
-// `type` from `dispatch.md`'s associated types and `@external`'s existing
-// argument shape, so it needs no new grammar — and the block is where it
-// wants to live, because both handles answer all three the same way:
+// Two of the three needed no new syntax at all, and the strawman was
+// inventing `.aliasing`/`.independent`/`.illegal` for exactly what
+// `Move`/`Copy`/`Duplicate` already mean. The answers:
 //
-//   @external(.C, library = "sqlite3", duplication = .aliasing, threads = .confined) {
-//           export type Sqlite3
-//           export type Sqlite3Stmt
-//   }
+//   - duplication -> the conformance, written below.
+//   - may it cross a thread? -> `Sendable`, declared not derived. Still
+//     blocked in fact by GAP 2: SQLite's answer is a runtime value.
+//   - who releases it, exactly once? -> still open. See `db.elp`.
 //
-// That is a sharpening the first draft missed. Written per-declaration, the
-// three answers read as properties of one symbol; written on the block, they
-// read as properties of *this library's handles*, which is what they are.
+// The draft also mis-diagnosed *why* the compiler could not help. It said an
+// external type "has no fields for field-wise `Copy` to be wise about".
+// Field-wise was not failing to see the handle — `db.elp` held it as
+// `&Sqlite3`, `memory-model.md` Finding 6 makes `&T` unconditionally `Copy`,
+// so the rule looked, applied, and said *yes*. `Connection implements Move`
+// was the author declining a `Copy` the compiler would have granted, with
+// nothing stopping the next person granting it.
 //
-// `release = sqlite3_close` would be the natural fourth argument and is the
-// one that does not fit: elp has no destructors, no `defer`, and nothing
-// that runs at scope exit. See `db.elp`.
+// `aliasing.md` closes it with three parts: a field may not hold a borrow, a
+// foreign handle is a value rather than a borrow, and an `@external type`
+// must declare its tier because silence derives the dangerous answer.
 @external(.C, library = "sqlite3") {
 	export type Sqlite3
 	export type Sqlite3Stmt
 }
+
+// `Move` because *this* program releases them: `sqlite3_close` and
+// `sqlite3_finalize` must each run exactly once, and `Move` is the only tier
+// where "the source is dead" makes that checkable.
+//
+// Worth saying what this is NOT, because generalising from SQLite alone
+// would be wrong. GLFW and Vulkan hand back pointers they own and never
+// expect back — `VkQueue`, `VkPhysicalDevice`, `GLFWmonitor*` — and the
+// right tier for those is `Copy`: you never destroy one, duplicating is
+// free, and two copies have nothing to observe about each other. Same rule,
+// opposite answer, which is why the declaration is mandatory rather than
+// defaulted.
+Sqlite3     implements Move
+Sqlite3Stmt implements Move
 
 // One block for the whole library's functions. Note what stayed on each
 // line: `export`. Nothing distributes it, and nothing distributes anything —
@@ -122,7 +136,7 @@
 	// Declared in raw form, so the translation is visible in `db.elp` rather
 	// than hidden here.
 	export fn sqlite3_open(path &CString, out &OpaqueHandle) -> int
-	export fn sqlite3_close(db &Sqlite3) -> int
+	export fn sqlite3_close(db Sqlite3) -> int
 	export fn sqlite3_errmsg(db &Sqlite3) -> &CString
 
 	export fn sqlite3_prepare_v2(
@@ -134,7 +148,7 @@
 	) -> int
 
 	export fn sqlite3_step(stmt &Sqlite3Stmt) -> int
-	export fn sqlite3_finalize(stmt &Sqlite3Stmt) -> int
+	export fn sqlite3_finalize(stmt Sqlite3Stmt) -> int
 	export fn sqlite3_bind_text(stmt &Sqlite3Stmt, index int, value &CString, bytes int, free &OpaqueHandle) -> int
 	export fn sqlite3_bind_int(stmt &Sqlite3Stmt, index int, value int) -> int
 	export fn sqlite3_column_int(stmt &Sqlite3Stmt, column int) -> int
@@ -207,6 +221,25 @@
 	export type CString
 	export type OpaqueHandle
 }
+
+// Both have to declare a tier now, and both are awkward in a way that is
+// worth recording rather than smoothing over.
+//
+// `CString` is `Move` because the elp side allocates it (`CString.from(path)`)
+// and something has to free it — so it is the owned-handle row of
+// `aliasing.md`'s table, with the same at-least-once hole as a connection.
+// Note that this is *not* the `const char *` SQLite hands back: that is a
+// transient view, the third row, and no tier fits it. The binding copies it
+// out immediately (`Statement.textAt` returns `Optional<string>`) and never
+// lets the pointer escape `internal/`.
+//
+// `OpaqueHandle` is the one that does not belong in this scheme at all. It
+// stands in for `void*` and `T**`, so "duplicating it" has no meaning
+// independent of what it currently points at. `Move` is the conservative
+// answer and the real answer is GAP 3: out-parameters should not be modelled
+// as a type.
+CString      implements Move
+OpaqueHandle implements Move
 
 // GAP 7 — a C callback cannot be an elp closure.
 //

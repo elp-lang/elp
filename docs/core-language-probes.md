@@ -556,12 +556,39 @@ does.
 The FFI boundary, and the first thing in the corpus that `aliasing.md`
 cannot answer **even in principle**.
 
-1. **An opaque handle has no declarable duplication semantics.** A
-   `sqlite3*` is a pointer: copying it aliases a live connection, and an
-   external type has no fields for field-wise `Copy` to be wise about. So
-   `Connection implements Move` is a *promise by the author* rather than
-   a conclusion by the compiler — the one place in the language where
-   those differ.
+1. ~~**An opaque handle has no declarable duplication semantics.**~~
+   **Resolved**, and the finding was mis-diagnosed. It said field-wise
+   `Copy` had "no fields to be wise about" — but `db.elp` held the handle
+   as `&Sqlite3`, and `memory-model.md` Finding 6 makes `&T`
+   unconditionally `Copy`. The rule looked, applied, and said *yes*:
+   `Connection` was `Copy`-eligible, and `Connection implements Move` was
+   the author declining a `Copy` the compiler would have granted. A
+   soundness bug in a decided rule, not a gap in an undesigned corner.
+
+   `aliasing.md` closes it in three parts, with no new vocabulary: a field
+   may not hold a borrow (the corpus had exactly two, both these handles);
+   a foreign handle is a value rather than a borrow, since nothing in the
+   program owns the pointee; and an `@external type` must declare its tier,
+   because zero fields makes field-wise *vacuously* satisfied and the
+   derivation's answer is `Copy`. Then `Connection implements Move` is a
+   conclusion, exactly as `Style implements Move` is.
+
+   Two of the three questions the probe asked turned out to need no syntax:
+   duplication **is** the conformance, and thread-crossing **is**
+   `Sendable`. That retired a strawman putting both in `@external`'s
+   arguments as `duplication = .aliasing, threads = .confined` — a parallel
+   vocabulary for what `Move`/`Copy`/`Duplicate` already say.
+
+   And one thing it forced into the open: **`sqlite3*` is the easy case.**
+   GLFW and Vulkan hand back handles they own and never take back —
+   `VkQueue`, `VkPhysicalDevice`, `GLFWmonitor*` — for which `Copy` is the
+   right tier, not `Move`. Same rule, opposite answer, which is the
+   strongest argument for a mandatory declaration over a default. What
+   those handles do *not* get from a tier is **validity**: a `VkQueue` is
+   alive only while its `VkDevice` is, and Vulkan's handles form a strict
+   ownership tree where every edge is a constraint elp cannot express. That
+   is finding 4 below, far larger than one `Statement`/`Connection` pair
+   made it look.
 2. **The thread discipline is a runtime value, and
    `Confined`/`Synchronized` is a static distinction.**
    `sqlite3_threadsafe()` reports which of three modes libsqlite3 was

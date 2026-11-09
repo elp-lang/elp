@@ -27,24 +27,30 @@ export enum DbError {
 // see it, because `Confined<T>`/`Synchronized<T>` are elp types. Here it
 // cannot, and the declaration is the only record.
 export object Connection {
-	// GAP — this field is the whole problem in one line.
+	// RESOLVED, and the first draft of this file got the diagnosis wrong.
 	//
-	// `&Sqlite3` is a borrow of something elp does not own and whose lifetime
-	// it does not control. Copying it aliases a live database connection, and
-	// `aliasing.md`'s field-wise `Copy` rule cannot tell: an external type has
-	// no fields to be wise about.
+	// It held this field as `&Sqlite3` and said field-wise `Copy` "cannot
+	// tell" because an external type has no fields to be wise about. The
+	// rule was not failing to see the handle: `memory-model.md` Finding 6
+	// makes `&T` unconditionally `Copy`, so field-wise looked at
+	// `&Sqlite3`, applied a decided rule, and said *yes*. This object was
+	// `Copy`-eligible, and `Connection implements Move` was the author
+	// declining a `Copy` the compiler would have granted — with nothing
+	// stopping the next person granting it.
 	//
-	// So `Connection implements Move` below is a *promise by the author*
-	// rather than a conclusion by the compiler, and it is the one place in
-	// the language where those differ. Everywhere else, writing `implements
-	// Copy` on something holding a mutable alias is simply refused.
-	const handle &Sqlite3,
+	// The handle is a value, not a borrow. Nothing in the program owns a
+	// `Sqlite3` for a borrow to borrow from: SQLite owns the pointee, elp
+	// owns the pointer. `aliasing.md` now forbids a borrow in a field for
+	// exactly this reason, and these two files held the only `&` fields in
+	// the whole corpus.
+	const handle Sqlite3,
 	const path   string,
 }
 
-// `Move`, chosen by hand and for the right reason: the handle must be closed
-// exactly once, and `Move` is the only tier where "the source is dead" makes
-// that checkable.
+// A conclusion now, not a promise. `Sqlite3 implements Move` is declared at
+// the boundary (internal/external.elp), this object holds one, and field-wise
+// `Copy` forces the rest — the same way `Style implements Move` follows from
+// holding a `Confined<StyleValues>` in `examples/Sheet`.
 //
 // There is deliberately no `.alias()`. SQLite permits several connections to
 // one file and that is the supported way to share — `Connection.open` twice
