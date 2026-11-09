@@ -1,0 +1,98 @@
+import { Document, Edit } from .types.edit
+
+export object History {
+	var done   [Edit],
+	var undone [Edit],
+}
+
+export fn History.new() -> Self {
+	return Self { done = [], undone = [] }
+}
+
+// Calling a stored function value. `edit.apply` is a field holding a
+// function, and `edit.apply(&var doc)` calls it — so field access and
+// invocation compose, which `interfaces.md` already permits by allowing a
+// method and a field to share a name.
+export fn History.push(&var self, doc &var Document, edit Edit) {
+	edit.apply(&var doc)
+	self.done.append(edit)
+
+	// A new edit discards the redo stack, which is the standard behaviour and
+	// also drops a list of closures on the floor. Whatever those captured
+	// goes with it.
+	self.undone = []
+}
+
+// GAP 4 — does a `{ }` match arm produce a value?
+//
+// The corpus has both shapes and never both in one place: `LinkShortener`'s
+// router has `(.GET, "/") -> Response.text(...)`, an expression arm, while
+// `store.elp` has `.PUT { link, reply } -> { ... }`, a block arm used purely
+// for effect. Here the block arm has to *produce the bool*, and whether its
+// last expression is its value is exactly the implicit-return question that
+// closures raise. The two should be answered together.
+export fn History.undo(&var self, doc &var Document) -> bool {
+	return match self.done.pop() {
+		nil -> false
+		edit -> {
+			edit.revert(&var doc)
+			self.undone.append(edit)
+			true
+		}
+	}
+}
+
+export fn History.redo(&var self, doc &var Document) -> bool {
+	return match self.undone.pop() {
+		nil -> false
+		edit -> {
+			edit.apply(&var doc)
+			self.done.append(edit)
+			true
+		}
+	}
+}
+
+export fn History.canUndo(&self) -> bool {
+	return self.done.length() > 0
+}
+
+export fn History.canRedo(&self) -> bool {
+	return self.undone.length() > 0
+}
+
+// The label of whatever undo would reverse, for a menu item.
+export fn History.pendingLabel(&self) -> Optional<string> {
+	return match self.done.last() {
+		nil  -> nil
+		edit -> edit.label
+	}
+}
+
+// GAP 5 — a recursive closure.
+//
+// `retry` refers to itself, and the name is not bound until the closure
+// literal has finished being evaluated — so the body cannot see it. This is
+// the same hole every language has and each one plugs differently: Rust
+// refuses it outright for closures and makes you write a named fn or pass
+// the function to itself, JavaScript allows it because `const` is hoisted
+// into scope by the time the body runs, Swift requires an explicit `self`
+// capture on a local closure.
+//
+// Written here the way it reads best, which is the version that cannot work
+// without a rule saying `const f = fn { ... }` puts `f` in scope for the
+// body — and that rule has to interact with `const` meaning immutable.
+export fn retrying(attempts int, body fn() -> bool) {
+	var remaining = attempts
+
+	const retry = fn {
+		if !body() && remaining > 0 {
+			remaining -= 1
+			retry()
+		}
+	}
+
+	retry()
+}
+
+// vim: ft=kotlin

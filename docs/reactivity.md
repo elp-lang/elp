@@ -439,6 +439,65 @@ caught statically. A dev-mode watchdog warning when a turn exceeds a
 frame budget is the pragmatic answer, and it is a runtime feature
 rather than a language one.
 
+### A coroutine mutates component state directly
+
+**An effect writes component cells itself. There is no channel, no
+posted message and no scheduling hop.**
+
+Worth stating outright because it is the first question anyone asks of
+a reactive model, and the answer is only implied above. An effect's
+non-blocking segments run *on* the cell thread, so there is no boundary
+to cross; `SocialFeed/screens/home.velp` assigns `posts`, `loading` and
+`err` from inside `effect { loadFeed() }` and that is correct.
+
+A channel is for crossing a *thread*, which only `background` does —
+and that boundary is already enforced by `Sendable`, since a reactive
+cell and a `Binding<T>` never conform. `background(fn { posts = x })`
+fails as an ordinary conformance error rather than needing a rule of
+its own.
+
+### A yield point ends the turn, and yield points are invisible
+
+*"Any run of statements containing no yield point is atomic by
+construction"* is the load-bearing sentence above, and its contrapositive
+needs saying: **a blocking call ends the turn, and other turns run
+before it resumes.**
+
+This is sharper here than in Swift because there is no function
+colouring (§"It returns a handle"), so **any call may be a yield
+point** and nothing marks it. A reader cannot see where atomicity
+stops.
+
+Three consequences:
+
+1. **Flow narrowing of a cell does not survive a call.** See the
+   amendment in `operators.md`; the fix is to narrow by binding
+   (`patterns.md`), which produces a local that no other turn can
+   write.
+2. **Check-then-act is not atomic across a call.** The re-entrancy
+   guard works precisely because `if sending { return }` and
+   `sending = true` are adjacent; move a call between them and it
+   stops working.
+3. **The component may be gone on resume.** Already handled —
+   effects are component-scoped and cleanup is cancellation.
+
+`loadFeed` in `SocialFeed/screens/home.velp` is the worked example of
+getting this wrong:
+
+```elp
+fn loadFeed() {
+	loading = true
+	return match getFeed() {          // yields
+		Ok(fetched) -> { loading = false; posts = fetched }
+		...
+	}
+}
+```
+
+Two refreshes in flight, and the first to return sets `loading = false`
+while the second is still fetching, so the spinner disappears early.
+The guard above is the fix and the corpus has been migrated to use it.
+
 ### `background` and `Sendable`
 
 The distinction that matters is not slow versus fast — **IO yields and
@@ -481,6 +540,45 @@ Two things recommend the name: it is Swift's, whose actor model is
 precisely what this section describes, and it is the Rust lowering
 verbatim, since an `Rc`-shaped cell handle is not `Send`. The check and
 the codegen agree without being separately specified.
+
+### Three aliasing types, and only one of them is confined
+
+`aliasing.md` is authoritative; what matters here is which side of
+`background` each one may sit on.
+
+| | may cross `background` | why |
+|---|---|---|
+| `Shared<T>` | **yes**, when `T` is `Sendable` | immutable — there are no writers to order |
+| `Synchronized<T>` | **yes**, when `T` is `Sendable` | internally synchronized — the lock is in the type |
+| `Confined<T>` | **never**, under any `T` | nothing orders two writers |
+| a reactive cell, `Binding<T>` | **never** | as above, plus they drive the view |
+
+`Confined<T: Sendable> implements Sendable` looks like the obvious rule
+and is unsound, which is worth stating here because this is where
+somebody will reach for it:
+
+```elp
+const hits = Confined.new(0)
+
+background(fn { hits.set(hits.get() + 1) })     // thread B
+hits.set(hits.get() + 1)                        // cell thread
+```
+
+`int` is as `Sendable` as a type gets, and the update is still lost.
+**`T: Sendable` constrains what is in the box; the race is the box.**
+
+So `Confined<T>` simply never declares the conformance, which needs no
+new machinery — it is this section's existing rule, *"a reactive cell
+fails to conform by simply never declaring it"*, applied to one more
+type. Conformance being field-wise then propagates it for free: a type
+holding a `Confined` field is not `Sendable`, all the way up, and the
+error lands on the capture the developer wrote rather than inside a
+generic instantiation.
+
+This is also where `Synchronized<T>` earns its place: a target with no
+cell thread has nothing to confine to, so server-side shared state had
+no mechanism at all before it existed. That was `examples/Worker`'s
+GAP 4.
 
 `background` **blocks its caller and returns the value.** The caller is
 a coroutine, so parking it is free and the cell thread stays open;

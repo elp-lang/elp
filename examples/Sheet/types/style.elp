@@ -1,0 +1,76 @@
+// Cell formatting, shared by every cell that uses it. Editing a style
+// restyles thousands of cells at once, which is why a spreadsheet shares
+// styles instead of copying them into each cell.
+//
+// RESOLVED — this is what `Confined<T>` is for, and this file is
+// `kind = .Library` deliberately: sharing is not a UI concern and should not
+// need the reactive system to express it. Before `aliasing.md` there was no
+// type a library author could write to get aliasing semantics at all.
+
+// The values. A plain immutable record, so it is `Copy` by the field-wise
+// rule with nothing declared about sharing.
+//
+// The first draft of this file held `Shared<bool>` and `Shared<Alignment>`
+// as two separate cells — two allocations for two booleans' worth of state,
+// and two independent things to keep consistent. One cell over one `Copy`
+// record is both cheaper and the only version where "set bold" is a single
+// atomic write.
+export object StyleValues {
+	const bold      bool,
+	const alignment Alignment,
+}
+
+StyleValues implements Copy
+
+export enum Alignment {
+	LEFT,
+	CENTER,
+	RIGHT,
+}
+
+Alignment implements Copy
+
+// One mutable cell. `Confined<T>` says both of the things a reader needs:
+// writes through it are visible to every other holder, and it cannot cross a
+// thread.
+export object Style {
+	const values Confined<StyleValues>,
+}
+
+// `Move`, not `Copy`, and not because of a rule about styles — `Copy` is
+// field-wise and `Confined<T>` is not `Copy`. Every type above this one in
+// the workbook inherits that by the same single rule.
+Style implements Move
+
+export fn Style.default() -> Self {
+	return Self { values = .new(StyleValues { bold = false, alignment = .LEFT }) }
+}
+
+// A second holder of the same style. The whole point of the type, and now it
+// has a name that says so.
+export fn Style.alias(&self) -> Self {
+	return Self { values = self.values.alias() }
+}
+
+export fn Style.isBold(&self) -> bool {
+	return self.values.get().bold
+}
+
+// `&self`, not `&var self`: the object is unchanged, the cell it points at
+// is not. Every Cell holding this Style sees the change.
+//
+// Note the shape — read, `copyWith`, write. `Confined<T>` has `.get()` and
+// `.set()` rather than a mutable place, which is `collections.md`'s
+// "collections hold values, not places" applied to a cell. On the cell
+// thread the read-modify-write cannot be interleaved, so this is atomic;
+// `Synchronized<T>`'s `.with()` exists precisely because that is not true
+// off it.
+export fn Style.setBold(&self, on bool) {
+	self.values.set(self.values.get().copyWith(bold = on))
+}
+
+export fn Style.setAlignment(&self, to Alignment) {
+	self.values.set(self.values.get().copyWith(alignment = to))
+}
+
+// vim: ft=kotlin

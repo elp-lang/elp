@@ -114,7 +114,7 @@ rejected.
 Required, not optional — `reactivity.md` already states that
 `Channel<T>` is `Sendable` when `T` is, and that is not otherwise
 expressible. The same applies to `Optional<T>`, `[T]`, and `Copy`/
-`Move` on any container.
+`Duplicate`/`Move` on any container.
 
 ```
 Channel<T: Sendable> implements Sendable
@@ -122,6 +122,24 @@ Channel<T: Sendable> implements Sendable
 
 "A `Channel` of a `Sendable` `T` implements `Sendable`." Sixth use of
 `: A + B`, and no `where` keyword.
+
+### The form carries a premise it does not state
+
+`Channel`'s line is sound for a reason the syntax does not express: a
+channel is **internally synchronized**, so the contents really are the
+only open question. Where that premise fails the same spelling produces
+a silent data race, which `aliasing.md` found the hard way —
+`Confined<T: Sendable> implements Sendable` is the obvious rule and is
+unsound, because `T: Sendable` constrains what is in the box while the
+race is the box.
+
+So on `Sendable` specifically, every legal use of this form owes a
+reason: immutable (`Shared<T>`), or internally synchronized
+(`Synchronized<T>`, `Channel<T>`). Nothing currently *checks* that, and
+a library author can write `MyCache<T: Sendable> implements Sendable`
+over an unsynchronized cache with the orphan rule's blessing. Tracked as
+open question 5 in `interfaces.md`, since it is a property of
+conformance rather than of generics.
 
 ## No template specialisation
 

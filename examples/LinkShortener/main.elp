@@ -16,7 +16,7 @@ const PORT = 8080
 export fn main() {
 	const store = Store.start()
 
-	Server.listen(PORT, fn (req) { route(req, store) })
+	Server.listen(PORT, fn (req) { return route(req, store) })
 }
 
 fn route(req Request, store Store) -> Response {

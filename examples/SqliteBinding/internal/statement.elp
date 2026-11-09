@@ -1,0 +1,115 @@
+import { Error } from elp.types
+import {
+	Sqlite3,
+	Sqlite3Stmt,
+	CString,
+	sqlite3_prepare_v2,
+	sqlite3_step,
+	sqlite3_finalize,
+	sqlite3_bind_text,
+	sqlite3_bind_int,
+	sqlite3_column_int,
+	sqlite3_column_text,
+} from .external
+
+// A prepared statement: the second handle, and the one that shows why the
+// lifetime question in `internal/external.elp` GAP 5 is not academic.
+
+export object Statement {
+	const handle &Sqlite3Stmt,
+	const sql    string,
+}
+
+// `Move`, for the same reason `Connection` is: `sqlite3_finalize` must run
+// exactly once.
+//
+// And a second reason the connection did not have: a statement is only valid
+// while its connection is open. That is an ordering constraint between two
+// independently-owned values, which is what Rust spends a lifetime parameter
+// on (`Statement<'db>`). elp has no lifetime parameters, and
+// `memory-model.md` Finding 4 infers borrows from usage inside one call —
+// which cannot express a constraint that spans two.
+//
+// So nothing stops `connection.close()` followed by `statement.step()`, and
+// the result is a use-after-free in C.
+Statement implements Move
+
+export fn Statement.new(db &Sqlite3, sql string) -> Either<Self, Error> {
+	const text = CString.from(sql)
+
+	match sqlite3_prepare_v2(db, &text, -1, &out, &tail) {
+		0    -> return Ok(Self { handle = out.asStatement(), sql })
+		code -> throw StatementError.CANNOT_PREPARE { sql, code }
+	}
+}
+
+@error
+export enum StatementError {
+	CANNOT_PREPARE { sql string, code int },
+	EXHAUSTED,
+}
+
+export fn Statement.bind(&self, index int, value string) -> Either<bool, Error> {
+	const text = CString.from(value)
+
+	// GAP — the fifth argument is SQLite's destructor for the bound bytes,
+	// and the choice is a memory-management decision with no elp vocabulary.
+	//
+	// Passing NULL ("static") promises the bytes outlive the statement;
+	// passing `SQLITE_TRANSIENT` asks SQLite to copy them. `text` is an elp
+	// local, so it must be the second — and "must be the second" is a fact
+	// about elp's ownership model that the C signature expresses as an
+	// untyped function pointer.
+	match sqlite3_bind_text(self.handle, index, &text, -1, &transient) {
+		0    -> return Ok(true)
+		code -> throw StatementError.CANNOT_PREPARE { sql = self.sql, code }
+	}
+}
+
+export fn Statement.bindInt(&self, index int, value int) -> Either<bool, Error> {
+	match sqlite3_bind_int(self.handle, index, value) {
+		0    -> return Ok(true)
+		code -> throw StatementError.CANNOT_PREPARE { sql = self.sql, code }
+	}
+}
+
+// GAP — the borrow returned by `sqlite3_column_text` dies on the next
+// `step`, and the signature cannot say so.
+//
+// This is `internal/external.elp` GAP 5 arriving as a concrete bug. The body
+// below is correct only because `.asString()` copies immediately. Write the
+// obvious thing instead —
+//
+//   const name = statement.textAt(0)      // a borrow into SQLite's buffer
+//   statement.step()                      // invalidates it
+//   return name                           // dangling
+//
+// — and nothing in the type system objects. Every real binding in every
+// language solves this by copying at the boundary, which is a convention
+// rather than a guarantee, and elp currently has no way to make it one.
+export fn Statement.textAt(&self, column int) -> Optional<string> {
+	return sqlite3_column_text(self.handle, column).asString()
+}
+
+export fn Statement.intAt(&self, column int) -> int {
+	return sqlite3_column_int(self.handle, column)
+}
+
+// `100` is SQLITE_ROW, `101` is SQLITE_DONE. Named constants would come from
+// the stdlib binding; spelled raw here because the point is the shape.
+export fn Statement.step(&self) -> Either<bool, Error> {
+	match sqlite3_step(self.handle) {
+		100  -> return Ok(true)
+		101  -> return Ok(false)
+		code -> throw StatementError.CANNOT_PREPARE { sql = self.sql, code }
+	}
+}
+
+export fn Statement.finalize(self) -> Either<bool, Error> {
+	match sqlite3_finalize(self.handle) {
+		0    -> return Ok(true)
+		code -> throw StatementError.CANNOT_PREPARE { sql = self.sql, code }
+	}
+}
+
+// vim: ft=kotlin

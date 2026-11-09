@@ -1,0 +1,203 @@
+// A quad-tree spatial index.
+//
+// This is the recursive-data-structure probe, and it exists because the
+// memory model has no vocabulary for one. Everything else here — generics,
+// `&var self`, pattern matching — is settled; the tree shape is not.
+//
+// Leans on undesigned constructs: recursive value types, mutable paths into
+// an interior node, matching through a reference, re-borrowing a `&var`
+// parameter, and multi-line boolean expressions (see types/geometry.elp).
+
+import { Point, Rect } from .types.geometry
+
+// Entries a leaf holds before it splits into four children.
+const CAPACITY = 4
+
+export object Entry<T> {
+	const at    Point,
+	const value T,
+}
+
+// GAP 1 — a recursive value type has no size.
+//
+// A node is either a leaf holding entries or a branch holding four more
+// nodes. Written as a value type this is infinite: a BRANCH contains four
+// QuadNodes, each of which may contain four more, so the compiler cannot
+// assign the type a size and cannot lay it out.
+//
+// Every value-semantics language needs a spelling for "this field sits
+// behind an indirection". Rust writes `Box<Node>` and makes you say it;
+// Swift makes a `class` a reference type so the question never arises for
+// trees; C++ uses a pointer. elp has `Copy`, `Move`, `Protected` and
+// `Binding<T>`, and not one of them says "boxed".
+//
+// This is not a corner case. Every tree, linked list, AST and JSON value in
+// every program elp will ever compile is this shape, and `BlogStyle` already
+// wants a JSON type.
+//
+// Written here without any marker, which is the version a person reaches for
+// first and which the compiler must reject with a diagnostic that teaches
+// the fix.
+export enum QuadNode<T> {
+	LEAF { entries [Entry<T>] },
+	BRANCH { children [QuadNode<T>] },
+}
+
+export object QuadTree<T> {
+	const bounds Rect,
+	var root     QuadNode<T>,
+}
+
+export fn QuadTree<T>.new(bounds Rect) -> Self {
+	return Self { bounds, root = .LEAF { entries = [] } }
+}
+
+// GAP 2 — a mutable path into an interior node.
+//
+// `insert` holds `&var self`, then needs `&var` to a node *inside*
+// `self.root` while that outer borrow is still live. `collections.md`
+// introduced `&var self` for a mutating receiver, but only ever for the
+// whole receiver; nothing says whether `&var self.root` is a thing, nor what
+// prevents two such paths existing at once.
+//
+// Rust's answer is the borrow checker. Swift's is exclusivity enforcement,
+// partly at run time. elp's cell-thread confinement does not help here —
+// that rules out *interleaving*, and this is straight-line aliasing within
+// one turn.
+export fn QuadTree<T>.insert(&var self, at Point, value T) -> bool {
+	if !self.bounds.contains(&at) {
+		return false
+	}
+
+	return insertInto<T>(&var self.root, &self.bounds, at, value)
+}
+
+// A free generic function that recurses. `functions.md` permits this — it is
+// declared in the package that owns `QuadNode` — and a named function
+// recursing needs nothing new, unlike a closure doing the same (see
+// examples/Undo).
+fn insertInto<T>(node &var QuadNode<T>, bounds &Rect, at Point, value T) -> bool {
+	// GAP 3 — matching through a reference.
+	//
+	// `node` is `&var QuadNode<T>`, so what does `entries` bind to in the
+	// LEAF arm? `patterns.md` settled that a record pattern binds fields by
+	// name, but every corpus site so far matched an owned value. Binding a
+	// field of a borrowed enum has to produce a borrow, or the match copies
+	// the whole payload and the mutation below is lost.
+	match node {
+		.LEAF { entries } -> {
+			if entries.length() < CAPACITY {
+				entries.append(Entry<T> { at, value })
+				return true
+			}
+
+			split<T>(&var node, bounds)
+			return insertInto<T>(&var node, bounds, at, value)
+		}
+
+		.BRANCH { children } -> {
+			const quads = bounds.quadrants()
+			var i = 0
+
+			while i < 4 {
+				if quads[i].contains(&at) {
+					return insertInto<T>(&var children[i], &quads[i], at, value)
+				}
+
+				i += 1
+			}
+
+			// Unreachable while the quadrants tile `bounds` exactly, which is
+			// what the half-open ranges in geometry.elp buy. Returning false
+			// rather than trapping keeps the invariant checkable in a test.
+			return false
+		}
+	}
+}
+
+// Replaces a full leaf with a branch and redistributes its entries.
+//
+// GAP 4 — this writes a whole new value through `&var`, replacing the enum
+// variant rather than mutating a field of it. Whether `*node = ...` or
+// `node.replace(...)` or plain assignment is the spelling is undesigned, and
+// it interacts with GAP 1: the new BRANCH owns four nodes it just built.
+fn split<T>(node &var QuadNode<T>, bounds &Rect) {
+	match node {
+		.LEAF { entries } -> {
+			const quads = bounds.quadrants()
+
+			var children [QuadNode<T>] = [
+				.LEAF { entries = [] },
+				.LEAF { entries = [] },
+				.LEAF { entries = [] },
+				.LEAF { entries = [] },
+			]
+
+			for entry in entries {
+				var i = 0
+
+				while i < 4 {
+					if quads[i].contains(&entry.at) {
+						match children[i] {
+							.LEAF { entries as bucket } -> bucket.append(entry)
+							_ -> nil
+						}
+
+						i = 4
+					}
+
+					i += 1
+				}
+			}
+
+			node = .BRANCH { children }
+		}
+
+		// Splitting a branch is a caller bug, not a runtime condition.
+		.BRANCH { children } -> nil
+	}
+}
+
+export fn QuadTree<T>.query(&self, area &Rect) -> [Entry<T>] {
+	var found [Entry<T>] = []
+
+	// GAP 5 — a `&var` to a local, passed down and re-borrowed at every
+	// level of the recursion. The corpus has never passed a local mutably.
+	collect<T>(&self.root, &self.bounds, area, &var found)
+
+	return found
+}
+
+fn collect<T>(node &QuadNode<T>, bounds &Rect, area &Rect, out &var [Entry<T>]) {
+	if !bounds.intersects(area) {
+		return
+	}
+
+	match node {
+		.LEAF { entries } -> {
+			for entry in entries {
+				if area.contains(&entry.at) {
+					// GAP 6 — `entry` is borrowed from `entries` and appended
+					// into `out`. Under "collections hold values, not places"
+					// (memory-model.md) this is a copy if `Entry<T>` is Copy,
+					// and `Entry<T>` is Copy only if `T` is. Nothing declares
+					// that conditional conformance here, so either the
+					// compiler infers it or this line needs `.copy()`.
+					out.append(entry)
+				}
+			}
+		}
+
+		.BRANCH { children } -> {
+			const quads = bounds.quadrants()
+			var i = 0
+
+			while i < 4 {
+				collect<T>(&children[i], &quads[i], area, &var out)
+				i += 1
+			}
+		}
+	}
+}
+
+// vim: ft=kotlin

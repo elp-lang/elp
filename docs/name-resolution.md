@@ -439,6 +439,210 @@ registry graph is a conflict to report rather than to unify.
 This is what makes a monorepo the easy case rather than a special one:
 a local package is a dependency whose value happens to be a path.
 
+### Native libraries — `links` is an allow-list, not a dependency
+
+`@external(.OBJC) fn OBJC_msgSend<T: OBJC_Obj + Sendable>(...)` already
+exists (`BlogStyle/internal/api.elp`) and already parses as a body-less
+declaration. What it never said is **which shared library the symbol
+comes from**, or how that library is found. `examples/SqliteBinding`
+needs both, because libsqlite3 is in the SDK on macOS and iOS, a package
+install on Linux, and a platform library on Android.
+
+Three separate questions, and conflating any two of them is what makes
+this awkward in other toolchains:
+
+| question | where it is answered |
+|---|---|
+| may this package bind native code at all, and what? | **`links` on `@Package`** |
+| which allowed library does *this symbol* come from? | **`@external`'s arguments** |
+| does the build *acquire* the library, or expect to find it? | **`dependencies`**, via `.native(...)` |
+
+```
+@Package(
+	name = "sqlite",
+	version = .new(0, 1, 0, 0),
+	entry = "db.elp",
+	kind = .Library,
+	dependencies = [
+		.stdlib("1.0.0"),
+	],
+	links = [
+		.system("sqlite3", binding = .dynamic, minimumVersion = "3.35.0"),
+	],
+)
+```
+
+```
+@external(.C, library = "sqlite3") {
+	fn sqlite3_open(path &CString, out &OpaqueHandle) -> int
+	fn sqlite3_close(db &Sqlite3) -> int
+}
+```
+
+The block form is `macros.md`'s. A macro receives the AST of what follows
+it, and a declaration list is an AST node, so a package that links one
+library names it once. It is not an FFI feature, and the braces are not a
+scope because they are not in the program at all — they are the generator's
+input, and what reaches the module is ordinary module-level declarations.
+
+#### Why `links` is its own property rather than a `dependencies` variant
+
+`dependencies` carries a **version algebra**: a resolver, a transitive
+graph, semver, and "one version per package" above. A system library has
+none of it. There is no manifest to read, no transitive graph, and no
+version to *choose* — you cannot ask the OS for a different libsqlite3.
+Putting it in `dependencies` imports an algebra that does not apply, and
+version resolution is precisely the part that breaks.
+
+It is also the property most worth reviewing. `links` is the complete
+list of native surface a package can reach, in one place in one file, so
+adding native code is a manifest change rather than a line buried in a
+`.elp` file — which is where review attention already goes. That is why
+it reads as permission ("what this package *may* link against") rather
+than as an instruction.
+
+**`.native(...)` in `dependencies` is still wanted**, for the other kind:
+a native library the build genuinely acquires — fetched, vendored, or
+built from source. That one *does* have the full algebra (a source, a
+checksum, a version to pick, a build recipe), so it belongs with the
+other dependencies, and it **satisfies** a `links` entry rather than
+replacing it. A `links` entry with no matching `.native` dependency means
+"expect this from the system or SDK".
+
+#### `binding` does not reopen the question `dispatch.md` defers
+
+`dispatch.md` leaves "static vs shared linking" undecided for **elp's own
+code**. `binding` says how a **foreign** library attaches, which is a
+different decision and not ours to defer: the library dictates it. A
+system framework cannot be statically linked whatever elp prefers.
+
+`.dynamic` is link-time dynamic, `.static` links an archive,
+and `.runtime` is `dlopen` — see the open items.
+
+#### Per-target variation needs no new mechanism
+
+`condition` already exists:
+
+```
+links = [
+	.system("sqlite3", binding = .dynamic),
+	.system("sqlite3", binding = .dynamic, pkgConfig = "sqlite3",
+		condition = target == .Linux),
+]
+```
+
+And because the dependency graph is already per-target, so is this.
+
+#### A library's `links` constrains its consumers' targets
+
+This partially answers the open item above — *"`.Library` probably takes
+no `targets` at all"*. A library with no native surface takes none,
+because its platforms are whatever its consumer's are. **A library with a
+`links` entry is different:** `.Web` has no shared libraries and no
+`dlopen`, so a package that links one cannot be built for Web, and
+neither can anything that imports it.
+
+So `links` is the first thing that gives a `.Library` real target
+constraints, and they propagate to consumers. `examples/SqliteBinding`
+spells its `targets` out for that reason.
+
+#### A `links` entry is an exclusive claim
+
+**At most one package in a program may link a given native library.** Two
+packages both naming `.system("sqlite3", ...)` is a resolution error, in
+the same place and of the same kind as two majors of one package above.
+
+The problem it answers is that two packages may each declare
+`@external(.C, library = "sqlite3") fn sqlite3_open(...)` with *different
+signatures*, each locally correct, and the linker resolves by name — so
+both get the same address and one of them is wrong.
+
+The orphan rule cannot be stretched over it, and the reason is exactly
+that **there is no contract on the far side of a shared library.** The
+orphan rule works because elp owns both operands: some package defines
+`T`, some package defines `I`, and "only those two may declare the
+conformance" names a real party in both cases. Nobody defines
+`sqlite3_open`. It is a name in a symbol table with no types attached and
+no author to appeal to, so a rule of the form "only the owner may declare
+it" has nothing to bind to.
+
+The uniqueness therefore has to be imposed one level up, on the only
+elp-side entity there is: **the symbol has no owner, but the library can
+have exactly one claimant.** That is the orphan rule's shape — one
+declaration site, enforced at resolution, so nothing downstream needs
+disambiguating — moved from the type to the package.
+
+Cargo reached the same rule under the same name: its `links` key must be
+unique across a dependency graph. What makes it liveable there is the
+`-sys` crate convention, one binding package per library that everyone
+else depends on. elp makes that convention the rule, which is the right
+way round, because the convention is what makes the rule tolerable and
+leaving it optional is the bad half.
+
+**It obliges stdlib to claim the universal ones.** libc, libSystem,
+Foundation and the Android platform libraries are reachable from too many
+places for a first-come claim to be sane, so they are stdlib's and no user
+package links them.
+
+#### What exclusivity leaves, and the whole-program check
+
+Two cases survive it, and one rule catches both: **within a program, all
+declarations of the same symbol in the same library must have identical
+signatures.**
+
+| case | caught by |
+|---|---|
+| two packages declaring one library's symbols | exclusivity, at resolution |
+| one package disagreeing with itself across files | the agreement check |
+| two *different* libraries exporting the same name | the agreement check |
+
+elp can run that check where Rust cannot, and for something it has already
+paid for: the build is whole-program and resolution is global, so every
+`@external` declaration in the program is in hand at once. Rust's
+`clashing_extern_declarations` lint is per-crate on purpose — separate
+compilation never sees the other crate's declaration.
+
+The escape hatch for the third case is a **`symbol =` argument**, so the
+elp name and the linker name may differ:
+
+```
+@external(.C, library = "mylib", symbol = "init") export fn mylibInit() -> int
+```
+
+which is wanted anyway for a C name that is not a valid elp identifier,
+and is what makes the agreement check's error fixable rather than fatal.
+
+**What none of this fixes.** Every declaration agreeing with every other
+declaration does not mean any of them agrees with the library. No header
+is being read and a symbol table carries no types, so a unanimous wrong
+signature is still wrong and still corrupts memory. That residual is
+irreducible without parsing C, and it is the honest reason `@external` is
+the language's one unsafe surface rather than merely its most awkward one.
+
+#### Open within native linking
+
+- **A version constraint on a system dynamic library is unenforceable at
+  build time.** The linker does not check it and the installed version is
+  whatever is present at run time. So `minimumVersion` is either a
+  build-time probe where one exists (pkg-config, an SDK manifest) or a
+  promise the code must verify itself (`sqlite3_libversion()`). This is
+  the same shape as `examples/SqliteBinding`'s threading-mode finding — a
+  property declared statically that is only knowable at runtime — and two
+  instances make it a pattern rather than an oddity.
+- **`.runtime` binding changes the shape of every declaration in the
+  block.** `error-handling.md` makes a failure a value, so a `dlopen`
+  that fails is an `Either` — which means the symbols are not callable
+  until something resolved the library, and that implies a handle on the
+  library itself, with the same exactly-once release problem as any other
+  foreign handle. `.runtime` may be out of scope for a first version
+  rather than a third enum case.
+- **Whether a claim may be delegated.** Exclusivity above says one
+  package per library, which is right for a binding package and awkward
+  for an application that wants two symbols of its own out of a library
+  a dependency already claims. Re-exporting the dependency's declarations
+  is the answer in principle; whether that needs anything beyond an
+  ordinary import is not designed.
+
 ### Lockfile
 
 A separate generated `Package.lock`, in elp syntax so the toolchain has

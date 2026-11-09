@@ -1,0 +1,41 @@
+import { View } from ...internal.view
+
+component Pane {
+	export var view Binding<View>
+	export var label string
+
+	// `view.buffer` is the shared handle and `view.cursor` is this pane's
+	// own. Reading them side by side was the sharpest form of the original
+	// ambiguity: two identical-looking field accesses, one private to this
+	// pane and one global to the document.
+	//
+	// It is now visible one hop away — `Buffer` holds a `Confined<[string]>`
+	// and `Cursor` is `Copy` — rather than being unknowable.
+	return Column(style = Styles.pane) {
+		Text("{label} — line {view.cursor.line} of {view.buffer.lineCount()}")
+
+		// GAP — does reading a `Confined<T>` inside a component body
+		// subscribe?
+		//
+		// This has to re-render when another pane inserts a line, and under
+		// Model B (`reactivity.md`) a read is what subscribes. A `Confined`
+		// *is* a cell confined to the cell thread, so the mechanism is
+		// there — but `reactivity.md` keys subscription off `var` inside a
+		// component body, and `lines` is neither.
+		//
+		// If the answer is no, this pane silently stops updating and the
+		// whole probe is broken. If the answer is yes, then `Confined<T>`
+		// and a reactive cell are the same mechanism with two names, which
+		// is the open question in `aliasing.md` arriving as a concrete bug
+		// rather than a note.
+		//
+		// `.get()` is written explicitly because the handle is not a
+		// collection and `for` needs a materialised one with a `by`
+		// identity.
+		for line in view.buffer.lines.get() by line {
+			Text(line)
+		}
+	}
+}
+
+// vim: ft=kotlin

@@ -1,0 +1,57 @@
+import { Package, Version } from elp.package
+
+@Package(
+	name = "sqlite",
+	version = .new(0, 1, 0, 0),
+	entry = "db.elp",
+	kind = .Library,
+
+	// `targets` on a `.Library` is unusual — `name-resolution.md` says a
+	// library's platforms are whatever its consumer's are. It is spelled out
+	// here because `links` below makes it not true: `.Web` has no shared
+	// libraries and no `dlopen`, so this package cannot be built for Web and
+	// neither can anything importing it.
+	//
+	// That is the first thing in the design that gives a library real target
+	// constraints, and they propagate to consumers.
+	targets = [.macOS, .Linux, .iOS, .Android],
+
+	dependencies = [
+		.stdlib("1.0.0"),
+
+		// Not here, deliberately. libsqlite3 is not acquired — it is in the
+		// SDK on macOS and iOS, a platform library on Android, and a package
+		// install on Linux. There is no version to *choose* and no transitive
+		// graph, so it has none of the algebra `dependencies` carries.
+		//
+		// `.native(...)` is for the other kind — a native library this build
+		// fetches, vendors or compiles — which does have all of it, and which
+		// would *satisfy* the `links` entry below rather than replace it.
+	],
+
+	// The allow-list: the complete native surface this package may reach, in
+	// one reviewable place. `@external` declarations name which entry they
+	// come from; they cannot reach anything not listed here.
+	//
+	// It is also an exclusive claim. No other package in the program may
+	// link sqlite3 — the entry says "mine", not only "allowed" — which is
+	// how internal/external.elp's symbol-collision gap got closed. The
+	// symbol has no owner to appeal to, so the uniqueness sits on the one
+	// elp-side thing that exists: this package. Any app wanting SQLite
+	// depends on this package rather than declaring the symbols again.
+	links = [
+		.system("sqlite3", binding = .dynamic, minimumVersion = "3.35.0"),
+
+		// GAP — `minimumVersion` is unenforceable for a system dynamic
+		// library. The linker does not check it and the installed version is
+		// whatever is present at run time, so this is either a build-time
+		// probe where one exists (pkg-config on Linux) or a promise the code
+		// has to verify itself with `sqlite3_libversion()`.
+		//
+		// Same shape as the threading-mode gap in internal/external.elp: a
+		// property the manifest states statically that is only knowable at
+		// runtime. Two instances now, which makes it a pattern.
+	],
+)
+
+// vim: ft=kotlin

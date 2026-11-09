@@ -31,7 +31,10 @@ export fn LoginForm -> Component {
 	// Similarly to the way that React and Svelte have props and SwiftUI has
 	// struct properties. Exporting is the same as marking as "public".
 	export var email Optional<string>
-	export *fn onSubmit(username string, password Protected<string>)
+	// `*fn onSubmit(...)` would declare a *required* callback prop
+	// (functions.md). This component deliberately handles its absence, so the
+	// optionality is spelled out the same way `email`'s is, one line up.
+	export var onSubmit Optional<fn(string, Protected<string>)>
 
 	// They also have their own private variables as this is a block/lexical scope.
 	// Note that a variable is just that, it's variable in nature so it is mutable.
@@ -47,11 +50,14 @@ export fn LoginForm -> Component {
 	fn handleSubmit() {
 		attempts += 1
 
-		if onSubmit.isNil() {
-			throw LoginError.NO_HANDLER
+		// `onSubmit` is a cell, so it is narrowed by *binding* rather than by
+		// an `isNil()` test: a call between the test and the use would end
+		// the turn and another turn could clear it (operators.md, "The
+		// amendment: a call ends the turn").
+		return match onSubmit {
+			nil      -> throw LoginError.NO_HANDLER
+			callback -> callback(email, password)
 		}
-
-		onSubmit(email, password)
 	}
 
 	// A component must return something that implements Component or nil.

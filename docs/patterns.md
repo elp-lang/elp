@@ -143,9 +143,18 @@ what makes `(whole, fraction)` in the parallel match above bind two
 `int`s after `(nil, _)` and `(_, nil)` have been handled.
 
 This is the same flow-sensitive machinery `operators.md` settled for
-narrowing through `&&` and `||`, and it is sound for the same reason:
-`reactivity.md`'s cell thread confinement means nothing interleaves
-with straight-line code inside one turn.
+narrowing through `&&` and `||`, and inside one turn it is sound for
+the same reason: `reactivity.md`'s cell thread confinement means
+nothing interleaves with straight-line code.
+
+**Binding is also the only form that survives a yield point**, which is
+why it is the primary mechanism and not a convenience. A bound pattern
+produces a **local**, and no other turn can write a local — whereas an
+in-place narrowing of a cell is invalidated by the first call in the
+narrowed scope, since elp has no function colouring and so no marker for
+where a turn ends. `operators.md` carries the amendment; the consequence
+here is that `match cell { nil -> ...; x -> ... }` is always correct,
+while `if cell != nil { ... }` is correct only up to the first call.
 
 ## A variant payload is a record
 
@@ -208,6 +217,83 @@ for a hazard that cannot occur there.
 error")"`. An unnamed payload gives a JSON encoder no key to use, so
 the generated shape has to be invented. `SERVER { message string }`
 makes it fall out.
+
+## `match` is an expression, and an arm produces a value
+
+`match` and `if` both produce values. (`if` was settled earlier, when
+a dependency's `condition = if target == .iOS` showed it reading better
+than a nest of statements.)
+
+An arm is either an expression or a block, and **a block arm's value is
+its final expression**:
+
+```elp
+return match self.done.pop() {
+	nil -> false
+	edit -> {
+		edit.revert(&var doc)
+		self.undone.append(edit)
+		true
+	}
+}
+```
+
+### Why `return` is not what produces it
+
+This looks like it contradicts the rule that a function body always
+needs an explicit `return` (`functions.md`). It does not, and the
+reason is worth stating because the asymmetry is **forced rather than
+chosen**:
+
+**`return` exits a function.** An arm does not exit a function — it
+produces a value in place, and execution carries on with whatever
+consumes the `match`. So `return` could never mean "this is the arm's
+value" without becoming ambiguous with the `return` that really does
+leave the function:
+
+```elp
+const label = match state {
+	.DONE { output } -> output
+	_ -> {
+		Console.log("unknown state")
+		return "unreported"      // leaves the enclosing fn; `label` is never bound
+	}
+}
+```
+
+A function body is a **statement** block, so it needs a keyword to hand
+a value back. An arm is already in **expression** position, so it needs
+none. Two different constructs, one rule each.
+
+### The rules
+
+| | |
+|---|---|
+| arm forms | `-> expr` or `-> { statements; expr }` |
+| a block arm's value | its final expression; nothing if the block ends in a statement |
+| `return` / `throw` in an arm | exits the **enclosing function**, skipping the rest of the `match` |
+| a diverging arm | `return`, `throw` or a non-returning call imposes no type constraint |
+| arm agreement | every non-diverging arm produces the same type |
+| a `match` used as a statement | legal; its value is discarded |
+| loops | statements, never expressions — there is no `break`, so no loop value |
+
+The diverging-arm rule is what makes this work:
+
+```elp
+return match onSubmit {
+	nil      -> throw LoginError.NO_HANDLER
+	callback -> callback(email, password)
+}
+```
+
+The `nil` arm never produces anything, so it constrains nothing and the
+`match`'s type comes from the second arm alone.
+
+A value-producing `match` in statement position is allowed because
+`store.elp`'s message loop is exactly that — arms run for effect and
+produce nothing. A `match` whose arms *do* produce a value that nobody
+consumes is a candidate for an `unused_value` lint
+(`diagnostics.md`), not an error.
 
 ## The pattern grammar
 

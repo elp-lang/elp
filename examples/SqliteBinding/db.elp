@@ -1,0 +1,145 @@
+// The safe surface over internal/external.elp. This is where the FFI boundary's
+// questions turn into decisions a caller lives with.
+
+import { Error } from elp.types
+import {
+	Sqlite3,
+	CString,
+	sqlite3_open,
+	sqlite3_close,
+	sqlite3_errmsg,
+	sqlite3_threadsafe,
+} from .internal.external
+import { Statement } from .internal.statement
+
+@error
+export enum DbError {
+	CANNOT_OPEN { path string, message string },
+	CLOSED,
+	NOT_THREADSAFE { mode int },
+}
+
+// A connection.
+//
+// This is the FFI counterpart of `examples/Sheet`'s `Style` and
+// `examples/Pipeline`'s `Collector`: a domain type wrapping a handle whose
+// duplicates alias. The difference is that for those two the compiler could
+// see it, because `Confined<T>`/`Synchronized<T>` are elp types. Here it
+// cannot, and the declaration is the only record.
+export object Connection {
+	// GAP — this field is the whole problem in one line.
+	//
+	// `&Sqlite3` is a borrow of something elp does not own and whose lifetime
+	// it does not control. Copying it aliases a live database connection, and
+	// `aliasing.md`'s field-wise `Copy` rule cannot tell: an external type has
+	// no fields to be wise about.
+	//
+	// So `Connection implements Move` below is a *promise by the author*
+	// rather than a conclusion by the compiler, and it is the one place in
+	// the language where those differ. Everywhere else, writing `implements
+	// Copy` on something holding a mutable alias is simply refused.
+	const handle &Sqlite3,
+	const path   string,
+}
+
+// `Move`, chosen by hand and for the right reason: the handle must be closed
+// exactly once, and `Move` is the only tier where "the source is dead" makes
+// that checkable.
+//
+// There is deliberately no `.alias()`. SQLite permits several connections to
+// one file and that is the supported way to share — `Connection.open` twice
+// — rather than two handles to one connection, which would make "who closes
+// it" unanswerable.
+Connection implements Move
+
+// GAP 1 — nothing guarantees `close` is called.
+//
+// `Move` gives *at most once*: once the handle is moved into `close` the
+// source is dead, so a double close is a compile error. It does not give *at
+// least once*. An elp program that drops a `Connection` on the floor leaks
+// the C allocation, and there is no mechanism that would notice.
+//
+// elp has no destructors, no `defer`, and nothing that runs at scope exit.
+// Three candidates, none designed:
+//
+//   - a `Drop`-shaped interface the compiler calls, which is a large
+//     addition and reaches well past FFI;
+//   - a scoped form, `with Connection.open(path) as db { ... }`, which is
+//     narrow and reads well and is a new statement;
+//   - `@MustUse`-style linting, which catches the common case and nothing
+//     else.
+//
+// The second is the smallest thing that works, and it is worth noting that
+// `Synchronized<T>`'s `.update`/`.with` are the same shape — a resource
+// borrowed for the extent of one block — arrived at independently.
+export fn Connection.open(path string) -> Either<Self, Error> {
+	// GAP 2, RESOLVED — there is no `unsafe` marker, because `@external` is
+	// the marker.
+	//
+	// An earlier draft of this probe asked whether `unsafe` goes on the
+	// declaration, the call site, or a block. The question dissolves:
+	// `@external` is an attribute on the declaration, it is the only way to
+	// reach native code, and `links` in `Package.elp` bounds what it can
+	// reach. There is nothing a second keyword would add.
+	//
+	// What remains true is the objection to declaration-site marking: a
+	// reader of *this* function cannot see that it touches native code. The
+	// mitigation is that `links` lists the whole surface in one file, which
+	// is a better audit point than a keyword sprinkled through bodies.
+	const c = CString.from(path)
+
+	match sqlite3_open(&c, &out) {
+		0    -> return Ok(Self { handle = out.asSqlite3(), path })
+		code -> throw DbError.CANNOT_OPEN { path, message = "sqlite error {code}" }
+	}
+}
+
+export fn Connection.close(self) -> Either<bool, Error> {
+	// `self` by value, not `&self` — this consumes the connection, which is
+	// what makes the double close a compile error rather than a crash.
+	//
+	// GAP — `fn Type.method(self)` is not a form `functions.md` has.
+	// Receivers there are `&self` or `&var self`. A by-value receiver is
+	// exactly what a consuming method needs and there is no spelling for it.
+	match sqlite3_close(self.handle) {
+		0    -> return Ok(true)
+		code -> throw DbError.CANNOT_OPEN { path = self.path, message = "close failed: {code}" }
+	}
+}
+
+export fn Connection.lastError(&self) -> string {
+	return sqlite3_errmsg(self.handle).asString() ?? "unknown"
+}
+
+export fn Connection.prepare(&self, sql string) -> Either<Statement, Error> {
+	return Statement.new(self.handle, sql)
+}
+
+// GAP 3 — the thread discipline is a runtime answer to a static question.
+//
+// `aliasing.md` puts every mutable alias in one of two tiers: `Confined<T>`
+// (never crosses a thread) or `Synchronized<T>` (crosses, lock in the type).
+// A `Connection` is one or the other depending on how libsqlite3 was built,
+// and `sqlite3_threadsafe()` is the only way to find out.
+//
+// So this function has to exist, and it returns an answer the type system
+// needed before the program started:
+//
+//   0  single-thread    the whole library is unsafe to share at all
+//   1  serialized       connections may be shared freely
+//   2  multi-thread     one connection per thread, no sharing
+//
+// Mapping those onto elp: mode 1 is `Synchronized`-shaped, mode 2 is
+// `Confined`-shaped, mode 0 is neither. A `Connection` cannot be declared
+// `Sendable` or not until this is known, which means either the binding
+// declares the strictest and throws away mode 1's capability, or
+// `Sendable`-ness becomes something checked at startup — which is a
+// different language from the one `reactivity.md` describes.
+//
+// This is the first thing in the corpus that `aliasing.md` cannot answer
+// even in principle.
+export fn Connection.threadingMode() -> int {
+	return sqlite3_threadsafe()
+}
+
+// vim: ft=kotlin

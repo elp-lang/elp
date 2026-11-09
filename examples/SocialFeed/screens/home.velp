@@ -11,9 +11,24 @@ import { Post } from .types.post
 export fn Feed -> Component {
 	var posts [Post] = []
 	var loading = true
+	var refreshing = false
 	var err Error
 
+	// `getFeed()` yields, so `loading = true` and `loading = false` land in
+	// different turns and two refreshes can be in flight at once — the first
+	// to return would clear the spinner while the second is still fetching.
+	//
+	// `loading` cannot be the guard: it starts `true` to mean "nothing
+	// fetched yet", so testing it would refuse the very first load. Display
+	// state and a concurrency guard are genuinely two different things, and
+	// conflating them was the original bug. `refreshing` is the guard, and it
+	// works because the test and the write are adjacent with no call between
+	// them (reactivity.md, "A yield point ends the turn").
 	fn loadFeed() {
+		if refreshing { return }
+		refreshing = true
+		defer { refreshing = false }
+
 		loading = true
 
 		return match getFeed() {

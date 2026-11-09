@@ -1,0 +1,61 @@
+import { Job, JobId, PoolError } from .types.job
+import { Pool } from .internal.pool
+
+// Submits a batch, shuts the pool down halfway through, and reports what was
+// lost. The interesting output is the count of cancelled jobs: it is only
+// correct if shutdown and completion cannot interleave, which on a `.Binary`
+// target they can. See GAP 4 in internal/pool.elp.
+export fn main() -> int {
+	const pool = Pool.start(4)
+
+	var submitted [JobId] = []
+	var i = 0
+
+	while i < 32 {
+		const job = Job { id = JobId { value = i }, payload = "task-{i}" }
+
+		match pool.submit(job) {
+			Ok(id) -> submitted.append(id)
+			Err(e) -> {
+				// Reaching this before shutdown means the inbox filled up,
+				// which is a capacity decision rather than a failure. The
+				// design has not said whether `send` to a full channel blocks
+				// or fails, and the two give this loop very different
+				// behaviour.
+				Console.error("submit {i} refused: {e.toString()}")
+			}
+		}
+
+		if i == 16 {
+			const lost = pool.shutdown()
+			Console.log("shutdown with {lost} jobs still queued")
+		}
+
+		i += 1
+	}
+
+	// Every submit after the shutdown should have been refused with
+	// SHUTTING_DOWN rather than hanging — which is only true if the pool
+	// drains its inbox instead of returning from the loop. It does not, so
+	// this program is expected to deadlock, and that is the finding.
+	var done = 0
+	var cancelled = 0
+
+	for id in submitted {
+		match pool.status(id) {
+			Err(e) -> Console.error("status {id.value}: {e.toString()}")
+			Ok(state) -> match state {
+				.DONE { output }               -> done += 1
+				.CANCELLED { onShutdown }      -> cancelled += 1
+				.FAILED { reason }             -> Console.error("job {id.value}: {reason}")
+				_                              -> nil
+			}
+		}
+	}
+
+	Console.log("{done} done, {cancelled} cancelled")
+
+	return 0
+}
+
+// vim: ft=kotlin

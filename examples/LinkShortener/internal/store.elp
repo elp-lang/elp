@@ -78,15 +78,15 @@ fn Store.ask<T>(&self, build fn(Channel<T>) -> StoreMsg) -> T {
 }
 
 export fn Store.put(&self, link Link) -> Either<Link, Error> {
-	return self.ask<Either<Link, Error>>(fn (reply) { .PUT { link, reply } })
+	return self.ask<Either<Link, Error>>(fn (reply) { return .PUT { link, reply } })
 }
 
 export fn Store.resolve(&self, code string) -> Either<Link, Error> {
-	return self.ask<Either<Link, Error>>(fn (reply) { .RESOLVE { code, reply } })
+	return self.ask<Either<Link, Error>>(fn (reply) { return .RESOLVE { code, reply } })
 }
 
 export fn Store.list(&self) -> [Link] {
-	return self.ask<[Link]>(fn (reply) { .LIST(reply) })
+	return self.ask<[Link]>(fn (reply) { return .LIST(reply) })
 }
 
 // vim: ft=kotlin

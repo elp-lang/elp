@@ -1,0 +1,184 @@
+// A job pool with graceful shutdown.
+//
+// `LinkShortener` declares a SHUTDOWN variant and never sends one, so the
+// whole shutdown path is undesigned. This probe sends it, and everything
+// interesting happens in the ten lines after it arrives.
+//
+// Leans on undesigned constructs: `break`, channel closure semantics, a
+// blocked receiver whose sender has gone, multi-consumer channels, and what
+// "cell" means on a target with no UI thread.
+
+import { Error } from elp.types
+import { Job, JobId, JobState, PoolError } from ..types.job
+
+export enum PoolMsg {
+	SUBMIT { job Job, reply Channel<Either<JobId, Error>> },
+	STATUS { id JobId, reply Channel<Either<JobState, Error>> },
+	COMPLETED { id JobId, state JobState },
+	// Replies with the number of jobs that never ran, so a caller can report
+	// what was lost rather than guessing.
+	SHUTDOWN { reply Channel<int> },
+}
+
+export object Pool {
+	const inbox Channel<PoolMsg>,
+}
+
+Pool implements Sendable
+
+export fn Pool.start(workers int) -> Self {
+	const inbox Channel<PoolMsg> = .new(capacity = 64)
+	const work Channel<Job> = .new(capacity = 64)
+
+	// GAP 1 — is a Channel multi-consumer?
+	//
+	// `workers` coroutines all iterate `work`. `collections.md` settled that
+	// a Channel's iterator blocks in `next()` and returns nil on close, which
+	// describes one consumer. With several, each message must go to exactly
+	// one of them — that is a different guarantee from broadcast, and nothing
+	// says which `Channel<T>` provides. `LinkShortener` has a single consumer
+	// so it never had to say.
+	var spawned = 0
+
+	while spawned < workers {
+		background(fn {
+			for job in work {
+				const state = run(&job)
+				inbox.send(.COMPLETED { id = job.id, state })
+			}
+		})
+
+		spawned += 1
+	}
+
+	background(fn {
+		var states Map<JobId, JobState> = .new()
+		var queued [Job] = []
+		var draining = false
+
+		// GAP 2 — there is no `break`.
+		//
+		// The corpus has `while` and `for` and not one `break` or `continue`.
+		// A SHUTDOWN arm has to stop this loop, and the only exit elp offers
+		// is `return` from the enclosing function — which here is a closure
+		// passed to `background`, so returning from it is both the loop exit
+		// and the coroutine's end. That conflates two things, and it only
+		// works at all because the loop is the closure's last statement.
+		//
+		// It also interacts with the implicit-return question: if a closure's
+		// last expression is its value, a bare `return` inside one needs a
+		// meaning.
+		for msg in inbox {
+			match msg {
+				.SUBMIT { job, reply } -> {
+					if draining {
+						reply.send(Err(PoolError.SHUTTING_DOWN))
+					} else {
+						states.set(job.id, .QUEUED)
+						queued.append(job)
+						work.send(job)
+						reply.send(Ok(job.id))
+					}
+				}
+
+				.STATUS { id, reply } -> {
+					reply.send(match states.get(id) {
+						nil   -> Err(PoolError.UNKNOWN_JOB { id })
+						state -> Ok(state)
+					})
+				}
+
+				.COMPLETED { id, state } -> {
+					states.set(id, state)
+					queued = queued.filter(fn (job) { return !job.id.equals(&id) })
+				}
+
+				.SHUTDOWN { reply } -> {
+					draining = true
+
+					// GAP 3 — closing a channel with blocked readers.
+					//
+					// `work.close()` has to make every worker's `for job in
+					// work` terminate. But a worker may be *mid-job* right
+					// now, and will try `inbox.send(.COMPLETED ...)` when it
+					// finishes. If `inbox` is closed first that send fails;
+					// if it is not, this loop has already exited and nobody
+					// will receive it. Neither order is obviously right and
+					// the design has never said what `send` to a closed
+					// channel does — error, trap, or silently drop.
+					work.close()
+
+					// GAP 4 — cancellation during mutation.
+					//
+					// Every job still in `queued` is marked CANCELLED here,
+					// while a worker may be concurrently finishing one of
+					// them and about to report DONE for the same id. On the
+					// three client targets `reactivity.md`'s cell-thread
+					// confinement rules out interleaving, but this is a
+					// `.Binary` target with no UI thread, so that guarantee
+					// does not exist here and this is a genuine race on
+					// `states`.
+					//
+					// That is the open question "the server has no UI thread
+					// for cell confinement", arriving as a concrete bug
+					// rather than a note.
+					for job in queued {
+						states.set(job.id, .CANCELLED { onShutdown = true })
+					}
+
+					reply.send(queued.length())
+
+					// GAP 5 — in-flight requests are abandoned.
+					//
+					// A caller blocked in `reply.receive()` inside `submit`
+					// below, whose SUBMIT is still sitting in `inbox` behind
+					// this SHUTDOWN, will never be answered. `PoolError
+					// .ABANDONED` exists for them and there is no way to
+					// send it, because the only code that could is the loop
+					// that is about to stop.
+					//
+					// Draining `inbox` before exiting would fix it, and
+					// requires reading from a channel after deciding to
+					// stop — so the loop needs a second phase and `break`
+					// becomes unavoidable.
+					return
+				}
+			}
+		}
+	})
+
+	return Self { inbox }
+}
+
+fn run(job &Job) -> JobState {
+	if job.payload.trim().length() == 0 {
+		return .FAILED { reason = "empty payload" }
+	}
+
+	return .DONE { output = job.payload.trim() }
+}
+
+// The ask pattern from `LinkShortener`, with the failure mode made explicit:
+// if the pool has stopped, this blocks forever. A reply channel of capacity 1
+// with nobody to write to it is a deadlock, not an error, and nothing in the
+// type signature says so.
+fn Pool.ask<T>(&self, build fn(Channel<T>) -> PoolMsg) -> T {
+	const reply Channel<T> = .new(capacity = 1)
+	self.inbox.send(build(reply))
+
+	return reply.receive()
+}
+
+export fn Pool.submit(&self, job Job) -> Either<JobId, Error> {
+	return self.ask<Either<JobId, Error>>(fn (reply) { return .SUBMIT { job, reply } })
+}
+
+export fn Pool.status(&self, id JobId) -> Either<JobState, Error> {
+	return self.ask<Either<JobState, Error>>(fn (reply) { return .STATUS { id, reply } })
+}
+
+export fn Pool.shutdown(&self) -> int {
+	return self.ask<int>(fn (reply) { return .SHUTDOWN { reply } })
+}
+
+// vim: ft=kotlin

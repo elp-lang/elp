@@ -1,0 +1,52 @@
+import { Error } from elp.types
+
+export object JobId {
+	const value int,
+}
+
+JobId implements Copy + Equatable + Hashable
+
+export fn JobId.equals(&self, other &Self) -> bool {
+	return self.value == other.value
+}
+
+export fn JobId.hash(&self, into &var Hasher) {
+	self.value.hash(&var into)
+}
+
+export object Job {
+	const id      JobId,
+	const payload string,
+}
+
+// A job's lifecycle. CANCELLED is reachable two ways — the caller asked, or
+// the pool shut down before the job ran — and the probe is about telling
+// those apart.
+export enum JobState {
+	QUEUED,
+	RUNNING,
+	DONE { output string },
+	FAILED { reason string },
+	CANCELLED { onShutdown bool },
+}
+
+export enum PoolError {
+	SHUTTING_DOWN,
+	UNKNOWN_JOB { id JobId },
+	// GAP — the error a caller gets when the pool dies while their request is
+	// in flight. Nobody is left to send it, which is the whole problem. See
+	// internal/pool.elp.
+	ABANDONED,
+}
+
+PoolError implements Error
+
+export fn PoolError.toString(&self) -> string {
+	return match self {
+		.SHUTTING_DOWN      -> "the pool is shutting down"
+		.UNKNOWN_JOB { id } -> "no job with id {id.value}"
+		.ABANDONED          -> "the pool stopped before this request was answered"
+	}
+}
+
+// vim: ft=kotlin

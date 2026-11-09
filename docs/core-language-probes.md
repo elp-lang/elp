@@ -1,6 +1,6 @@
 # Core language probes
 
-Three programs written to put pressure on the parts of elp the original
+Ten programs written to put pressure on the parts of elp the original
 corpus never exercised. They are **design probes, not specimens** — they
 use constructs the language does not have, written in the most plausible
 spelling, so the gaps can be read rather than listed.
@@ -10,6 +10,13 @@ spelling, so the gaps can be read rather than listed.
 | `examples/TextSearch` | Boyer-Moore-Horspool substring search | indexing, integer arithmetic, comparison and logical operators, conditional loops, `Map`, `char` |
 | `examples/LinkShortener` | an HTTP server with a channel-driven store | parallel match, string manipulation, concurrency off the UI thread, a non-client target |
 | `examples/Expenses` | an app that aggregates rather than fetches | grouping, sorting, percentage arithmetic, optional narrowing, reactivity over computed data |
+| `examples/QuadTree` | a spatial index over a recursive tree | **recursive value types**, mutable paths into an interior node, matching through a reference, multi-line expressions |
+| `examples/Undo` | a notes editor with an undo stack of closures | function-typed fields, escaping captures, one value captured twice, recursive closures, value-producing match arms |
+| `examples/Worker` | a job pool with graceful shutdown | `break`, channel closure, abandoned in-flight requests, cancellation during mutation, multi-consumer channels |
+| `examples/Buffer` | a split-pane editor: shared text, per-pane cursors | **proved `Copy` meant two incompatible things**; now migrated onto `Confined<T>`/`.alias()` so it demonstrates the fix, with whether reading a handle in markup subscribes left open |
+| `examples/Sheet` | a spreadsheet with shared cell styles | field-wise `Copy` over four levels; mixed duplication ("copy the values, share the styles") is a domain operation and **a derive cannot close it** |
+| `examples/Pipeline` | a static-site build fanning out to background workers | the **immutable** half: `Shared<T>` as `Copy` for any `T` and `Sendable` when `T` is, `Synchronized<T>`'s `update`/`with` surface, and a `Confined` refused at a thread boundary |
+| `examples/SqliteBinding` | a library binding to libsqlite3 | the **FFI boundary**: an opaque handle with no declarable duplication semantics, a thread discipline that is a runtime value, no exactly-once release, borrows invalidated by unrelated calls |
 
 None of them parse today, which is expected — the corpus parse test
 treats non-parsing as the default and they are not in `expect_success`.
@@ -24,7 +31,7 @@ computes — across 24 files there are eight `!=` (all of them `!= nil`),
 one `+=`, zero `==`, zero `&&`/`||`, zero comparisons, and three
 collection calls.
 
-These three put that right before the decisions get made, not after.
+These put that right before the decisions get made, not after.
 
 ---
 
@@ -203,7 +210,7 @@ corpus sites are exactly that, so nothing enters the type system. The
 same document rules that destructuring is named rather than positional,
 which migrates `stats.elp`'s `for category, amount in ...`.
 
-## 7. Function values
+## 7. Function values — resolved
 
 Used heavily, spelled by analogy with the corpus's `fn { dispatch(...) }`:
 
@@ -212,18 +219,188 @@ Server.listen(PORT, fn (req) { route(req, store) })
 Picker(&category, options = Category.all(), label = fn (c) { c.label() })
 ```
 
-Two open points:
+All three open points are settled in `functions.md`:
 
-- **Parameter types are inferred** in every lambda above. `generics.md`
-  ratified that *type arguments* are always mandatory; whether that
-  extends to lambda parameters is a separate question, and writing them
-  out would be heavy at these call sites.
-- **Function types as parameters**: `build fn(Channel<T>) -> StoreMsg`
-  in `store.elp`. The corpus has `PureFn`/`ImpureFn` as the types of
-  functions but no spelling for a *specific* signature.
-- `return` inside a lambda — `.SHUTDOWN -> return nil` sits inside
-  `background(fn { ... })`. Does it return from the lambda or the
-  enclosing function?
+- **Parameter types are inferred** from the expected type. That is not
+  the pathology mandatory type arguments were adopted to avoid: there is
+  exactly one expected function type at the position, so it is
+  propagation rather than constraint solving.
+- **The type spelling is `fn(T1, T2) -> R`**, with no parameter names —
+  a function value has no overload set, so a label would have nothing to
+  disambiguate.
+- **`return` in a closure returns from the closure**, as in Swift and
+  Rust, not from the enclosing function as in Ruby. And `return` is now
+  required in a closure that produces a value, which migrated nine
+  corpus sites.
+
+Two further decisions came out of it: a `*fn` callback prop is
+**required** (an optional one is an ordinary prop with an
+`Optional<fn(...)>` type, which migrated `login-form.velp`), and a bound
+method reference is not a value — `fn (x) { return money.add(x) }` makes
+the capture visible where `money.add` would hide it.
+
+Still open, both from `examples/Undo`: a capture that outlives its frame,
+and one value captured by two closures at once.
+
+## 7b. The second round of probes
+
+The first three probes were written because the original corpus could not
+drive *expression* design. These three were written because it could not
+drive **data shape, lifetime or shutdown** design, and they were chosen
+over a suggested list that mixed design probes with compiler-robustness
+tests. Malformed syntax, recursive macro expansion and deliberately
+deep generics all target a compiler that does not exist; they belong in
+`crates/parser/test_projects/`, and the corpus parse test actively
+requires an `examples/` file to *fail* parsing, so they would assert
+nothing here.
+
+### Recursive value types have no spelling
+
+The largest hole any probe has found, and it was not on the suggested
+list.
+
+```elp
+export enum QuadNode<T> {
+	LEAF { entries [Entry<T>] },
+	BRANCH { children [QuadNode<T>] },
+}
+```
+
+A `BRANCH` contains four `QuadNode`s, each of which may contain four
+more, so as a value type it has no size and cannot be laid out. Every
+value-semantics language needs a marker for "this field is behind an
+indirection" — Rust's `Box<Node>`, C++'s pointer — or sidesteps it by
+making the recursive case a reference type, which is Swift's `class`.
+
+`memory-model.md` has `Copy`, `Move`, `Protected` and `Binding<T>` and
+not one of them says "boxed". This is not a corner case: every tree,
+linked list, AST and JSON value is this shape, and `BlogStyle` already
+wants a `JSON` type.
+
+### Mutable paths into an interior node
+
+`collections.md` introduced `&var self` for a mutating receiver, always
+for the *whole* receiver. `QuadTree.insert` holds `&var self` and then
+needs `&var` to a node inside `self.root`:
+
+```elp
+return insertInto<T>(&var self.root, &self.bounds, at, value)
+```
+
+Nothing says whether `&var self.root` exists, what stops two such paths
+being live at once, or what `&var` to a local (`&var found` in `query`)
+and a re-borrow of a `&var` parameter mean. Cell-thread confinement does
+not help: it rules out *interleaving*, and this is straight-line
+aliasing inside one turn.
+
+### Matching through a reference
+
+Every corpus match so far scrutinised an owned value. `insertInto`
+matches `node &var QuadNode<T>`, so `entries` in the LEAF arm has to
+bind a *borrow* — otherwise the match copies the payload and the
+`entries.append(...)` below it is lost. `patterns.md` settled how a
+record pattern binds names and said nothing about ownership.
+
+### Captures that outlive their frame
+
+Every closure in the first three probes was called immediately or lived
+exactly as long as its component. `Undo`'s do not:
+
+```elp
+export fn Edit.insert(at int, line string) -> Self {
+	return Self {
+		apply  = fn (doc) { doc.lines.insert(at, line) },
+		revert = fn (doc) { doc.lines.remove(at) },
+	}
+}
+```
+
+`at` and `line` are parameters of a function that has already returned.
+And `Edit.composite` captures one `[Edit]` in **two** closures at once —
+a closure is not `Copy`, so neither is `[Edit]`, so capturing it is a
+move and the same value cannot move twice. Either non-`Copy` captures
+are implicitly shared, which contradicts how explicit the memory model
+is everywhere else, or that function is illegal.
+
+### A recursive closure cannot name itself
+
+```elp
+const retry = fn {
+	if !body() && remaining > 0 {
+		remaining -= 1
+		retry()
+	}
+}
+```
+
+`retry` is not bound until the literal finishes evaluating, so the body
+cannot see it. Rust refuses this for closures outright; JavaScript
+allows it because the binding is in scope by the time the body runs.
+Whichever way elp goes, the rule has to interact with `const` meaning
+immutable.
+
+### There is no `break`
+
+The corpus contains `while` and `for` and **not one** `break` or
+`continue`. `Worker`'s shutdown arm has to stop its message loop, and
+the only exit available is `return` from the enclosing closure — which
+is simultaneously the loop exit and the coroutine's end. It works only
+because the loop happens to be the closure's last statement, and it
+rules out the drain-then-exit phase that GAP 5 below needs.
+
+### Channel shutdown is entirely undesigned
+
+`LinkShortener` declares a `SHUTDOWN` variant and never sends one, so
+nothing was ever forced. `Worker` sends it, and four questions fall out
+in the ten lines after it arrives:
+
+- **What does `send` to a closed channel do** — error, trap, or drop? A
+  worker mid-job will report `COMPLETED` after the supervisor has gone.
+- **What does `send` to a *full* channel do** — block or fail? `main`
+  behaves very differently under each.
+- **In-flight requests are abandoned.** A caller blocked in
+  `reply.receive()` whose `SUBMIT` sits behind the `SHUTDOWN` is never
+  answered. `PoolError.ABANDONED` exists for them and there is no way to
+  send it, because the only code that could is the loop that just
+  stopped. A reply channel with no writer left is a **deadlock, not an
+  error**, and nothing in the signature says so.
+- **Is `Channel<T>` multi-consumer?** Four workers iterate one `work`
+  channel and each message must reach exactly one of them. That is a
+  different guarantee from broadcast and `LinkShortener`'s single
+  consumer never had to state it.
+
+### Cancellation during mutation, on a target with no cell thread
+
+`Worker`'s shutdown arm marks every queued job `CANCELLED` while a
+worker may be concurrently finishing one of them and about to report
+`DONE` for the same id. On the three client targets `reactivity.md`'s
+cell-thread confinement rules that out; `Worker` is `kind = .Binary`
+with no UI thread, so the guarantee does not exist and this is a real
+race on `states`.
+
+This is the standing open question *"the server has no UI thread for
+cell confinement"* arriving as a concrete bug rather than a note.
+
+### Two questions the probes raise about existing decisions
+
+**Does a `{ }` match arm produce a value?** `LinkShortener`'s router has
+expression arms; `store.elp` has block arms used purely for effect.
+`History.undo` needs a block arm to *produce a bool*. That is the same
+question as implicit return in a closure body, and the two should be
+answered together rather than separately.
+
+**May an expression span a line break?** The lexer emits a `Newline`
+token, so this is significant:
+
+```elp
+return p.x >= self.minX && p.x < self.maxX
+	&& p.y >= self.minY && p.y < self.maxY
+```
+
+Python continues inside brackets, Swift and Kotlin continue when the
+line cannot yet be a complete statement, Go inserts semicolons and
+forbids it. Under Go's rule `QuadTree/types/geometry.elp` does not
+compile.
 
 ## 8. Findings that are not about expressions
 
@@ -321,6 +498,180 @@ The probes invent `elp.http`, `elp.storage`, `elp.concurrent` and
 `elp.ui.font`. This is the same gap `name-resolution.md` already records
 (four roots for `Text` in the old corpus), now with four more guesses on
 top of it.
+
+---
+
+## 9. Aliasing — resolved, and the two probes that closed it
+
+Designed in `aliasing.md`. `examples/Buffer` proved that `Copy` meant
+two incompatible things; `examples/Sheet` tested the fix by depth;
+`examples/Pipeline` and `examples/SqliteBinding` were written afterwards,
+because the decision had **two outcomes with no corpus witness at all**.
+
+### Why two more probes rather than none
+
+`Buffer` and `Sheet` both share *mutably*, so both migrated onto
+`Confined<T>` and left `Shared<T>` — the one type in `aliasing.md`
+carrying a conditional conformance that has to be sound — with zero
+users. A type nothing uses is a type nothing has tested, and the claim
+being made about it ("`Sendable` when `T` is") is the claim the whole
+concurrency story rests on.
+
+And `unsafe` being FFI-only is what makes everything else in
+`aliasing.md` *inferable*: mutable aliasing is obtainable nowhere else,
+so field-wise conformance always sees it. That assumption is load-bearing
+and had no probe either.
+
+### What `examples/Pipeline` found
+
+A `kind = .Binary` build pipeline on macOS and Linux, so there is no
+cell thread and every rule that leans on confinement has to say what it
+does.
+
+1. **`Shared<T>` makes its holder *more* duplicable, not less.**
+   `Config` is `Move` (it holds a `[string]`), yet `Settings` holding a
+   `Shared<Config>` is `Copy`. That is the one case a handle improves
+   the holder's tier, and it is the reason `Shared<T>` has to be a
+   separate type rather than a mode of `Confined<T>`.
+2. **`.get()` returns `&T`, and nobody had said so.** Written `-> Config`
+   first, which cannot work — it would move the referent out of the cell
+   and leave every other holder pointing at nothing. The borrow's
+   *lifetime* is still open, and it has to answer to the same "a call
+   ends the turn" rule as narrowing.
+3. **`Synchronized<T>`'s surface is two closures, not one.**
+   `aliasing.md` proposed `.with(fn (v &var T) { ... })`, which needs a
+   `&var T` parameter spelling that `memory-model.md` Finding 4
+   deliberately rejected, plus whole-value assignment through a
+   reference, which is `QuadTree`'s GAP 4. Splitting it by direction —
+   `update(fn (T) -> T)` and `with(fn (&T) -> R) -> R` — needs neither,
+   cannot forget to write back, and makes the critical section total.
+4. **`background` has no join.** The fan-out loop never collects anything
+   to wait on, so `snapshot()` reads before the workers finish.
+   `reactivity.md` says `background` blocks its caller, which works for
+   one call and not for a loop of them. `Worker` reaches this wall from
+   the channel side; this reaches it from the `background` side.
+
+### What `examples/SqliteBinding` found
+
+The FFI boundary, and the first thing in the corpus that `aliasing.md`
+cannot answer **even in principle**.
+
+1. **An opaque handle has no declarable duplication semantics.** A
+   `sqlite3*` is a pointer: copying it aliases a live connection, and an
+   external type has no fields for field-wise `Copy` to be wise about. So
+   `Connection implements Move` is a *promise by the author* rather than
+   a conclusion by the compiler — the one place in the language where
+   those differ.
+2. **The thread discipline is a runtime value, and
+   `Confined`/`Synchronized` is a static distinction.**
+   `sqlite3_threadsafe()` reports which of three modes libsqlite3 was
+   built with, and the answer is not knowable when elp compiles. Nothing
+   in `aliasing.md`, `reactivity.md` or `dispatch.md` covers a
+   capability that is real but not statically known. **This is new**, and
+   it is the sharpest finding in either probe.
+3. **`Move` gives at-most-once release, never at-least-once.** A dropped
+   `Connection` leaks the C allocation and nothing notices. elp has no
+   destructors, no `defer`, nothing at scope exit. The smallest candidate
+   is a scoped form (`with Connection.open(path) as db { ... }`) — and it
+   is worth noting that `Synchronized<T>`'s `update`/`with` are the same
+   shape, a resource borrowed for one block, arrived at independently.
+4. **A borrow invalidated by an unrelated call cannot be typed.**
+   `sqlite3_column_text` returns a pointer killed by the next `step` on
+   the same statement. Finding 4 infers borrows from usage *inside one
+   call* and cannot express a constraint spanning two. Rust needs a
+   hand-written lifetime; elp has no lifetime parameters, which also
+   means `Statement` cannot be tied to its `Connection`.
+5. **A C callback cannot be an elp closure**, because elp closures
+   capture and a capturing closure has no C representation — which is why
+   the C API carries a `void*` for state in the first place.
+6. ~~**A native dependency is not a package dependency.**~~ **Resolved**
+   in `name-resolution.md`, "Native libraries": three questions, three
+   places. `links` on `@Package` is an **allow-list** — the complete
+   native surface a package may reach, in one reviewable file;
+   `@external`'s arguments say which allowed library a symbol comes from;
+   and `.native(...)` in `dependencies` stays for the other kind, a
+   library the build actually acquires, which has the full version
+   algebra a system library has none of.
+
+   It also partly answers an older open item: a `.Library` normally takes
+   no `targets`, but one with a `links` entry does, because `.Web` has no
+   shared libraries — and those constraints propagate to consumers.
+
+   One thing it opened and did not close. `minimumVersion` on a system
+   dynamic library is **unenforceable at build time**, so it is a probe
+   where one exists or a promise the code must verify — the same "declared
+   statically, knowable only at runtime" shape as finding 2, which makes
+   it a pattern.
+7. **`CString` and `OpaqueHandle` are invented in the probe and belong in
+   the stdlib.** `strings.md` makes `string` a sequence of Unicode scalar
+   values with guaranteed UTF-8; a `const char *` is bytes with a
+   terminator and no encoding guarantee, so conversion is fallible one way
+   and allocating the other, and `strings.md`'s open byte-access question
+   is on the critical path for any FFI at all. `OpaqueHandle` stands in
+   for `void*` / `T**`, which is the thing the type system exists to
+   prevent, needed in exactly one place. Finding 8 below turns this from
+   tidy-up into a prerequisite.
+8. ~~**Symbol collisions have no orphan rule.**~~ **Resolved**, by moving
+   the uniqueness a level up. Two packages could each declare
+   `sqlite3_open` with a different signature, each locally correct, and
+   the linker would give both the same address. The orphan rule cannot
+   reach it because **there is no contract on the far side of a shared
+   library**: it works by naming an owner, and nobody owns a C symbol.
+
+   So `name-resolution.md` makes a `links` entry **exclusive across a
+   program** — the symbol has no owner, but a library has exactly one
+   claimant — which is the orphan rule's shape moved from the type to the
+   package, and is the rule Cargo reached under the same key name. A
+   whole-program agreement check covers what exclusivity leaves, and elp
+   can afford one because resolution is already global where Rust's is
+   per-crate.
+
+   It opened one of its own and sharpened another: the agreement check
+   cannot compare *elp* types, because each package declares its own
+   `CString` and `OpaqueHandle`, so either it compares ABI or those types
+   must be stdlib's — which turns finding 7 from tidy-up into a
+   prerequisite.
+9. ~~**`library = "sqlite3"` fourteen times.**~~ **Resolved** by
+   `macros.md`, and the resolution needed no new rule. A macro is not an
+   entry in the program; it receives the AST of what follows it and
+   generates the declarations the program contains. A declaration list is
+   an AST node, so a macro may be handed one, and the attribute is written
+   once.
+
+   The probe had rejected grouping on the grounds that it would be a new
+   declaration shape, which is what `@external` being an attribute was
+   supposed to avoid. That was about the wrong thing: the grouping form is
+   not a form of `@external`, it is what a macro's input may be — so no
+   FFI content, and `@CodeGen(Copy) { ... }` gets it for the same reason.
+
+   Two things the framing fixed that an intermediate draft got wrong. It
+   had called the block "the language's one non-scoping brace" and
+   invented rules against distributing `export` and against nested
+   attributes merging. None of those exist: the braces are not in the
+   program, so there is no scope to carve an exception for; the macro
+   copies the `export` it was handed; and nesting is the macro's business,
+   not the language's. It had also made the block a **desugaring** into N
+   copies of the attribute, which gave up group-spanning codegen — three
+   types plus an enum over them plus one dispatch table — for safety that
+   a macro's own signature provides anyway.
+
+   The general lesson: the repetition read as an argument for weakening
+   the attribute's own rules (a conditional `library =`, which this
+   language refuses everywhere else) and was really a question about what
+   a macro may be handed.
+
+Plus one smaller thing worth naming: a by-value receiver
+(`fn Connection.close(self)`) is exactly what a consuming method needs,
+and `functions.md` has only `&self` and `&var self`.
+
+**And one correction this probe produced about itself.** Its first draft
+invented an `extern` keyword. That was wrong twice: `@external(.OBJC)`
+already exists (`BlogStyle/internal/api.elp`) with parser support for
+body-less declarations, and `reactivity.md` rejects new lowercase
+intrinsic keywords as policy — it is why `&mut` is not a spelling either.
+Migrating to `@external` also dissolved a gap the draft had listed:
+there is no question of where `unsafe` goes, because `@external` is the
+marker and `links` bounds what it can reach.
 
 ---
 

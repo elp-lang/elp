@@ -1,0 +1,88 @@
+// A text buffer that several panes edit at once — the ordinary split-view
+// arrangement in any editor.
+//
+// Two panes must see one buffer, so `Buffer` is a *handle* to shared state
+// rather than a value. Duplicating a handle duplicates the handle, not the
+// text: writing through either is visible through both. That is the whole
+// point, and it is correct behaviour.
+//
+// This file originally existed to show that the declaration could not say
+// so. It now shows the fix (`aliasing.md`), and the five findings below are
+// kept with their resolutions attached, because the resolutions are the
+// evidence that the fix is the right one.
+
+export object Buffer {
+	// RESOLVED — this is `Confined<T>`: a mutable alias, confined to one
+	// logical thread.
+	//
+	// First drafted as `Reactive<[string]>`, which is not writable elp —
+	// `memory-model.md` calls `Reactive<T>` *"a stand-in name"* for the Rust
+	// lowering. Then as `Shared<[string]>`, which is now the *immutable*
+	// alias and would refuse `.set` below.
+	//
+	// `Confined` is the honest one, and it says two things at a glance that
+	// no conformance said: writes through it are visible to every other
+	// holder, and it cannot cross a thread.
+	const lines Confined<[string]>,
+	const path  string,
+}
+
+// FINDING 1, RESOLVED — this declaration is no longer confusable with
+// Cursor's.
+//
+// `Cursor implements Copy` and `Buffer implements Move` are different words
+// for different guarantees, and the field above says why. Under the old
+// design both were `Copy`:
+//
+//   Cursor: duplicates are INDEPENDENT. A write to one is invisible to the other.
+//   Buffer: duplicates ALIAS.           A write to one is visible through the other.
+//
+// `Buffer` is `Move` because `Copy` is **field-wise** and `Confined<T>` is
+// not `Copy`. No rule about buffers was needed to get here.
+//
+// This is Rust's position, arrived at from the same evidence: `Arc<T>` is
+// `Clone`, not `Copy`, and `#[derive(Copy)]` is refused for any struct
+// holding one.
+Buffer implements Move
+
+export fn Buffer.open(path string) -> Self {
+	return Self { lines = .new([]), path }
+}
+
+// A second pane onto the same text. Hand-written, and the one interesting
+// line is `lines` — `.alias()` is where "these two share" is written down.
+//
+// `.copy()` would be wrong here and is not available: it promises an
+// independent duplicate, which would give the second pane its own text.
+export fn Buffer.alias(&self) -> Self {
+	return Self { lines = self.lines.alias(), path = self.path }
+}
+
+export fn Buffer.lineCount(&self) -> int {
+	return self.lines.get().length()
+}
+
+export fn Buffer.lineAt(&self, index int) -> string {
+	return self.lines.get()[index]
+}
+
+// Mutating through a handle. Note the receiver is `&self`, not `&var self`:
+// nothing about *this* object changes, only the cell it points at.
+//
+// That asymmetry is no longer hidden, which was the original complaint.
+// `collections.md` introduced `&var self` as the marker for a mutating
+// method; a handle type mutates shared state without needing it, and
+// `Confined<[string]>` in the declaration is what tells a reader so.
+//
+// `.copy()` on the inner `[string]` is the independent kind — it is a
+// `Duplicate`, not an alias — so this is read-modify-write on one cell and
+// not an aliasing bug.
+export fn Buffer.insert(&self, at int, line string) {
+	self.lines.set(self.lines.get().copy().insert(at, line))
+}
+
+export fn Buffer.remove(&self, at int) {
+	self.lines.set(self.lines.get().copy().remove(at))
+}
+
+// vim: ft=kotlin
