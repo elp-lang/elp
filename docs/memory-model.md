@@ -337,6 +337,61 @@ from usage rather than annotated. `const`-ness of the referent is then a
 hard constraint checked against that inferred usage, not a separate,
 independent rule.
 
+**Amended again, by FFI: there is one place with no callee to read.** The
+whole finding rests on inferring mutability from what the callee does
+through the reference. At an `@external` declaration the callee is C, so
+there is no body, and the one mechanism that let elp avoid a `&mut`
+spelling has nothing to work with at exactly the boundary where mutation
+matters most.
+
+**So at an `@external` declaration, `&T` means the callee may read *and*
+write.** Inference's absence resolves to the conservative side rather than
+to a marker. It costs the information that `sqlite3_errmsg(db &Sqlite3)`
+does not write, which buys nothing for safety and matters only for
+optimisation — and it needs no new syntax, which is the point.
+
+That is also the whole answer to C out-parameters, and the reason elp
+needs no `Out<T>` or `out` spelling for the scalar case. `sqlite3_open`
+writes a `sqlite3*` through a `sqlite3**`, and the thing being passed is
+not a mutable reference to a value — there is no value yet — but **a slot
+that may be empty**, which `Optional<T>` already is:
+
+```elp
+var db Optional<Sqlite3> = null
+
+match sqlite3_open(&c, &db) {
+	0    -> ...
+	code -> throw DbError.CANNOT_OPEN { path, message = "sqlite error {code}" }
+}
+```
+
+`Optional<Sqlite3>` niche-optimises to a nullable pointer, so `&db` *is*
+`sqlite3**` at the ABI. Two designs were considered and dropped:
+
+- **`&mut`, scoped to `@external` declarations only.** It describes the
+  wrong axis. The difficulty is emptiness, not direction: you cannot take
+  a mutable reference to a `Sqlite3` that does not exist yet.
+- **An `Out<T>` slot type.** It is `&Optional<T>` with extra vocabulary,
+  and it resembles `Binding<T>` closely enough to invite the question —
+  the roles *are* the same, a read-write reference to storage owned
+  elsewhere. But `reactivity.md` defines `Binding<T>` as a **retained,
+  shared** connection, so it is a refcounted cell with a notification
+  list: writes trigger reactivity, `aliasing.md` ties it to the cell
+  thread, and it is never `Sendable`. None of that belongs anywhere near
+  `sqlite3_open`, and its layout is nothing like `T*`. So the resemblance
+  is at the role and the machinery is actively unsuitable.
+
+**Irreducible, and not a gap:** a status code and an out-slot are two
+returns the C ABI does not relate, so nothing in elp can relate them
+either. `0` from `sqlite3_open` is the only evidence the slot was written.
+Reading an `Optional<T>` and letting the status code say whether to trust
+it is an honest reflection of the ABI rather than a weakness in the model.
+
+**What this does not cover is arrays.** `vkEnumeratePhysicalDevices`
+wants a contiguous allocation whose address the driver writes into, and
+`Optional<T>` is one slot. See "Collections hold values, not places"
+below.
+
 ## Finding 5 — `pure fn` + borrowing, resolved
 
 No function in the login-form exercise is marked `pure`, so the roadmap's
@@ -635,6 +690,136 @@ field is writable only if that field says so, rather than a blanket
 grant that would launder past visibility. See `reactivity.md`, "Bind
 the field, not the object".
 
+## Scoped release — `with ... as x { }`
+
+**`Move` gives at-most-once release and never at-least-once.** A dropped
+`Connection` leaks the C allocation and nothing notices; elp has no
+destructors, no `defer`, and nothing that runs at scope exit. Three
+unrelated probes reached independently for the same construct —
+`examples/SqliteBinding` for exactly-once release,
+`examples/VulkanTriangle` twice over, and `aliasing.md` noticing that
+`Synchronized<T>`'s `update`/`with` are already this shape — which is the
+strongest convergence in the corpus.
+
+```elp
+with Connection.open(path)? as db {
+	db.prepare("select 1")
+}
+```
+
+### Three problems, and the third is the one that corrupts memory
+
+1. **A leak with no witness.** Nothing guarantees `close` runs.
+2. **A leak per early exit.** `examples/VulkanTriangle`'s construction
+   path holds five handles by the end, so every `throw` on it must tear
+   down everything built above — C's `goto fail` ladder, written out.
+3. **Release *order* is unexpressed.** `vkDeviceWaitIdle` before
+   everything, swapchain before device, device before instance, renderer
+   before window across two files and two libraries. `Move` imposes no
+   order at all, and getting it wrong corrupts memory rather than merely
+   leaking.
+
+**Multiple bindings release in reverse, which answers (3) for free:**
+
+```elp
+with Window.open(800, 600, "triangle")? as window,
+     Renderer.new(&window)? as renderer {
+	loop(&window, &renderer)
+}
+```
+
+The order `examples/VulkanTriangle/main.elp` currently has to get right by
+hand becomes a consequence of the order the resources were acquired in.
+
+### What release is
+
+```elp
+interface Scoped {
+	fn release(self)
+}
+```
+
+`with` requires the bound expression's type to implement `Scoped` and
+calls `release` at every exit from the block.
+
+### This is scoped release, not RAII
+
+`aliasing.md` says plainly that **elp has no RAII**, and this does not add
+it. The difference is what makes it affordable:
+
+| | RAII / `Drop` | `with` |
+|---|---|---|
+| release point | wherever a value's lifetime ends | a brace in the source |
+| needs liveness tracking on every path | yes — drop flags, moved-out analysis | **no** |
+| recursive release of fields (drop glue) | yes | **no** |
+| applies to | every value of the type | only a value bound by `with` |
+| opt-in granularity | per type | **per use site** |
+
+A value not bound by a `with` is never released, so there is nothing to
+track. That is the entire cost difference, and it is why Rust needs
+unwinding machinery for `Drop` soundness and this needs none.
+
+### Two rules make it safe, and both already exist
+
+**The binding is a borrow** (`&T`) for the block's extent, so it cannot
+escape — and "a field may not hold a borrow" (`aliasing.md`) is what stops
+it being stashed in an object that outlives the block.
+
+**You cannot call `release` yourself**, because it takes `self` by value
+and the binding is a borrow. Double release is not *prevented*; it is
+unspellable. Which also makes `Scoped` the primary witness for the
+by-value receiver gap — `functions.md` has `&self` and `&var self`, and
+`Connection.close(self)` and `Renderer.destroy(self)` both want
+`fn T.method(self)`.
+
+### Why this does not reopen the lock-guard question
+
+`aliasing.md` rejected a lock *guard* object because yield points are
+invisible, so a guard could be held across a yielding call and deadlock
+with nothing in the source marking the boundary. A `with` block's
+boundary is marked — but a yield *inside* it is still invisible, so for a
+lock this fixes nothing.
+
+**So `with` is for resources, not for locks.** A resource needs release
+exactly once and in order; it does not need exclusivity between
+statements. `Synchronized<T>` keeps its two closures for exactly the
+reason already recorded, and the two constructs stay distinct on purpose.
+
+### It also covers the case with no handle at all
+
+`examples/VulkanTriangle` found that `glfwInit`/`glfwTerminate` are
+process-global with nothing for a tier to describe. A token type fixes it
+without wrapping GLFW:
+
+```elp
+with Glfw.initialised() as _ {
+	...
+}
+```
+
+### Open within scoped release
+
+- **`?` is a dependency for ergonomics, not for correctness.**
+  `Connection.open` returns `Either<Self, Error>`, so until `?` exists
+  this is a `match` around the `with`. The examples above are written
+  with `?` because that is the intended shape.
+- **Whether `release` may fail.** `sqlite3_close` returns a status and
+  `Scoped.release(self)` returns nothing, so a failing release is
+  silently dropped — which is Rust's problem with `Drop` too, and the
+  reason `Connection.close` exists returning `Either`. Whether both can
+  coexist, and which one `with` calls, is undecided.
+- **Whether a `with` block can yield.** If it can, a `Scoped` resource is
+  held across an invisible boundary — harmless for an FFI handle,
+  and the exact hazard that keeps locks out of this construct. The rule
+  probably has to be stated rather than left to follow from "it is not a
+  lock".
+- **Early `return` out of a `with` block** releases and then returns,
+  which is the intent, but interacts with `error-handling.md`'s "a
+  failure is a value": the release has to run on the error path of a
+  `throw` too, and both are statically visible exits, so this should be
+  local — it has not been checked against the panic path, where
+  `RecoveryBoundary` means discard-and-reinit anyway.
+
 ## Summary for Phase 2
 
 | elp construct | Rust elaboration | Confidence |
@@ -707,3 +892,27 @@ The cost is verbosity, and it is accepted deliberately — the cheaper
 spelling (`map.get(k)` yielding a mutable place, or an `update(k, fn)`
 helper) can be built in elp later without changing the semantics. A
 language rule that hands out hidden aliases cannot be walked back.
+
+### Open: contiguous storage, and the one case this rule blocks
+
+**There is no way to hand out the backing storage of a collection**, which
+is correct for every corpus use and wrong for one: an array
+out-parameter. `vkEnumeratePhysicalDevices(instance, &count, buffer)` is
+called twice — once with a null buffer to learn the count, once with an
+allocation the driver writes into — and the second call needs the
+*address* of contiguous memory, which this rule says does not exist.
+
+`Optional<T>` answers the scalar case (Finding 4), and cannot answer this
+one, because there is no single slot. So a named primitive is wanted —
+`examples/VulkanTriangle` writes `Buffer<T>` with `withCapacity(n)` and
+`.storage()` to make the shape visible — and it is **undesigned**.
+
+Worth stating what it is *not*, so the open item is scoped: it is not a
+relaxation of the rule above. A `Buffer<T>` would be a type whose whole
+purpose is contiguous storage with an addressable extent, distinct from
+`[T]`, rather than `[T]` growing a method that leaks its interior. The
+question is what that type is and what else in the language wants it —
+byte access for `strings.md`, image and vertex data, and anything
+mapping a file or a GPU allocation all point at the same place, and it
+should be designed once with those in view rather than carved to fit
+`vkEnumeratePhysicalDevices`.

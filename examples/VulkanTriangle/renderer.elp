@@ -98,91 +98,111 @@ export fn Renderer.new(window &Window) -> Either<Self, Error> {
 		ppEnabledExtensionNames = null,
 	}
 
-	match vkCreateInstance(&info, null, &out) {
+	var instanceSlot Optional<VkInstance> = null
+
+	match vkCreateInstance(&info, null, &instanceSlot) {
 		0    -> {}
 		code -> throw RenderError.NO_INSTANCE { code }
 	}
 
-	const instance = out.asInstance()
+	// Repeated after every call below, and it is the irreducible residual
+	// rather than ceremony: the status code is the only evidence the slot was
+	// written, and the C ABI does not relate the two returns.
+	const instance = instanceSlot ?? throw RenderError.NO_INSTANCE { code = 0 }
 
-	// GAP 3 — the count-then-fill call, written out, because the shape is
-	// the finding.
+	// GAP 3 — the count-then-fill call. The scalar half is settled and the
+	// array half is not.
 	//
-	// The first call asks how many GPUs there are. The second fills a buffer.
-	// elp cannot express either: the third argument is nullable with
-	// meaning-changing nullness, the second is in-out, and the buffer wants
-	// an elp array's backing storage, which `collections.md` says does not
-	// exist as an addressable place.
+	// `count` is `&Optional<int>` by `memory-model.md` Finding 4, with nothing
+	// invented. The buffer is `&Buffer<VkPhysicalDevice>` against a type that
+	// does not exist — "collections hold values, not places" means there is no
+	// way to hand out an array's backing storage, and this is the one case in
+	// the corpus that needs exactly that.
 	//
-	// Written as if a `Buffer<T>` primitive existed, which it does not, so
-	// that the rest of this function can be read.
-	var count = 0
+	// Written out so the shape is on the page: the first call passes no buffer
+	// and learns the count, the second fills it.
+	var count Optional<int> = null
 	vkEnumeratePhysicalDevices(instance, &count, null)
 
-	if count == 0 {
+	const found = count ?? 0
+
+	if found == 0 {
 		throw RenderError.NO_GPU
 	}
 
-	var gpus = Buffer<VkPhysicalDevice>.withCapacity(count)
-	vkEnumeratePhysicalDevices(instance, &count, gpus.storage())
+	var gpus = Buffer<VkPhysicalDevice>.withCapacity(found)
+	vkEnumeratePhysicalDevices(instance, &count, &gpus)
 
 	// Elided: ~80 lines picking a GPU with a graphics queue family that can
 	// present to this surface. It is `for` over two arrays and asks nothing
 	// new.
 	const physical = gpus.at(0)
 
-	match glfwCreateWindowSurface(&instance, &window.handle, null, &out) {
+	var surfaceSlot Optional<VkSurfaceKHR> = null
+
+	match glfwCreateWindowSurface(&instance, &window.handle, null, &surfaceSlot) {
 		0    -> {}
 		code -> throw RenderError.NO_SURFACE { code }
 	}
 
-	const surface = out.asSurface()
+	const surface = surfaceSlot ?? throw RenderError.NO_SURFACE { code = 0 }
 
-	match vkCreateDevice(physical, null, null, &out) {
+	var deviceSlot Optional<VkDevice> = null
+
+	match vkCreateDevice(physical, null, null, &deviceSlot) {
 		0    -> {}
 		code -> throw RenderError.NO_DEVICE { code }
 	}
 
-	const device = out.asDevice()
+	const device = deviceSlot ?? throw RenderError.NO_DEVICE { code = 0 }
 
-	// The borrowed handle. No error path, because nothing is created: this
-	// reads a pointer out of the device.
-	vkGetDeviceQueue(device, 0, 0, &out)
-	const graphics = out.asQueue()
+	// The borrowed handle. No status code at all, because nothing is created:
+	// this reads a pointer out of the device. So the slot is the *only*
+	// evidence here, and `??` is carrying real weight rather than satisfying
+	// the type checker.
+	var queueSlot Optional<VkQueue> = null
+	vkGetDeviceQueue(device, 0, 0, &queueSlot)
+	const graphics = queueSlot ?? throw RenderError.NO_DEVICE { code = 0 }
 
-	match vkCreateSwapchainKHR(device, null, null, &out) {
+	var swapchainSlot Optional<VkSwapchainKHR> = null
+
+	match vkCreateSwapchainKHR(device, null, null, &swapchainSlot) {
 		0    -> {}
 		code -> throw RenderError.NO_SWAPCHAIN { code }
 	}
 
-	const swapchain = out.asSwapchain()
+	const swapchain = swapchainSlot ?? throw RenderError.NO_SWAPCHAIN { code = 0 }
 
-	match vkCreateCommandPool(device, null, null, &out) {
+	var poolSlot Optional<VkCommandPool> = null
+
+	match vkCreateCommandPool(device, null, null, &poolSlot) {
 		0    -> {}
 		code -> throw RenderError.NO_SWAPCHAIN { code }
 	}
 
-	// GAP 4 — every `throw` above this line leaks everything created before
-	// it.
+	// GAP 4 — every `throw` above this line still leaks everything created
+	// before it, and this is the function `with` does **not** fix.
 	//
-	// By the `vkCreateCommandPool` call there are five live handles. A
-	// failure here must destroy the swapchain, the device, the surface and
-	// the instance, in that order, before returning the error — and
-	// `error-handling.md` makes a failure a *value* that returns immediately.
-	// There is no scope exit to hook.
+	// By the last call there are five live handles. A failure must destroy
+	// the swapchain, the device, the surface and the instance, in that order,
+	// before returning — and `error-handling.md` makes a failure a value that
+	// returns immediately, so there is no scope exit to hook.
 	//
-	// This is `SqliteBinding` GAP 1 (at-most-once, never at-least-once) at
-	// five-deep: not one leak site but one per construction step, each needing
-	// the teardown of everything above it. In C it is the `goto fail` ladder.
-	// Rust solves it with `Drop` running on the error path, which is the one
-	// mechanism elp has rejected having.
+	// `memory-model.md`'s scoped release covers a resource *used* inside a
+	// block. This is a resource being *assembled* for a caller, so there is
+	// no block to bound it: each handle has to outlive this function. So
+	// `with` answers `main.elp` (where these are consumed in a known order)
+	// and does not answer here.
 	//
-	// The scoped form (`with ... as x { }`) solves it the same way `Drop`
-	// does and more narrowly, and this is now the third unrelated probe to
-	// land on it.
+	// Which sharpens what is left. The remaining question is narrower than
+	// "elp has no destructors": it is **a partially-constructed aggregate on
+	// an error path**, which is C's `goto fail` ladder and which Rust solves
+	// with `Drop` on the error path. Possibly the answer is that assembly
+	// itself belongs in a `with`, with the handles moved out on success —
+	// which needs a way to cancel the release, and nothing proposes one.
 	return Ok(Self {
 		instance, physical, device, graphics, surface, swapchain,
-		pool = out.asCommandPool(),
+		pool = poolSlot ?? throw RenderError.NO_SWAPCHAIN { code = 0 },
 	})
 }
 
@@ -201,13 +221,27 @@ export fn Renderer.drawFrame(&self) -> Either<bool, Error> {
 	}
 }
 
+Renderer implements Scoped
+
 // Teardown, by value, in the one order that is correct.
 //
 // GAP 5 — this function is the specification and the compiler cannot read
 // it. Reorder any two lines and the program corrupts memory or crashes in
 // the driver; the types permit every permutation. `Move` guarantees each
 // handle is destroyed at most once and imposes no order at all.
-export fn Renderer.destroy(self) {
+//
+// What `Scoped` adds is that it is *called*, on every path out of the `with`
+// block in `main.elp`, including the error paths. What it does not add is any
+// opinion about the order of the lines inside it — reverse-order release
+// orders `with` bindings relative to each other, and the five handles here
+// are one binding.
+//
+// So the ordering gap shrinks rather than closes: across resources it is
+// answered, within an aggregate it is not. The fix for the inside of this
+// function is to not have an aggregate — five nested `with` bindings in
+// `main.elp` instead of one `Renderer` — which is correct and gives up the
+// type that makes the renderer a thing you can pass around.
+export fn Renderer.release(self) {
 	// Must come first: the queue may still be executing work that references
 	// everything below.
 	vkDeviceWaitIdle(self.device)

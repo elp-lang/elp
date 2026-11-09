@@ -114,28 +114,33 @@ Sqlite3Stmt implements Move
 	// makes it a pattern rather than a one-off.
 	export fn sqlite3_threadsafe() -> int
 
-	// GAP 3 — out-parameters have no mapping.
+	// GAP 3, RESOLVED — a scalar out-parameter is `&Optional<T>`.
 	//
 	// The C signature is:
 	//
 	//   int sqlite3_open(const char *filename, sqlite3 **ppDb)
 	//
-	// An `int` status and a handle written through a pointer-to-pointer. elp
-	// has `Either<T, Error>` and `error-handling.md` is emphatic that a
-	// failure is a value — so the binding wants
+	// An earlier draft of this file wrote the second parameter as
+	// `out &OpaqueHandle` and the call site as `&out` — an undeclared
+	// binding, which was placeholder shorthand that should never have been
+	// written. There is no `out` in this language.
 	//
-	//   fn sqlite3_open(path string) -> Either<&Sqlite3, Error>
+	// The difficulty was never mutability direction, so `&mut` would have
+	// described the wrong axis: you cannot take a mutable reference to a
+	// `Sqlite3` that does not exist yet. It is **emptiness**, and
+	// `Optional<T>` is already a slot that may be empty.
+	// `Optional<Sqlite3>` niche-optimises to a nullable pointer, so
+	// `&db` *is* `sqlite3**` at the ABI.
 	//
-	// but that is a *different signature* from the C one, and something has
-	// to perform the translation. Whether an `@external` declaration may
-	// describe the elp-facing shape and have the compiler synthesise the
-	// shim, or whether a hand-written wrapper does it (the Rust `-sys` crate
-	// convention), is undecided. The second is more honest and much more
-	// verbose.
+	// And `memory-model.md` Finding 4 now says what makes the write legal:
+	// at an `@external` declaration `&T` is read-write, because Finding 4
+	// infers mutability from the callee's body and here the callee is C.
 	//
-	// Declared in raw form, so the translation is visible in `db.elp` rather
-	// than hidden here.
-	export fn sqlite3_open(path &CString, out &OpaqueHandle) -> int
+	// What stays irreducible: the status code and the slot are two returns
+	// the C ABI does not relate, so `0` is the only evidence the slot was
+	// written. `db.elp` reads an `Optional` and lets the code say whether to
+	// trust it.
+	export fn sqlite3_open(path &CString, db &Optional<Sqlite3>) -> int
 	export fn sqlite3_close(db Sqlite3) -> int
 	export fn sqlite3_errmsg(db &Sqlite3) -> &CString
 
@@ -143,8 +148,8 @@ Sqlite3Stmt implements Move
 		db &Sqlite3,
 		sql &CString,
 		bytes int,
-		out &OpaqueHandle,
-		tail &OpaqueHandle,
+		stmt &Optional<Sqlite3Stmt>,
+		tail &Optional<CString>,
 	) -> int
 
 	export fn sqlite3_step(stmt &Sqlite3Stmt) -> int

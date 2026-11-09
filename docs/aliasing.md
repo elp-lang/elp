@@ -102,6 +102,15 @@ across a call that yields, and deadlock with nothing in the source
 marking the boundary. elp also has no RAII and no `&mut` spelling, so
 there was never a good way to express a guard anyway.
 
+**Still true after scoped release.** `memory-model.md` adds
+`with ... as x { }`, which binds a resource to a block and releases it at
+every exit — RAII-shaped, and not RAII, because release is tied to a brace
+rather than to a value's lifetime. It does not rehabilitate the guard: a
+`with` block's boundary is marked, but a yield *inside* it is still
+invisible, so a lock held across one deadlocks exactly as before. The line
+is that `with` is for **resources**, which need release once and in order,
+not for **locks**, which need exclusivity between statements.
+
 `update` takes a **pure transform** rather than a mutating body, which
 is what `examples/Pipeline` corrected. A single
 `with(fn (v &var T) { ... })` needs two things the language does not

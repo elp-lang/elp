@@ -18,6 +18,35 @@ import {
 	glfwGetPrimaryMonitor,
 } from .internal.glfw
 
+// The handle-less global, given a handle.
+//
+// `internal/glfw.elp` GAP 3 found that `glfwInit`/`glfwTerminate` are process
+// state with no value for a tier to describe: initialisation must happen once
+// before anything else and termination once after everything else, and the
+// thing being tracked is the library itself.
+//
+// A token type is the whole answer, and it needed `Scoped` to be worth
+// writing. `Glfw` carries no data — it exists so that "GLFW is initialised"
+// is a value with a lifetime, which `with` then bounds. Terminating is its
+// `release`, so it happens once, and because release order is the reverse of
+// acquisition, it happens after every window acquired inside it.
+export object Glfw {}
+
+Glfw implements Move
+Glfw implements Scoped
+
+export fn Glfw.initialised() -> Either<Self, Error> {
+	if glfwInit() == 0 {
+		throw WindowError.INIT_FAILED
+	}
+
+	return Ok(Self {})
+}
+
+export fn Glfw.release(self) {
+	glfwTerminate()
+}
+
 @error
 export enum WindowError {
 	INIT_FAILED,
@@ -48,15 +77,17 @@ export object Monitor {
 
 Monitor implements Copy
 
+// Opening a window no longer initialises GLFW, which is the point of the
+// token above. An earlier draft called `glfwInit` here, so opening two
+// windows initialised GLFW twice and the type system had no opinion about it.
+//
+// GAP — nothing *requires* a `Glfw` to exist before this is called. The token
+// makes the lifetime expressible and does not make it mandatory; a parameter
+// (`Window.open(glfw &Glfw, ...)`) would, at the cost of threading it through
+// every call. Which of those is right is the same question as whether a
+// capability should be a parameter or an ambient fact, and nothing in the
+// design has had to answer it yet.
 export fn Window.open(width int, height int, title string) -> Either<Self, Error> {
-	// GAP — `glfwInit` has no handle, so this call is unsequenced relative to
-	// everything else. See `internal/glfw.elp` GAP 3. Calling it here means
-	// opening two windows initialises GLFW twice, which GLFW tolerates and
-	// which the type system has no opinion about.
-	if glfwInit() == 0 {
-		throw WindowError.INIT_FAILED
-	}
-
 	// 0x00022001 is GLFW_CLIENT_API, 0 is GLFW_NO_API: tell GLFW not to make
 	// an OpenGL context, because Vulkan owns the surface. Raw because the
 	// constants would come from a generated binding (`vk-types.elp`).
@@ -87,19 +118,25 @@ export fn Window.pumpEvents(&self) {
 	glfwPollEvents()
 }
 
-// `self` by value: closing consumes the window. Same shape as
-// `SqliteBinding`'s `Connection.close`, and the same gap — `functions.md` has
-// `&self` and `&var self` and no by-value receiver.
-export fn Window.close(self) {
-	glfwDestroyWindow(self.handle)
+Window implements Scoped
 
-	// GAP — and this is the ordering problem in two lines. `glfwTerminate`
-	// invalidates every `Monitor` in the program, which are `Copy` and
-	// therefore scattered wherever anyone put them. `Move` on `Window` makes
-	// the double-destroy a compile error and says nothing about the monitors
-	// that just became dangling.
-	glfwTerminate()
+// `self` by value: releasing consumes the window. Same shape as
+// `SqliteBinding`'s `Connection.release`, and the same gap — `functions.md`
+// has `&self` and `&var self` and no by-value receiver, which `Scoped`
+// cannot be declared without.
+export fn Window.release(self) {
+	glfwDestroyWindow(self.handle)
 }
+
+// What is still unfixed, and it is the `Copy` row's problem rather than this
+// file's: `Glfw.release` invalidates every `Monitor` in the program. Monitors
+// are `Copy` — correctly, nothing releases one — so copies are scattered
+// wherever anyone put them, and reverse-order release says nothing about
+// values that were never bound by a `with` at all.
+//
+// So scoped release orders *resources* and cannot reach *borrowed handles
+// derived from them*, which is `aliasing.md`'s validity gap seen from the
+// release side rather than the duplication side.
 
 export fn Monitor.primary() -> Either<Self, Error> {
 	match glfwGetPrimaryMonitor() {

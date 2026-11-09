@@ -58,26 +58,29 @@ export object Connection {
 // it" unanswerable.
 Connection implements Move
 
-// GAP 1 — nothing guarantees `close` is called.
+// GAP 1, RESOLVED — nothing guaranteed `close` was called, and now `with`
+// does.
 //
 // `Move` gives *at most once*: once the handle is moved into `close` the
-// source is dead, so a double close is a compile error. It does not give *at
-// least once*. An elp program that drops a `Connection` on the floor leaks
-// the C allocation, and there is no mechanism that would notice.
+// source is dead, so a double close is a compile error. It never gave *at
+// least once*, and a program that dropped a `Connection` leaked the C
+// allocation with nothing to notice.
 //
-// elp has no destructors, no `defer`, and nothing that runs at scope exit.
-// Three candidates, none designed:
+// Three candidates were on the table: a `Drop`-shaped interface, which
+// reaches well past FFI and needs liveness tracking on every path;
+// `@MustUse`-style linting, which catches the common case and nothing else;
+// and the scoped form, which won.
 //
-//   - a `Drop`-shaped interface the compiler calls, which is a large
-//     addition and reaches well past FFI;
-//   - a scoped form, `with Connection.open(path) as db { ... }`, which is
-//     narrow and reads well and is a new statement;
-//   - `@MustUse`-style linting, which catches the common case and nothing
-//     else.
+//   with Connection.open(path)? as db {
+//       db.prepare("select 1")
+//   }
 //
-// The second is the smallest thing that works, and it is worth noting that
-// `Synchronized<T>`'s `.update`/`.with` are the same shape — a resource
-// borrowed for the extent of one block — arrived at independently.
+// `memory-model.md` records why it is affordable: release is tied to a brace
+// in the source rather than to a value's lifetime, so there are no drop
+// flags, no moved-out analysis and no drop glue — a value not bound by a
+// `with` is simply never released. `examples/VulkanTriangle` is what made it
+// urgent, because its five-deep handle tree needs release *ordering* and
+// reverse-order release gives that for free.
 export fn Connection.open(path string) -> Either<Self, Error> {
 	// GAP 2, RESOLVED — there is no `unsafe` marker, because `@external` is
 	// the marker.
@@ -94,10 +97,38 @@ export fn Connection.open(path string) -> Either<Self, Error> {
 	// is a better audit point than a keyword sprinkled through bodies.
 	const c = CString.from(path)
 
-	match sqlite3_open(&c, &out) {
-		0    -> return Ok(Self { handle = out.asSqlite3(), path })
+	// The out-parameter, with nothing invented. An earlier draft wrote
+	// `&out` against an undeclared `out` binding; `memory-model.md` Finding 4
+	// settles it as `&Optional<T>` — a slot that may be empty, which is the
+	// actual difficulty rather than mutability direction.
+	var handle Optional<Sqlite3> = null
+
+	match sqlite3_open(&c, &handle) {
+		0    -> {}
 		code -> throw DbError.CANNOT_OPEN { path, message = "sqlite error {code}" }
 	}
+
+	// GAP — the status code said the slot was written and the type cannot
+	// know that. Two returns the C ABI does not relate, so this `??` is the
+	// irreducible residual rather than a missing feature.
+	match handle {
+		null -> throw DbError.CANNOT_OPEN { path, message = "sqlite reported success and wrote nothing" }
+		h    -> return Ok(Self { handle = h, path })
+	}
+}
+
+// `Scoped` is what `with` calls at every exit from a block, so GAP 1 below
+// is answered: a `Connection` acquired by a `with` is released on every path
+// out of it, including the error paths.
+Connection implements Scoped
+
+export fn Connection.release(self) {
+	// GAP — `release` returns nothing and `sqlite3_close` returns a status,
+	// so a failing close is silently dropped. That is Rust's problem with
+	// `Drop` too, and it is why `close` below still exists returning
+	// `Either`. Whether both may coexist, and which one `with` calls, is the
+	// open question in `memory-model.md`'s scoped-release section.
+	sqlite3_close(self.handle)
 }
 
 export fn Connection.close(self) -> Either<bool, Error> {
@@ -106,7 +137,9 @@ export fn Connection.close(self) -> Either<bool, Error> {
 	//
 	// GAP — `fn Type.method(self)` is not a form `functions.md` has.
 	// Receivers there are `&self` or `&var self`. A by-value receiver is
-	// exactly what a consuming method needs and there is no spelling for it.
+	// exactly what a consuming method needs and there is no spelling for it —
+	// and `Scoped.release(self)` above is now the second, harder witness,
+	// because `with` cannot be built without it.
 	match sqlite3_close(self.handle) {
 		0    -> return Ok(true)
 		code -> throw DbError.CANNOT_OPEN { path = self.path, message = "close failed: {code}" }

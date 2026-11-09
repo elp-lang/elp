@@ -21,10 +21,11 @@ import { VkInstanceCreateInfo } from .vk-types
 	export type VkCommandPool
 	export type VkCommandBuffer
 
-	export fn vkCreateInstance(info &VkInstanceCreateInfo, allocator OpaqueHandle, out &OpaqueHandle) -> int
+	export fn vkCreateInstance(info &VkInstanceCreateInfo, allocator OpaqueHandle, instance &Optional<VkInstance>) -> int
 	export fn vkDestroyInstance(instance VkInstance, allocator OpaqueHandle)
 
-	// GAP 1 — the count-then-fill out-parameter, called twice.
+	// GAP 1 — the count-then-fill out-parameter, called twice. Half of this
+	// is now answered and the interesting half is not.
 	//
 	// The C idiom is:
 	//
@@ -33,20 +34,26 @@ import { VkInstanceCreateInfo } from .vk-types
 	//   VkPhysicalDevice *devs = malloc(n * sizeof *devs);
 	//   vkEnumeratePhysicalDevices(instance, &n, devs);         // fill
 	//
-	// Three things elp cannot say. The third argument is **nullable** and its
-	// nullness changes the function's meaning, so one declaration describes
-	// two operations. The second argument is in-out: the caller writes a
-	// capacity and the callee writes a length. And the third wants the
-	// *backing storage* of an elp array, which `collections.md` rules out
-	// directly — "collections hold values, not places".
+	// The **scalar** half is settled: `memory-model.md` Finding 4 makes a
+	// single out-parameter `&Optional<T>`, so `count` below is
+	// `&Optional<int>` and nothing is invented.
 	//
-	// `SqliteBinding` GAP 3 found single out-parameters awkward. An array
-	// out-parameter is a different problem: it needs a place, and the
-	// language is built on there not being one.
-	export fn vkEnumeratePhysicalDevices(instance VkInstance, count &OpaqueHandle, out OpaqueHandle) -> int
+	// Three things remain. The last argument wants the *backing storage* of
+	// contiguous memory, which "collections hold values, not places" rules
+	// out directly — written `&Buffer<T>` here against a type that does not
+	// exist, so the shape is visible and the dependency is named. The
+	// argument is also **nullable**, and its nullness changes the function's
+	// meaning, so one declaration describes two operations. And `count` is
+	// genuinely in-out: the caller writes a capacity and the callee writes a
+	// length, which `&Optional<int>` can carry but does not *say*.
+	//
+	// `SqliteBinding` GAP 3 found single out-parameters awkward and that one
+	// closed. An array out-parameter is a different problem: it needs a
+	// place, and the language is built on there not being one.
+	export fn vkEnumeratePhysicalDevices(instance VkInstance, count &Optional<int>, devices &Buffer<VkPhysicalDevice>) -> int
 
-	export fn vkGetPhysicalDeviceQueueFamilyProperties(device VkPhysicalDevice, count &OpaqueHandle, out OpaqueHandle)
-	export fn vkCreateDevice(physical VkPhysicalDevice, info OpaqueHandle, allocator OpaqueHandle, out &OpaqueHandle) -> int
+	export fn vkGetPhysicalDeviceQueueFamilyProperties(device VkPhysicalDevice, count &Optional<int>, out &Buffer<OpaqueHandle>)
+	export fn vkCreateDevice(physical VkPhysicalDevice, info OpaqueHandle, allocator OpaqueHandle, device &Optional<VkDevice>) -> int
 	export fn vkDestroyDevice(device VkDevice, allocator OpaqueHandle)
 
 	// GAP 2 — a handle you must never release, handed back by value.
@@ -60,12 +67,12 @@ import { VkInstanceCreateInfo } from .vk-types
 	// *right* answer: duplicating it is free and two copies have nothing to
 	// observe about each other. It is also the answer that would have been
 	// wrong for every handle in `SqliteBinding`.
-	export fn vkGetDeviceQueue(device VkDevice, family int, index int, out &OpaqueHandle)
+	export fn vkGetDeviceQueue(device VkDevice, family int, index int, queue &Optional<VkQueue>)
 
-	export fn vkCreateSwapchainKHR(device VkDevice, info OpaqueHandle, allocator OpaqueHandle, out &OpaqueHandle) -> int
+	export fn vkCreateSwapchainKHR(device VkDevice, info OpaqueHandle, allocator OpaqueHandle, swapchain &Optional<VkSwapchainKHR>) -> int
 	export fn vkDestroySwapchainKHR(device VkDevice, swapchain VkSwapchainKHR, allocator OpaqueHandle)
 
-	export fn vkCreateCommandPool(device VkDevice, info OpaqueHandle, allocator OpaqueHandle, out &OpaqueHandle) -> int
+	export fn vkCreateCommandPool(device VkDevice, info OpaqueHandle, allocator OpaqueHandle, pool &Optional<VkCommandPool>) -> int
 	export fn vkDestroyCommandPool(device VkDevice, pool VkCommandPool, allocator OpaqueHandle)
 
 	export fn vkQueueSubmit(queue VkQueue, count int, submits OpaqueHandle, fence OpaqueHandle) -> int

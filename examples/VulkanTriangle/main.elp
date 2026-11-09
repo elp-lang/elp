@@ -7,43 +7,48 @@
 // the GPU, `main` is a `while` loop that must not be left, and the thread it
 // runs on is load-bearing in a way nothing in the language can express.
 
-import { Window } from .window
+import { Glfw, Window } from .window
 import { Renderer } from .renderer
 
 export fn main() {
-	match Window.open(800, 600, "triangle") {
-		.Err(e) -> {
-			print("could not open a window: {e}")
-			return
-		}
-		.Ok(window) -> {
-			match Renderer.new(&window) {
-				.Err(e) -> {
-					print("could not start vulkan: {e}")
-					window.close()
-					return
-				}
-				.Ok(renderer) -> {
-					loop(&window, &renderer)
-
-					// GAP 1 — the teardown order spans two files and two
-					// libraries, and nothing checks it.
-					//
-					// The renderer must be destroyed before the window: the
-					// Vulkan surface was created *from* the GLFW window, so
-					// destroying the window first leaves the surface pointing
-					// at freed Cocoa or X11 state. `renderer.elp` GAP 5 is
-					// the same problem inside one object; this is it across
-					// two.
-					//
-					// Both are `Move`, so both are destroyed at most once and
-					// in whatever order someone typed.
-					renderer.destroy()
-					window.close()
-				}
-			}
-		}
+	// `with`, three bindings, released in reverse. This is the file that
+	// `memory-model.md`'s scoped-release section was designed against, and
+	// the diff against the previous draft is the argument for it: that draft
+	// was four levels of nested `match`, two hand-written teardown calls in
+	// one specific order, and one of them duplicated on an error path.
+	//
+	// GLFW's initialisation is the outermost binding, as a token type, so
+	// `glfwTerminate` runs exactly once and after every window inside it.
+	// That is the fix for `window.elp`'s misplaced `glfwTerminate`, and it
+	// only works because release order is the reverse of acquisition.
+	//
+	// The `?` on each acquisition is `error-handling.md`'s open question
+	// rather than a decided spelling; `memory-model.md` records that `with`
+	// depends on it for ergonomics and not for correctness. Without it this
+	// is a `match` around the `with`, which is the previous draft again.
+	with Glfw.initialised()? as _,
+	     Window.open(800, 600, "triangle")? as window,
+	     Renderer.new(&window)? as renderer {
+		loop(&window, &renderer)
 	}
+
+	// GAP 1, RESOLVED — the teardown order spanned two files and two
+	// libraries, and nothing checked it.
+	//
+	// The renderer had to be destroyed before the window, because the Vulkan
+	// surface was created *from* the GLFW window, so destroying the window
+	// first left the surface pointing at freed Cocoa or X11 state. Both are
+	// `Move`, so both were destroyed at most once and in whatever order
+	// someone typed.
+	//
+	// Reverse-order release makes that a consequence of the acquisition
+	// order, which is the one ordering a reader can check locally: the
+	// renderer is built *from* the window, so it is bound after it, so it is
+	// released before it.
+	//
+	// What is NOT fixed is the ordering *inside* `Renderer.release` — see
+	// `renderer.elp` GAP 5. Across resources the construct answers it;
+	// within an aggregate it does not.
 }
 
 // GAP 2 — this loop must run on the main thread and there is no way to say

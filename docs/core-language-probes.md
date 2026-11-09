@@ -828,16 +828,72 @@ FFI works because of a rule adopted for a different reason.
     C's `goto fail` ladder and what Rust's `Drop` handles on the error
     path.
 
-### The construct three unrelated probes have now asked for
+### ~~The construct three unrelated probes have now asked for~~ — designed
 
-A scoped form — `with Connection.open(path) as db { ... }` — has been
-reached for independently by `SqliteBinding` (exactly-once release),
-`VulkanTriangle` (the five-deep teardown ladder *and* GLFW's
-`init`/`terminate` global, which has no handle for a tier to describe),
-and noted in `aliasing.md` as the same shape as `Synchronized<T>`'s
-`update`/`with`. Three probes, two of them FFI and one not, converging on
-one statement form is the strongest signal in the corpus about what to
-design next.
+A scoped form was reached for independently by `SqliteBinding`
+(exactly-once release), `VulkanTriangle` (the teardown ladder *and* GLFW's
+handle-less `init`/`terminate`), and noted in `aliasing.md` as the same
+shape as `Synchronized<T>`'s `update`/`with`.
+
+**Designed** in `memory-model.md`, "Scoped release": `with expr as x { }`,
+with multiple bindings released in reverse, and a `Scoped` interface whose
+`release(self)` the compiler calls at every exit. It is scoped release
+rather than RAII — release is tied to a brace in the source, not to a
+value's lifetime, so there are no drop flags, no moved-out analysis and no
+drop glue, and a value not bound by a `with` is simply never released.
+
+Three things it settled that were not the headline:
+
+- **Reverse order answers the ordering gap across resources.**
+  `VulkanTriangle`'s renderer is built *from* its window, so it is bound
+  after it and released before it. That was two hand-written calls in one
+  specific order, duplicated on an error path.
+- **The handle-less global gets a handle.** `Glfw.initialised()` is a
+  token type carrying no data, which exists so that "GLFW is initialised"
+  is a value with a lifetime. Worth writing only because `Scoped` exists.
+- **`Scoped` is the second and harder witness for a by-value receiver.**
+  `release(self)` cannot be declared at all under `functions.md`'s
+  `&self`/`&var self`, so the construct cannot be built without it.
+
+And three it did not:
+
+- **A partially-constructed aggregate on an error path.**
+  `Renderer.new` assembles five handles *for a caller*, so there is no
+  block to bound them and `with` does not apply. The remaining question is
+  narrower than "elp has no destructors" — possibly assembly belongs in a
+  `with` whose release is cancelled on success, and nothing proposes a
+  way to cancel one.
+- **Ordering *within* an aggregate.** Reverse order sequences `with`
+  bindings relative to each other; the five lines inside
+  `Renderer.release` are one binding and the types permit every
+  permutation.
+- **Borrowed handles derived from a released resource.**
+  `Glfw.release` invalidates every `Monitor`, which are `Copy` and were
+  never bound by a `with`. `aliasing.md`'s validity gap, seen from the
+  release side.
+
+### The `out` keyword was never a design — it was my placeholder
+
+`db.elp` and `renderer.elp` wrote `&out` against a binding nothing
+declared, then read `out.asSqlite3()`. Shorthand for "the thing C wrote
+into" that should not have been committed, and it spread from one probe to
+the other. (`QuadTree/tree.elp`'s `out` is unrelated and legitimate — an
+ordinary declared parameter that happens to be named `out`.)
+
+**Resolved** in `memory-model.md` Finding 4, and the resolution deletes
+the concept rather than designing it. The difficulty was never mutability
+direction, so `&mut` would have described the wrong axis: you cannot take
+a mutable reference to a `Sqlite3` that does not exist yet. It is
+**emptiness**, and `Optional<T>` is already a slot that may be empty —
+niche-optimised to a nullable pointer, so `&db` *is* `sqlite3**`.
+
+What made it legal needed one sentence: **Finding 4 infers mutability from
+the callee's body, and at an `@external` declaration the callee is C.** So
+at that boundary `&T` is read-write, conservatively, because there is
+nothing to infer from. An `Out<T>` slot type was considered and dropped as
+`&Optional<T>` with extra vocabulary — and because its closest relative,
+`Binding<T>`, is a refcounted reactive cell tied to the cell thread, which
+is machinery that has no business near `sqlite3_open`.
 
 ## Suggested order
 
