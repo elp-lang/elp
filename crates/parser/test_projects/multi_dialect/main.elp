@@ -1,1 +1,0 @@
-export const GREETING = "hello from script"

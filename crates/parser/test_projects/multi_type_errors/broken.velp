@@ -1,3 +1,0 @@
-export @Package(
-	name = "broken",
-)

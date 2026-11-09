@@ -1,5 +1,0 @@
-export fn main -> int {
-	return 0
-}
-
-// vim: ft=kotlin
