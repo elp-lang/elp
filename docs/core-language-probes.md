@@ -1,6 +1,6 @@
 # Core language probes
 
-Ten programs written to put pressure on the parts of elp the original
+Eleven programs written to put pressure on the parts of elp the original
 corpus never exercised. They are **design probes, not specimens** — they
 use constructs the language does not have, written in the most plausible
 spelling, so the gaps can be read rather than listed.
@@ -418,6 +418,10 @@ file names, or a module path segment is lexed differently from an
 identifier. `name-resolution.md` says a path segment is always a file;
 it does not say what a file may be called.
 
+`examples/VulkanTriangle/internal/vk-types.elp` is a second witness and a
+worse one: three files import it, so the path is load-bearing rather than
+decorative. Kept hyphenated on purpose for that reason.
+
 ### The server has no UI thread
 
 `reactivity.md` confines cells to one logical thread, justified by that
@@ -701,6 +705,124 @@ there is no question of where `unsafe` goes, because `@external` is the
 marker and `links` bounds what it can reach.
 
 ---
+
+## 10. System resources — `examples/VulkanTriangle`
+
+A Vulkan triangle in a GLFW window, `kind = .Binary`. Written because
+`examples/SqliteBinding` turned out to be the easy case: one library, one
+handle you own, scalars across the boundary. This is two libraries that
+reference each other's types, a five-deep handle tree with release
+*ordering*, C structs built in elp and read by a driver, out-parameters
+that must be called twice, and functions that do not exist until the
+driver is asked for them by name.
+
+### What it confirmed
+
+**The owned/borrowed split in `aliasing.md` is real, and not a SQLite
+quirk.** `window.elp` holds the two rows side by side: `Window` wrapping a
+`GLFWwindow` is `Move`, `Monitor` wrapping a `GLFWmonitor` is `Copy`, and
+neither file argues for its tier — both are conclusions from a boundary
+declaration plus field-wise `Copy`. Vulkan then splits the same way inside
+one API: `VkInstance`/`VkDevice`/`VkSwapchainKHR` are `Move`, and
+`VkPhysicalDevice`/`VkQueue`/`VkCommandBuffer` are `Copy`. One rule,
+opposite answers, in one file — which is the strongest argument yet that
+the mandatory declaration beats a default in either direction.
+
+**Exclusivity buys more than it was argued for.** `links` was made an
+exclusive claim to stop two packages declaring one symbol differently.
+`glfwCreateWindowSurface` takes a `VkInstance`, so the GLFW binding must
+import the Vulkan binding — and exclusivity is what guarantees there is
+exactly one `VkInstance` *type* in the program to import. Multi-library
+FFI works because of a rule adopted for a different reason.
+
+### What it resolved
+
+1. **A `links` entry's first argument is a logical name.** Vulkan is
+   `libvulkan.so.1` on Linux and `libMoltenVK.dylib` on macOS — same
+   symbols, different file — so `condition` covered the manifest and broke
+   the declarations, which refer to the library by name. `soname` is now
+   separate and defaults to the logical name. The allow-list is keyed on
+   the logical name, so two conditional entries are one claim.
+2. **`scripts` on `@Package`** runs an external process at a build stage,
+   with **mandatory** `inputs` and `outputs`. That is the deliberate
+   divergence from Cargo's `build.rs`: declaring them makes a script a
+   function of its inputs, so it is skippable, cacheable and parallel,
+   rather than re-running on any change unless it opts out from inside
+   itself. It is also where impurity is allowed to live, which is what lets
+   `macros.md` keep compile-time elp `pure`.
+
+### What it found that is new
+
+3. **An `@external` type with *fields* needs a layout guarantee.** Every
+   previous external type was opaque, which is what let `aliasing.md` say
+   field-wise `Copy` is vacuous for them. A `VkInstanceCreateInfo` is
+   filled in elp and read by the driver at a C ABI, so `object`'s freedom
+   to reorder and pack fields — correct and valuable for elp-only types —
+   is a crash here.
+4. **`sType`/`pNext` is a heterogeneous intrusive list with no spelling.**
+   Every Vulkan struct starts with a tag and a nullable pointer to a struct
+   of a *different* type, each with its own tag and pointer. It is a tagged
+   union threaded through pointers and assembled by the caller. elp's
+   `enum` is the right shape and the wrong representation. **The one place
+   this probe needs a new language feature rather than a new rule.**
+5. **`Copy` and `Sendable` come apart, in the direction nothing has
+   needed.** A `VkQueue` is `Copy` — correctly, it is a pointer you never
+   release — and Vulkan queues are explicitly *not* thread-safe, so it
+   crosses into `background` with no syntax and two threads submitting to
+   one queue is undefined behaviour. Everywhere else in the corpus a `Copy`
+   type is trivially `Sendable` because it is plain data. This needs a
+   `Copy` type that declines `Sendable`, which is legal and unprecedented
+   here.
+6. **A field can outlive a sibling field.** `Renderer` is `Move`, so the
+   object cannot be duplicated — and `renderer.graphics` is a `Copy`
+   `VkQueue` that can be read out and copied anywhere, pointing at
+   something owned by `renderer.device`. Field-wise `Copy` protects the
+   aggregate and not the members. For `Confined<T>` that asymmetry is fine,
+   because reading a handle out keeps the cell alive; a foreign handle
+   keeps nothing alive. **The sharpest form of the validity gap in the
+   corpus.**
+7. **Main-thread affinity is a property of a call, not of a value.**
+   `glfwPollEvents` must run on the macOS main thread or it aborts.
+   `Sendable` answers *may this value cross a thread?*; the constraint here
+   is *this function must run on one specific thread*. `reactivity.md` has
+   thread affinity only for data, via the cell thread, which a `.Binary`
+   does not have — so a `.Binary` on macOS has an affinity requirement the
+   language cannot state. Swift's answer is `@MainActor`, already noted
+   there as a comparison and declined.
+8. **The count-then-fill out-parameter needs a place.**
+   `vkEnumeratePhysicalDevices(instance, &count, null)` then again with a
+   buffer: a nullable argument whose nullness changes the function's
+   meaning, an in-out count, and a destination that wants an elp array's
+   backing storage. `collections.md` says collections hold values, not
+   places. `SqliteBinding` found single out-parameters awkward; an array
+   out-parameter is a different problem.
+9. **Extension functions are loaded by name and called as values.**
+   `vkGetInstanceProcAddr` returns a generic function pointer to cast.
+   There is no symbol for the allow-list to check, and the result is a
+   function value with a C ABI, which `functions.md` says nothing about —
+   `fn(T) -> R` carries no calling convention. It is also not exotic: the
+   debug messenger and `vkDestroySurfaceKHR` are both only reachable this
+   way, so `renderer.elp` leaks its surface because two unspellable things
+   compose.
+10. **Teardown ordering is the specification and the types permit every
+    permutation.** `vkDeviceWaitIdle` before everything, swapchain before
+    device, device before instance, renderer before window across two
+    files and two libraries. `Move` gives at-most-once and imposes no
+    order. And every `throw` on the construction path leaks everything
+    built before it — five handles deep, one leak site per step, which is
+    C's `goto fail` ladder and what Rust's `Drop` handles on the error
+    path.
+
+### The construct three unrelated probes have now asked for
+
+A scoped form — `with Connection.open(path) as db { ... }` — has been
+reached for independently by `SqliteBinding` (exactly-once release),
+`VulkanTriangle` (the five-deep teardown ladder *and* GLFW's
+`init`/`terminate` global, which has no handle for a tier to describe),
+and noted in `aliasing.md` as the same shape as `Synchronized<T>`'s
+`update`/`with`. Three probes, two of them FFI and one not, converging on
+one statement form is the strongest signal in the corpus about what to
+design next.
 
 ## Suggested order
 

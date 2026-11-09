@@ -1,0 +1,114 @@
+// `kind = .Binary` with a native event loop, which is the part of this probe
+// `examples/Pipeline` could not reach.
+//
+// `Pipeline` is a `.Binary` too, and it showed what `aliasing.md`'s rules do
+// with no cell thread. It still *owned its own control flow*: `main` ran,
+// fanned out, collected, returned. Here the control flow belongs to GLFW and
+// the GPU, `main` is a `while` loop that must not be left, and the thread it
+// runs on is load-bearing in a way nothing in the language can express.
+
+import { Window } from .window
+import { Renderer } from .renderer
+
+export fn main() {
+	match Window.open(800, 600, "triangle") {
+		.Err(e) -> {
+			print("could not open a window: {e}")
+			return
+		}
+		.Ok(window) -> {
+			match Renderer.new(&window) {
+				.Err(e) -> {
+					print("could not start vulkan: {e}")
+					window.close()
+					return
+				}
+				.Ok(renderer) -> {
+					loop(&window, &renderer)
+
+					// GAP 1 — the teardown order spans two files and two
+					// libraries, and nothing checks it.
+					//
+					// The renderer must be destroyed before the window: the
+					// Vulkan surface was created *from* the GLFW window, so
+					// destroying the window first leaves the surface pointing
+					// at freed Cocoa or X11 state. `renderer.elp` GAP 5 is
+					// the same problem inside one object; this is it across
+					// two.
+					//
+					// Both are `Move`, so both are destroyed at most once and
+					// in whatever order someone typed.
+					renderer.destroy()
+					window.close()
+				}
+			}
+		}
+	}
+}
+
+// GAP 2 — this loop must run on the main thread and there is no way to say
+// so.
+//
+// `glfwPollEvents` must be called from the thread that called `glfwInit`, and
+// on macOS it must be *the* main thread, because it pumps an NSApplication
+// run loop and Cocoa requires that. This is not a convention: calling it
+// elsewhere aborts.
+//
+// `reactivity.md` has one thread-affinity concept — the **cell thread** — and
+// it belongs to the reactive runtime, which a `.Binary` does not have. So the
+// language has a notion of "the thread where UI state lives" and no notion of
+// "the thread the OS demands for event pumping", and in a `.Binary` the
+// second exists while the first does not.
+//
+// `Sendable` is the wrong tool for it, and it is worth saying why. `Sendable`
+// answers *may this value cross a thread?*. The constraint here is *this
+// function must run on one specific thread*, which is a property of the
+// **call**, not of any value — a `Window` is not unsendable, it is unusable
+// from anywhere but one place. Swift spells that `@MainActor`, which
+// `reactivity.md` already notes as a comparison and declines to adopt.
+//
+// So the honest status: `.Binary` on macOS needs main-thread affinity for a
+// call, elp has thread-affinity only for data, and this loop is correct by
+// accident of being written in `main`.
+fn loop(window &Window, renderer &Renderer) {
+	while !window.shouldClose() {
+		window.pumpEvents()
+
+		match renderer.drawFrame() {
+			.Err(e) -> {
+				print("draw failed: {e}")
+				return
+			}
+			.Ok(_) -> {}
+		}
+	}
+}
+
+// GAP 3 — what `background` means here is undefined, and a real renderer
+// needs it.
+//
+// `reactivity.md` gives `background(fn { ... })` for off-thread work and
+// `aliasing.md` gates it on `Sendable`. A Vulkan program wants exactly that:
+// asset loading, shader compilation and buffer uploads belong off the event
+// thread, submitting to a transfer queue while the main thread pumps events.
+//
+// Three things are unanswered, and the first is the one that matters:
+//
+//   - `VkQueue` is `Copy`, so it crosses into a `background` closure with no
+//     syntax — and Vulkan queues are explicitly *not* thread-safe. Two
+//     threads submitting to one queue is undefined behaviour, and the tier
+//     that is correct about duplication actively invites it. `Sendable` is
+//     the right gate and `VkQueue` would have to decline it, which means a
+//     `Copy` type that is not `Sendable` — legal, and nothing in the corpus
+//     has needed it before.
+//   - `VkDevice` is `Move`, so it cannot be used from two threads at once by
+//     construction, which is *stricter* than Vulkan requires: a device is
+//     thread-safe and a real program shares it.
+//   - `background` has no join (`Pipeline` GAP 1), and an upload that
+//     finishes after `vkDeviceWaitIdle` is a use-after-free.
+//
+// The first is the finding: **`Copy` and `Sendable` come apart at the FFI
+// boundary**, in the direction the language has not seen. Everywhere else a
+// `Copy` type is trivially `Sendable` because it is plain data.
+
+// vim: ft=kotlin

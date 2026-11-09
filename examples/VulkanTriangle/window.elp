@@ -1,0 +1,111 @@
+// The safe surface over GLFW. This file is short on purpose: it is the one
+// place in the corpus where `aliasing.md`'s owned and borrowed rows sit next
+// to each other in the same file, doing different things, with the difference
+// visible at a glance.
+
+import { Error } from elp.types
+import {
+	GLFWwindow,
+	GLFWmonitor,
+	CString,
+	glfwInit,
+	glfwTerminate,
+	glfwWindowHint,
+	glfwCreateWindow,
+	glfwDestroyWindow,
+	glfwWindowShouldClose,
+	glfwPollEvents,
+	glfwGetPrimaryMonitor,
+} from .internal.glfw
+
+@error
+export enum WindowError {
+	INIT_FAILED,
+	CREATE_FAILED { width int, height int },
+	NO_MONITOR,
+}
+
+// Owned. `Move` is a conclusion: the field's type is `GLFWwindow`, which is
+// declared `Move` at the boundary, and field-wise `Copy` forces the rest.
+// Nothing in this file declares anything about duplication.
+export object Window {
+	const handle GLFWwindow,
+	const title  string,
+}
+
+Window implements Move
+
+// Borrowed. `Copy` is *also* a conclusion — `GLFWmonitor` is declared `Copy`
+// at the boundary — and it is the right answer: this program never releases a
+// monitor, duplicating the handle is a pointer copy, and two copies have no
+// operation through which either can observe the other.
+//
+// The pair is the demonstration. Two wrappers, one rule, opposite tiers, and
+// neither one argued for in this file.
+export object Monitor {
+	const handle GLFWmonitor,
+}
+
+Monitor implements Copy
+
+export fn Window.open(width int, height int, title string) -> Either<Self, Error> {
+	// GAP — `glfwInit` has no handle, so this call is unsequenced relative to
+	// everything else. See `internal/glfw.elp` GAP 3. Calling it here means
+	// opening two windows initialises GLFW twice, which GLFW tolerates and
+	// which the type system has no opinion about.
+	if glfwInit() == 0 {
+		throw WindowError.INIT_FAILED
+	}
+
+	// 0x00022001 is GLFW_CLIENT_API, 0 is GLFW_NO_API: tell GLFW not to make
+	// an OpenGL context, because Vulkan owns the surface. Raw because the
+	// constants would come from a generated binding (`vk-types.elp`).
+	glfwWindowHint(0x00022001, 0)
+
+	const name = CString.from(title)
+
+	match glfwCreateWindow(width, height, &name, null, null) {
+		// GAP — `null` twice above, for "no monitor" and "no window to share
+		// with". `OpaqueHandle` is `Move`, and `null` is not a value of it.
+		// `error-handling.md` makes absence `Optional<T>`, which is the right
+		// elp answer and the wrong C one: an `Optional<OpaqueHandle>` is not
+		// guaranteed to be a null pointer at the ABI. Nothing says how an
+		// absent pointer is spelled at the boundary.
+		.NULL  -> throw WindowError.CREATE_FAILED { width, height }
+		handle -> return Ok(Self { handle = handle.asWindow(), title })
+	}
+}
+
+export fn Window.shouldClose(&self) -> bool {
+	return glfwWindowShouldClose(&self.handle) != 0
+}
+
+export fn Window.pumpEvents(&self) {
+	// GAP — this must run on the thread that called `glfwInit`, and on macOS
+	// specifically the main thread, because Cocoa requires it. See
+	// `main.elp`: there is no way to say so.
+	glfwPollEvents()
+}
+
+// `self` by value: closing consumes the window. Same shape as
+// `SqliteBinding`'s `Connection.close`, and the same gap — `functions.md` has
+// `&self` and `&var self` and no by-value receiver.
+export fn Window.close(self) {
+	glfwDestroyWindow(self.handle)
+
+	// GAP — and this is the ordering problem in two lines. `glfwTerminate`
+	// invalidates every `Monitor` in the program, which are `Copy` and
+	// therefore scattered wherever anyone put them. `Move` on `Window` makes
+	// the double-destroy a compile error and says nothing about the monitors
+	// that just became dangling.
+	glfwTerminate()
+}
+
+export fn Monitor.primary() -> Either<Self, Error> {
+	match glfwGetPrimaryMonitor() {
+		.NULL  -> throw WindowError.NO_MONITOR
+		handle -> return Ok(Self { handle = handle.asMonitor() })
+	}
+}
+
+// vim: ft=kotlin

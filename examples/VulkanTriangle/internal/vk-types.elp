@@ -1,0 +1,128 @@
+// The C structs, and the question `examples/SqliteBinding` never asked.
+//
+// SQLite's whole API is scalars and opaque pointers, so `@external` only ever
+// had to describe a type with *no* fields — which is what let `aliasing.md`
+// say "an external type has no fields, so field-wise `Copy` is vacuous, so
+// the tier must be declared". Vulkan's API is structs: you fill one in elp,
+// hand over its address, and the driver reads it.
+//
+// So `@external` has to describe a type **with** fields, and that is a
+// different thing in three ways. Each is a GAP below.
+//
+// A note on this file's own name. It is `vk-types.elp`, imported as
+// `.vk-types`, which does not lex — `core-language-probes.md` records that a
+// hyphen in a module path tokenises as subtraction, found in `Expenses` and
+// latent in the old corpus because the hyphenated file was never imported.
+// Kept hyphenated deliberately: this is the second witness, and the first
+// where the import is load-bearing rather than absent.
+
+import { OpaqueHandle, CString } from .vulkan
+
+// GAP 1 — an external struct needs a layout guarantee elp does not give.
+//
+// `object` says nothing about field order, padding or size. For an elp-only
+// type that is correct and valuable: the compiler should be free to reorder
+// fields to pack them. For a type the driver reads at a C ABI, every one of
+// those freedoms is a crash.
+//
+// So an external struct is declaring **layout**, not just fields, and needs
+// to promise C order with C padding and C alignment. The strawman is that
+// `@external` on a type with fields *means* that, with no extra argument —
+// which is attractive because there is no second thing to forget, and it
+// gives `@external` a second meaning depending on whether a body is present.
+//
+// Rust spells this `#[repr(C)]` separately from `extern`, and the separation
+// is load-bearing there: a `#[repr(C)]` struct is useful in pure Rust for
+// stable layout. Nothing in elp wants that yet.
+@external(.C, library = "vulkan") {
+	// GAP 2 — `sType` and `pNext` are a heterogeneous intrusive list and
+	// elp has no way to spell the second field at all.
+	//
+	// Every Vulkan struct begins with a tag saying which struct it is,
+	// followed by a nullable pointer to *a different struct type*, which has
+	// its own tag and its own `pNext`. It is a linked list whose element type
+	// varies per node, with the tag as the discriminant — a tagged union
+	// threaded through pointers, assembled by the caller.
+	//
+	// elp has `enum` with payloads, which is the right shape and the wrong
+	// representation: an elp enum is a value, and this is a chain of
+	// separately-addressed structs the driver walks. It also cannot be
+	// `Optional<T>` for a fixed `T`, because the `T` differs per link.
+	//
+	// Typed as `OpaqueHandle` below, which is honest and useless: it means
+	// every extension struct is built by hand and nothing checks the chain.
+	// This is the single most awkward thing in Vulkan FFI and the one place
+	// this probe would need a new language feature rather than a new rule.
+	export type VkInstanceCreateInfo {
+		const sType                   int,
+		const pNext                   OpaqueHandle,
+		const flags                   int,
+		const pApplicationInfo        OpaqueHandle,
+		const enabledLayerCount       int,
+		const ppEnabledLayerNames     OpaqueHandle,
+		const enabledExtensionCount   int,
+		const ppEnabledExtensionNames OpaqueHandle,
+	}
+
+	export type VkDeviceQueueCreateInfo {
+		const sType            int,
+		const pNext            OpaqueHandle,
+		const flags            int,
+		const queueFamilyIndex int,
+		const queueCount       int,
+		const pQueuePriorities OpaqueHandle,
+	}
+
+	// Elided: VkDeviceCreateInfo, VkSwapchainCreateInfoKHR,
+	// VkRenderPassCreateInfo, VkGraphicsPipelineCreateInfo and about fifteen
+	// more. They are the same shape at greater length and ask nothing new.
+}
+
+// GAP 3 — what tier is a C struct, and can the author even be trusted to
+// say?
+//
+// `aliasing.md`'s rule is that an `@external type` must declare its tier
+// because field-wise has nothing to inspect. Here field-wise has plenty to
+// inspect, and it would conclude `Copy`: every field above is an `int` or an
+// `OpaqueHandle`.
+//
+// `Copy` is *correct* for the struct itself — it is a plain value, copying
+// it copies bytes, two copies are independent. But it is the wrong answer
+// about what the struct **contains**: `ppEnabledExtensionNames` is a borrowed
+// pointer into GLFW's memory (see `glfw.elp`), so copying the struct
+// duplicates a pointer whose referent outlives nothing in particular.
+//
+// Which means the three-row table in `aliasing.md` is about *handles*, and a
+// struct of handles is a fourth case it does not cover: the tier of the
+// aggregate and the validity of its members come apart. The honest statement
+// is that `Copy` here describes the memcpy and says nothing about the
+// pointers, exactly as `&T` being `Copy` said nothing about `T`.
+VkInstanceCreateInfo    implements Copy
+VkDeviceQueueCreateInfo implements Copy
+
+// The `sType` constants. Real bindings generate these from `vk.xml`, which is
+// the strongest argument in this probe for `macros.md` existing: ~2000 enum
+// values and ~800 struct definitions from a machine-readable spec is exactly
+// the "a little source for a lot of generated code" case the attribute-block
+// form was designed for.
+export enum StructureType {
+	APPLICATION_INFO,
+	INSTANCE_CREATE_INFO,
+	DEVICE_QUEUE_CREATE_INFO,
+	DEVICE_CREATE_INFO,
+	SWAPCHAIN_CREATE_INFO_KHR,
+}
+
+StructureType implements Copy
+
+export fn StructureType.raw(&self) -> int {
+	match self {
+		.APPLICATION_INFO           -> return 0
+		.INSTANCE_CREATE_INFO       -> return 1
+		.DEVICE_QUEUE_CREATE_INFO   -> return 2
+		.DEVICE_CREATE_INFO         -> return 3
+		.SWAPCHAIN_CREATE_INFO_KHR  -> return 1000001000
+	}
+}
+
+// vim: ft=kotlin

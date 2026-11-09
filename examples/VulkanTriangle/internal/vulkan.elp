@@ -1,0 +1,138 @@
+// The Vulkan surface. One `@external` block, so `library = "vulkan"` is
+// written once for thirteen symbols — which is the block form in `macros.md`
+// doing the job it was designed for, at a scale `SqliteBinding` only
+// gestured at. A real binding has ~400 of these.
+
+import { VkInstanceCreateInfo } from .vk-types
+
+@external(.C, library = "vulkan") {
+	export type CString
+	export type OpaqueHandle
+
+	// The handle tree. Every one of these is a pointer or a 64-bit opaque
+	// integer, and their tiers are not uniform — which is the whole point of
+	// `aliasing.md` requiring each to be declared.
+	export type VkInstance
+	export type VkPhysicalDevice
+	export type VkDevice
+	export type VkQueue
+	export type VkSurfaceKHR
+	export type VkSwapchainKHR
+	export type VkCommandPool
+	export type VkCommandBuffer
+
+	export fn vkCreateInstance(info &VkInstanceCreateInfo, allocator OpaqueHandle, out &OpaqueHandle) -> int
+	export fn vkDestroyInstance(instance VkInstance, allocator OpaqueHandle)
+
+	// GAP 1 — the count-then-fill out-parameter, called twice.
+	//
+	// The C idiom is:
+	//
+	//   uint32_t n = 0;
+	//   vkEnumeratePhysicalDevices(instance, &n, NULL);         // ask how many
+	//   VkPhysicalDevice *devs = malloc(n * sizeof *devs);
+	//   vkEnumeratePhysicalDevices(instance, &n, devs);         // fill
+	//
+	// Three things elp cannot say. The third argument is **nullable** and its
+	// nullness changes the function's meaning, so one declaration describes
+	// two operations. The second argument is in-out: the caller writes a
+	// capacity and the callee writes a length. And the third wants the
+	// *backing storage* of an elp array, which `collections.md` rules out
+	// directly — "collections hold values, not places".
+	//
+	// `SqliteBinding` GAP 3 found single out-parameters awkward. An array
+	// out-parameter is a different problem: it needs a place, and the
+	// language is built on there not being one.
+	export fn vkEnumeratePhysicalDevices(instance VkInstance, count &OpaqueHandle, out OpaqueHandle) -> int
+
+	export fn vkGetPhysicalDeviceQueueFamilyProperties(device VkPhysicalDevice, count &OpaqueHandle, out OpaqueHandle)
+	export fn vkCreateDevice(physical VkPhysicalDevice, info OpaqueHandle, allocator OpaqueHandle, out &OpaqueHandle) -> int
+	export fn vkDestroyDevice(device VkDevice, allocator OpaqueHandle)
+
+	// GAP 2 — a handle you must never release, handed back by value.
+	//
+	// `vkGetDeviceQueue` does not create anything. The queue already exists;
+	// this reads a pointer to it out of the device. There is no
+	// `vkDestroyQueue` and calling one would be a category error.
+	//
+	// This is `aliasing.md`'s second row — a borrowed handle — and it is why
+	// that row had to exist. `VkQueue implements Copy` below, and that is the
+	// *right* answer: duplicating it is free and two copies have nothing to
+	// observe about each other. It is also the answer that would have been
+	// wrong for every handle in `SqliteBinding`.
+	export fn vkGetDeviceQueue(device VkDevice, family int, index int, out &OpaqueHandle)
+
+	export fn vkCreateSwapchainKHR(device VkDevice, info OpaqueHandle, allocator OpaqueHandle, out &OpaqueHandle) -> int
+	export fn vkDestroySwapchainKHR(device VkDevice, swapchain VkSwapchainKHR, allocator OpaqueHandle)
+
+	export fn vkCreateCommandPool(device VkDevice, info OpaqueHandle, allocator OpaqueHandle, out &OpaqueHandle) -> int
+	export fn vkDestroyCommandPool(device VkDevice, pool VkCommandPool, allocator OpaqueHandle)
+
+	export fn vkQueueSubmit(queue VkQueue, count int, submits OpaqueHandle, fence OpaqueHandle) -> int
+	export fn vkQueuePresentKHR(queue VkQueue, present OpaqueHandle) -> int
+	export fn vkDeviceWaitIdle(device VkDevice) -> int
+
+	// GAP 3 — a function that does not exist until you ask for it by name,
+	// and then has to be called as a value.
+	//
+	// Every Vulkan extension function — including the debug messenger a real
+	// program wants first — is absent from the shared library's symbol table.
+	// You call `vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT")`,
+	// get a generic function pointer back, and cast it to the right signature.
+	//
+	// This is `name-resolution.md`'s `.runtime` binding arriving as the
+	// normal case rather than an exotic one, and it breaks the shape of
+	// `@external` twice. The symbol is not known at link time, so there is
+	// nothing for the allow-list to check against beyond the library. And the
+	// result is a **function value with a C ABI**, which `functions.md` says
+	// nothing about: `fn(T) -> R` is an elp function type and says nothing
+	// about calling convention, and a cast from a `void (*)(void)` to a
+	// specific signature is unchecked by construction.
+	//
+	// So the honest declaration is the one below — it returns an opaque thing
+	// — and the call is unspellable. Left that way rather than invented.
+	export fn vkGetInstanceProcAddr(instance VkInstance, name &CString) -> OpaqueHandle
+}
+
+// The tiers, and they are not uniform. This is the table in `aliasing.md`
+// applied to one API, and it is the clearest evidence in the corpus that a
+// default would have been wrong whichever way it went.
+//
+// Owned — this program created it and must destroy it exactly once:
+VkInstance     implements Move
+VkDevice       implements Move
+VkSurfaceKHR   implements Move
+VkSwapchainKHR implements Move
+VkCommandPool  implements Move
+
+// Borrowed — owned by a parent, never released by this program, free to
+// duplicate:
+VkPhysicalDevice implements Copy
+VkQueue          implements Copy
+VkCommandBuffer  implements Copy
+
+CString      implements Move
+OpaqueHandle implements Move
+
+// GAP 4 — the tiers are right and they do not encode the ordering, which is
+// what actually goes wrong.
+//
+// `vkDestroySwapchainKHR` must run before `vkDestroyDevice`, which must run
+// before `vkDestroyInstance`. `vkDeviceWaitIdle` must run before any of them.
+// Every `Move` above is at-most-once and none of them is *after* anything.
+//
+// And the borrowed handles are worse, because `Copy` is correct about
+// duplication and silent about validity: a `VkQueue` is a dangling pointer
+// the instant its `VkDevice` is destroyed, and copying it freely — which the
+// tier explicitly permits — scatters that dangling pointer wherever the
+// program felt like putting it.
+//
+// `SqliteBinding` found this as one pair, `Statement` outliving
+// `Connection`. Vulkan is the same gap as a tree: instance -> physical
+// device -> device -> {queue, swapchain, pool} -> command buffer, with an
+// ordering constraint on every edge and a program that is a hundred lines of
+// teardown. Rust declines to solve it too — `ash` makes these handles `Copy`
+// and documents the hazard — so this is not elp being behind, but it is the
+// largest single thing the language cannot say about a real API.
+
+// vim: ft=kotlin

@@ -1,0 +1,117 @@
+import { Package, Version } from elp.package
+
+// A Vulkan triangle in a GLFW window. `kind = .Binary` deliberately: the
+// question is what system resources look like in a program that owns its own
+// `main`, its own event loop and its own device, with no cell thread and no
+// reactive runtime underneath it.
+//
+// It is the second FFI probe, and it exists because `examples/SqliteBinding`
+// turned out to be the easy case. SQLite is one library, one handle you own,
+// and scalars across the boundary. Vulkan is two libraries that reference
+// each other's types, a ten-deep tree of handles with release *ordering*,
+// handles you must never release, C structs constructed in elp and passed by
+// pointer, out-parameters that have to be called twice, and functions that do
+// not exist until you ask the driver for them by name.
+//
+// Elided on purpose: render-pass and pipeline creation are ~300 lines of
+// struct filling that asks nothing new after the first struct. Where this
+// happens it is marked, so the file is short without pretending Vulkan is.
+@Package(
+	name = "vulkan_triangle",
+	version = .new(0, 1, 0, 0),
+	entry = "main.elp",
+	kind = .Binary,
+
+	// No `.iOS`/`.Android` — both have Vulkan (or MoltenVK) but neither has
+	// GLFW, and no `.Web`, which `name-resolution.md` already rules out for
+	// anything with a `links` entry.
+	targets = [.macOS, .Linux],
+
+	dependencies = [
+		.stdlib("1.0.0"),
+	],
+
+	// Two entries, which is the first thing this probe adds: with one entry
+	// `library =` was pure noise (`SqliteBinding` GAP 4). With two it is
+	// load-bearing, and the block form in `macros.md` means it is still
+	// written exactly twice — once per `@external` block.
+	//
+	// GAP 1, RESOLVED — the first argument is a **logical name**, and the file
+	// it resolves to is separate.
+	//
+	// Vulkan on Linux is `libvulkan.so.1`. On macOS there is no Vulkan driver
+	// at all: it is MoltenVK, a Vulkan-to-Metal translation layer shipped as
+	// `libMoltenVK.dylib`. The symbols are identical; the file is not.
+	//
+	// `condition` covered the manifest side and then broke the thing it was
+	// supposed to feed, because a declaration written
+	// `@external(.C, library = "vulkan")` would match one entry and not the
+	// other. Splitting the logical name from the `soname` fixes it, and
+	// `soname` defaults to the logical name — which is why the `glfw` entry
+	// below still takes one argument.
+	//
+	// The allow-list is keyed on the logical name, so the two entries here are
+	// **one** exclusive claim on `vulkan` under disjoint conditions, not two.
+	links = [
+		.system("glfw", binding = .dynamic, minimumVersion = "3.3.0"),
+
+		.system("vulkan", soname = "libvulkan.so.1", binding = .dynamic,
+			minimumVersion = "1.2.0", condition = target == .Linux),
+
+		// No `minimumVersion`: MoltenVK's own version does not track Vulkan's,
+		// which is a second instance of `name-resolution.md`'s unenforceable-
+		// version gap rather than a new one.
+		.system("vulkan", soname = "libMoltenVK.dylib", binding = .dynamic,
+			condition = target == .macOS),
+	],
+
+	// GAP 2, RESOLVED — build-stage jobs, as a function of declared inputs.
+	//
+	// A triangle needs two SPIR-V modules, and SPIR-V is binary produced by
+	// running `glslc` over GLSL source. None of that is elp, and none of it
+	// can be a macro: `macros.md` runs `pure fn` at compile time and `pure`
+	// means no IO, which is correct and is what keeps the evaluator small.
+	//
+	// So the manifest is where impurity lives, bounded the same way `links`
+	// bounds native reach: declared, in one reviewable place.
+	//
+	// `inputs` and `outputs` are mandatory, which is the deliberate divergence
+	// from Cargo's `build.rs`. A `build.rs` is opaque, so Cargo re-runs it on
+	// any change unless the script prints an opt-out from inside itself.
+	// Declaring them makes this a function of its inputs: skippable, cacheable,
+	// and parallel with the fragment job below.
+	scripts = [
+		.run(
+			stage   = .beforeCompile,
+			command = ["glslc", "shaders/triangle.vert", "-o", "{out}/triangle.vert.spv"],
+			inputs  = ["shaders/triangle.vert"],
+			outputs = ["{out}/triangle.vert.spv"],
+		),
+		.run(
+			stage   = .beforeCompile,
+			command = ["glslc", "shaders/triangle.frag", "-o", "{out}/triangle.frag.spv"],
+			inputs  = ["shaders/triangle.frag"],
+			outputs = ["{out}/triangle.frag.spv"],
+		),
+	],
+)
+
+// GAP 3 — `scripts` runs the compiler and cannot deliver the bytes.
+//
+// The jobs above produce `triangle.vert.spv` and `triangle.frag.spv`, and
+// `vkCreateShaderModule` wants the bytes and a length. There is no way to
+// embed a file as data, which needs `strings.md`'s open byte-access question
+// answered first.
+//
+// So `scripts` closes half of this cleanly and leaves the other half exactly
+// where it was. `renderer.elp` elides shader module creation for that reason,
+// rather than pretending.
+//
+// Worth noting which half is the bigger one: a script whose output is
+// *generated elp source* works today, because that is a file the compiler
+// already knows how to read. That is what would let a real Vulkan binding be
+// generated from `vk.xml` — ~800 structs and ~2000 enum values — instead of
+// hand-written, which is the case `macros.md`'s attribute-block form was
+// designed for and that no corpus package could reach until now.
+
+// vim: ft=kotlin

@@ -1,0 +1,235 @@
+// The ownership tree. This is the file that exists to be looked at: five
+// handles, four of them owned, created in one order and destroyed in the
+// reverse order, with nothing in the language saying so.
+
+import { Error } from elp.types
+import { Window } from .window
+import {
+	VkInstance,
+	VkPhysicalDevice,
+	VkDevice,
+	VkQueue,
+	VkSurfaceKHR,
+	VkSwapchainKHR,
+	VkCommandPool,
+	OpaqueHandle,
+	vkCreateInstance,
+	vkDestroyInstance,
+	vkEnumeratePhysicalDevices,
+	vkCreateDevice,
+	vkDestroyDevice,
+	vkGetDeviceQueue,
+	vkCreateSwapchainKHR,
+	vkDestroySwapchainKHR,
+	vkCreateCommandPool,
+	vkDestroyCommandPool,
+	vkQueueSubmit,
+	vkQueuePresentKHR,
+	vkDeviceWaitIdle,
+} from .internal.vulkan
+import { VkInstanceCreateInfo, StructureType } from .internal.vk-types
+import { glfwCreateWindowSurface } from .internal.glfw
+
+@error
+export enum RenderError {
+	NO_INSTANCE { code int },
+	NO_DEVICE { code int },
+	NO_GPU,
+	NO_SURFACE { code int },
+	NO_SWAPCHAIN { code int },
+	DRAW_FAILED { code int },
+}
+
+// Four owned handles and one borrowed one, in a single object, which is how
+// every real renderer is written.
+//
+// `Renderer implements Move` is a conclusion four times over: `VkInstance`,
+// `VkDevice`, `VkSurfaceKHR`, `VkSwapchainKHR` and `VkCommandPool` are all
+// declared `Move` at the boundary, so field-wise forces this with no
+// propagation rule — the same single rule `examples/Sheet` exercises four
+// levels deep, here exercised five fields wide.
+export object Renderer {
+	const instance  VkInstance,
+	const physical  VkPhysicalDevice,
+	const device    VkDevice,
+	const graphics  VkQueue,
+	const surface   VkSurfaceKHR,
+	const swapchain VkSwapchainKHR,
+	const pool      VkCommandPool,
+}
+
+Renderer implements Move
+
+// GAP 1 — the two `Copy` fields are the hazard and the tier is silent.
+//
+// `physical` and `graphics` are `Copy`, correctly: this program never
+// destroys either. But `Renderer` is `Move`, so the *object* cannot be
+// duplicated while two of its fields can be read out and copied anywhere —
+// `renderer.graphics` is a free, unrestricted copy of a pointer that dies
+// with `renderer.device`.
+//
+// So field-wise `Copy` protects the aggregate and not the members, and that
+// asymmetry is correct for `Confined<T>` (reading one out gives you a handle
+// whose cell is refcounted and still alive) and wrong here (reading one out
+// gives you a pointer whose owner is a sibling field). The difference is that
+// an elp handle keeps its referent alive and a foreign handle does not.
+//
+// This is the sharpest form of the validity gap in the corpus: not two
+// objects outliving each other, but one object's field outliving another
+// field of the same object.
+
+export fn Renderer.new(window &Window) -> Either<Self, Error> {
+	const info = VkInstanceCreateInfo {
+		sType                   = StructureType.INSTANCE_CREATE_INFO.raw(),
+		pNext                   = null,
+		flags                   = 0,
+		pApplicationInfo        = null,
+		enabledLayerCount       = 0,
+		ppEnabledLayerNames     = null,
+		enabledExtensionCount   = 0,
+
+		// GAP 2 — this should be GLFW's `const char**`, handed straight
+		// through. See `internal/glfw.elp` GAP 1: copying it is the safe
+		// move and the destination wants the pointer, so the safe move is
+		// the one nobody makes. Passed `null` here, which produces an
+		// instance that cannot present to a window — a deliberately broken
+		// value, because writing the working version means writing the
+		// unsound one.
+		ppEnabledExtensionNames = null,
+	}
+
+	match vkCreateInstance(&info, null, &out) {
+		0    -> {}
+		code -> throw RenderError.NO_INSTANCE { code }
+	}
+
+	const instance = out.asInstance()
+
+	// GAP 3 — the count-then-fill call, written out, because the shape is
+	// the finding.
+	//
+	// The first call asks how many GPUs there are. The second fills a buffer.
+	// elp cannot express either: the third argument is nullable with
+	// meaning-changing nullness, the second is in-out, and the buffer wants
+	// an elp array's backing storage, which `collections.md` says does not
+	// exist as an addressable place.
+	//
+	// Written as if a `Buffer<T>` primitive existed, which it does not, so
+	// that the rest of this function can be read.
+	var count = 0
+	vkEnumeratePhysicalDevices(instance, &count, null)
+
+	if count == 0 {
+		throw RenderError.NO_GPU
+	}
+
+	var gpus = Buffer<VkPhysicalDevice>.withCapacity(count)
+	vkEnumeratePhysicalDevices(instance, &count, gpus.storage())
+
+	// Elided: ~80 lines picking a GPU with a graphics queue family that can
+	// present to this surface. It is `for` over two arrays and asks nothing
+	// new.
+	const physical = gpus.at(0)
+
+	match glfwCreateWindowSurface(&instance, &window.handle, null, &out) {
+		0    -> {}
+		code -> throw RenderError.NO_SURFACE { code }
+	}
+
+	const surface = out.asSurface()
+
+	match vkCreateDevice(physical, null, null, &out) {
+		0    -> {}
+		code -> throw RenderError.NO_DEVICE { code }
+	}
+
+	const device = out.asDevice()
+
+	// The borrowed handle. No error path, because nothing is created: this
+	// reads a pointer out of the device.
+	vkGetDeviceQueue(device, 0, 0, &out)
+	const graphics = out.asQueue()
+
+	match vkCreateSwapchainKHR(device, null, null, &out) {
+		0    -> {}
+		code -> throw RenderError.NO_SWAPCHAIN { code }
+	}
+
+	const swapchain = out.asSwapchain()
+
+	match vkCreateCommandPool(device, null, null, &out) {
+		0    -> {}
+		code -> throw RenderError.NO_SWAPCHAIN { code }
+	}
+
+	// GAP 4 — every `throw` above this line leaks everything created before
+	// it.
+	//
+	// By the `vkCreateCommandPool` call there are five live handles. A
+	// failure here must destroy the swapchain, the device, the surface and
+	// the instance, in that order, before returning the error — and
+	// `error-handling.md` makes a failure a *value* that returns immediately.
+	// There is no scope exit to hook.
+	//
+	// This is `SqliteBinding` GAP 1 (at-most-once, never at-least-once) at
+	// five-deep: not one leak site but one per construction step, each needing
+	// the teardown of everything above it. In C it is the `goto fail` ladder.
+	// Rust solves it with `Drop` running on the error path, which is the one
+	// mechanism elp has rejected having.
+	//
+	// The scoped form (`with ... as x { }`) solves it the same way `Drop`
+	// does and more narrowly, and this is now the third unrelated probe to
+	// land on it.
+	return Ok(Self {
+		instance, physical, device, graphics, surface, swapchain,
+		pool = out.asCommandPool(),
+	})
+}
+
+export fn Renderer.drawFrame(&self) -> Either<bool, Error> {
+	// Elided: acquire an image, record a command buffer, three draw calls.
+	// `vkQueueSubmit` and `vkQueuePresentKHR` are the only part that touches
+	// anything this probe is about.
+	match vkQueueSubmit(self.graphics, 1, null, null) {
+		0    -> {}
+		code -> throw RenderError.DRAW_FAILED { code }
+	}
+
+	match vkQueuePresentKHR(self.graphics, null) {
+		0    -> return Ok(true)
+		code -> throw RenderError.DRAW_FAILED { code }
+	}
+}
+
+// Teardown, by value, in the one order that is correct.
+//
+// GAP 5 — this function is the specification and the compiler cannot read
+// it. Reorder any two lines and the program corrupts memory or crashes in
+// the driver; the types permit every permutation. `Move` guarantees each
+// handle is destroyed at most once and imposes no order at all.
+export fn Renderer.destroy(self) {
+	// Must come first: the queue may still be executing work that references
+	// everything below.
+	vkDeviceWaitIdle(self.device)
+
+	vkDestroyCommandPool(self.device, self.pool, null)
+	vkDestroySwapchainKHR(self.device, self.swapchain, null)
+	vkDestroyDevice(self.device, null)
+
+	// GAP 6 — the surface was created by GLFW and must be destroyed by
+	// Vulkan, after the device and before the instance.
+	//
+	// `vkDestroySurfaceKHR` is an extension function, so by
+	// `internal/vulkan.elp` GAP 3 it is only reachable through
+	// `vkGetInstanceProcAddr` — which this probe cannot spell. So the surface
+	// leaks, and the leak is not an oversight in this file: it is the one
+	// place where two unspellable things compose.
+
+	vkDestroyInstance(self.instance, null)
+
+	// `self.physical` and `self.graphics` are not destroyed, because nothing
+	// destroys them. They are dangling from the line above onwards, and they
+	// are `Copy`, so any copy taken earlier is dangling too.
+}
+
+// vim: ft=kotlin

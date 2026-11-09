@@ -455,6 +455,26 @@ making its handle types `Copy` and leaving use-after-free to the
 programmer. So the honest statement is that elp's binding would be exactly
 as unsound as Rust's here, and the tier is not the thing that fixes it.
 
+**Two things the table does not capture, both from
+`examples/VulkanTriangle`.**
+
+A borrowed handle may be `Copy` and **not** `Sendable`. A `VkQueue` is a
+pointer you never release, so `Copy` is right; Vulkan queues are not
+thread-safe, so it must not cross into `background`. Everywhere else in
+the corpus a `Copy` type is trivially `Sendable` because it is plain data,
+and this is the first type that needs to decline — legal, since the two
+are unrelated conformances, and worth stating because the pairing has
+always been free until now.
+
+And a field can outlive a **sibling field**. `Renderer` holds a `Move`
+`VkDevice` and a `Copy` `VkQueue` that points into it, so the object
+cannot be duplicated while that field can be read out and copied anywhere.
+Field-wise `Copy` protects the aggregate, not the members — which is
+correct for `Confined<T>`, because reading a handle out keeps the cell
+alive, and wrong for a foreign handle, which keeps nothing alive. That
+difference is the whole reason the validity gap is FFI's and not the
+language's.
+
 **The third row is the one nothing covers.** A transient view is not a
 handle: its validity is measured in *calls*, not in the lifetime of a
 parent. No tier can express "you may read this and may not keep it",

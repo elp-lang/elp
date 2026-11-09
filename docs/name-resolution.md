@@ -519,9 +519,10 @@ system framework cannot be statically linked whatever elp prefers.
 `.dynamic` is link-time dynamic, `.static` links an archive,
 and `.runtime` is `dlopen` — see the open items.
 
-#### Per-target variation needs no new mechanism
+#### Per-target variation, and why an entry needs a logical name
 
-`condition` already exists:
+`condition` already exists, and the dependency graph is already
+per-target, so the manifest side needs nothing new:
 
 ```
 links = [
@@ -531,7 +532,35 @@ links = [
 ]
 ```
 
-And because the dependency graph is already per-target, so is this.
+**But `condition` alone breaks the thing it feeds**, which
+`examples/VulkanTriangle` found and a single-library package could not.
+Vulkan on Linux is `libvulkan.so.1`. On macOS there is no Vulkan driver:
+it is MoltenVK, a translation layer to Metal, shipped as
+`libMoltenVK.dylib`. The symbols are identical and the file is not — so a
+declaration written `@external(.C, library = "vulkan")` matches one entry
+and not the other, and the name a declaration refers to cannot be the
+file.
+
+**So an entry's first argument is a logical name, and its realisation is
+separate:**
+
+```
+links = [
+	.system("vulkan", soname = "libvulkan.so.1", condition = target == .Linux),
+	.system("vulkan", soname = "libMoltenVK.dylib", condition = target == .macOS),
+]
+```
+
+`library = "vulkan"` then resolves on both, and the per-target difference
+stays where per-target differences already live. Three things follow:
+
+- **The logical name is what the allow-list is keyed on**, so the
+  exclusive claim above is a claim on the *logical* name. Two entries
+  naming `vulkan` under disjoint conditions are one claim, not two.
+- **`soname` is optional and defaults to the logical name**, which is why
+  `sqlite3` above never needed it. The common case stays one argument.
+- **It is also the honest spelling for a renamed library** — `libz` vs
+  `zlib1` on Windows — rather than a Vulkan special case.
 
 #### A library's `links` constrains its consumers' targets
 
@@ -642,6 +671,105 @@ the language's one unsafe surface rather than merely its most awkward one.
   a dependency already claims. Re-exporting the dependency's declarations
   is the answer in principle; whether that needs anything beyond an
   ordinary import is not designed.
+
+### `scripts` — build-stage jobs, as a function of declared inputs
+
+**A `scripts` entry on `@Package` runs an external process at a named
+stage of the build.** It exists because a real program has build inputs
+that are not elp: `examples/VulkanTriangle` needs two SPIR-V modules,
+produced by running `glslc` over GLSL source, and a real Vulkan binding
+needs ~800 struct declarations generated from `vk.xml`.
+
+```
+scripts = [
+	.run(
+		stage   = .beforeCompile,
+		command = ["glslc", "shaders/triangle.vert", "-o", "{out}/triangle.vert.spv"],
+		inputs  = ["shaders/triangle.vert"],
+		outputs = ["{out}/triangle.vert.spv"],
+	),
+]
+```
+
+#### A script is a process, and that is where impurity is allowed
+
+`macros.md` runs `pure fn` at compile time and `pure` means no IO, no
+external calls, no async — which is correct and is what keeps the
+compile-time evaluator small. So compile-time *elp* cannot shell out, by
+design, and nothing here weakens that.
+
+The manifest is a different place with different rules. `scripts` is the
+one point in the system that may run arbitrary processes, it is declared
+rather than discovered, and it sits in the file where review attention
+already goes. That is the same argument `links` is made on, and the two
+properties compose: `links` bounds what native code a package may *reach*,
+`scripts` bounds what processes its build may *run*.
+
+#### Declared inputs and outputs are mandatory, not optional
+
+This is the one place where this deliberately diverges from Cargo's
+`build.rs`, and it is the whole value of the feature.
+
+A `build.rs` is an opaque program. Cargo cannot tell what it reads, so the
+default is to re-run it whenever anything in the package changes, and a
+package opts out by *printing* `cargo:rerun-if-changed` from inside the
+script it is trying to avoid running. The result is the most common
+complaint about Cargo builds: scripts that re-run constantly, and
+incremental builds that are not.
+
+Requiring `inputs` and `outputs` makes a script **a function of its
+declared inputs**, which buys three things at once: the build skips it when
+the inputs are unchanged, can cache its outputs across machines, and can
+run independent scripts in parallel. A script that reads a file it did not
+declare is a bug the build can detect rather than a performance
+characteristic nobody can see.
+
+Omitting them is an error. "Always re-run" is available by declaring no
+inputs, which is explicit and visible rather than the silent default.
+
+#### Two kinds of output, and only one of them is finished
+
+| output | what happens to it | status |
+|---|---|---|
+| **generated elp source** | compiled as part of the package, as if it had been written by hand | works — it is a file the compiler already knows how to read |
+| **a generated asset** (SPIR-V, an image, a table) | has to reach the program's *bytes* | **open** |
+
+The second is the honest limit. `scripts` closes "how do I run `glslc`";
+it does not close "how do those bytes get into the binary", which needs a
+way to embed a file as data and therefore needs `strings.md`'s open
+byte-access question answered first. `examples/VulkanTriangle` hardcodes
+an empty array where the shader bytes belong, for exactly this reason.
+
+So the generated-source case is the one that is usable today, and it is
+also the bigger one: it is what lets a Vulkan or Win32 binding be
+generated from a machine-readable spec instead of hand-written, which is
+the case `macros.md`'s attribute-block form was designed for and the case
+no corpus package could reach.
+
+#### The stage set is deliberately small
+
+`.beforeCompile` and `.afterLink`: generate inputs, then act on the
+finished artifact (codesign, bundle, strip). Nothing else has a witness,
+and a stage nobody uses is a stage that will be wrong when somebody
+finally does.
+
+#### Open within scripts
+
+- **Whether a dependency's scripts run at all.** Cargo runs every
+  transitive `build.rs`, which means installing a package runs its
+  author's code on your machine. Declared inputs and outputs make it
+  auditable rather than safe. The options are to run them (and lean on the
+  declaration being reviewable), to require opt-in per dependency, or to
+  forbid them outside the root package — which would stop a binding
+  package generating its own bindings, so it is probably too strict.
+- **Whether a script's outputs are recorded in the lockfile.** They are
+  build products, not dependencies, but a checksum over them is what would
+  make a build reproducible across machines.
+- **How `{out}` is spelled and where it points**, and whether a script may
+  write anywhere else. It should not be able to.
+- **Toolchain availability.** `glslc` is assumed present. A missing tool
+  should be a clear build error and may want declaring, which is close to
+  what `links` does for libraries and may be the same mechanism again.
 
 ### Lockfile
 

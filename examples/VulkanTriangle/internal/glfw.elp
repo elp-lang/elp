@@ -1,0 +1,88 @@
+// The GLFW surface, and the thing two libraries do that one cannot: GLFW's
+// API takes Vulkan's types.
+
+import { VkInstance, VkSurfaceKHR, CString, OpaqueHandle } from .vulkan
+
+@external(.C, library = "glfw") {
+	export type GLFWwindow
+	export type GLFWmonitor
+
+	export fn glfwInit() -> int
+	export fn glfwTerminate()
+	export fn glfwWindowHint(hint int, value int)
+
+	export fn glfwCreateWindow(width int, height int, title &CString, monitor OpaqueHandle, share OpaqueHandle) -> OpaqueHandle
+	export fn glfwDestroyWindow(window GLFWwindow)
+
+	export fn glfwWindowShouldClose(window &GLFWwindow) -> int
+	export fn glfwPollEvents()
+
+	// The borrowed-handle row again, from a second library, which is what
+	// makes it a pattern rather than a Vulkan quirk. GLFW owns the monitor
+	// list; this returns a pointer into it. There is no `glfwDestroyMonitor`,
+	// and the pointer is valid until the monitor is physically disconnected —
+	// a lifetime bounded by an event, not by a call or a parent handle.
+	export fn glfwGetPrimaryMonitor() -> OpaqueHandle
+
+	// GAP 1 — the third row, and the sharpest instance of it in the corpus.
+	//
+	// This returns `const char**`: an array of C strings, owned by GLFW,
+	// valid until `glfwTerminate`. It is a transient view by
+	// `aliasing.md`'s table, so no tier fits it, and the usual escape —
+	// copy at the boundary and never expose the pointer — is *expensive*
+	// here rather than free, because the destination is a Vulkan struct
+	// field (`ppEnabledExtensionNames`) that wants exactly this pointer.
+	//
+	// So the natural implementation hands GLFW's pointer straight into
+	// `VkInstanceCreateInfo` and the copy never happens. That is correct C
+	// and it means a `Copy` elp struct is carrying a borrowed pointer with
+	// a lifetime nothing tracks — `vk-types.elp` GAP 3.
+	export fn glfwGetRequiredInstanceExtensions(count &OpaqueHandle) -> OpaqueHandle
+
+	// GAP 2 — a GLFW function whose parameters are Vulkan's types, which
+	// makes one binding package depend on another.
+	//
+	// `name-resolution.md` made a `links` entry an **exclusive claim**: one
+	// package per native library. That is satisfied here — GLFW and Vulkan
+	// are different libraries, so two packages may each claim one — but it
+	// forces something the design did not say out loud: the GLFW binding
+	// must `import` the Vulkan binding to declare this at all.
+	//
+	// So the native dependency graph is mirrored by an elp package
+	// dependency, in the same direction, and the exclusive claim is what
+	// makes that sound: there is exactly one `VkInstance` type in the
+	// program to import. Had two packages been allowed to claim Vulkan,
+	// GLFW's binding would have had to pick one and the agreement check
+	// would be comparing types from different packages.
+	//
+	// Worth recording as a *consequence* rather than a gap: exclusivity was
+	// argued for on symbol-collision grounds and it also buys type identity
+	// across binding packages, which is what makes multi-library FFI work.
+	export fn glfwCreateWindowSurface(instance &VkInstance, window &GLFWwindow, allocator OpaqueHandle, out &OpaqueHandle) -> int
+}
+
+// Owned by this program: created by `glfwCreateWindow`, destroyed by
+// `glfwDestroyWindow`.
+GLFWwindow implements Move
+
+// Owned by GLFW, never released here, free to duplicate. The second library
+// to need this row and the reason it is in `aliasing.md` rather than in the
+// Vulkan file as a quirk.
+GLFWmonitor implements Copy
+
+// GAP 3 — `glfwInit`/`glfwTerminate` are process-global state with no
+// handle, so there is nothing for a tier to describe.
+//
+// Every other resource here is a value the type system can hold and track.
+// GLFW's initialisation is a hidden global: `glfwInit()` must be called once
+// before anything else, `glfwTerminate()` once after everything else, and
+// the thing being tracked is *the library itself*. There is no handle to
+// make `Move`.
+//
+// The shapes that would work are a token type `glfwInit` returns that every
+// other call takes — which is not GLFW's API and would mean wrapping all of
+// it — or a scoped form, which is the same `with ... as x { }` candidate
+// `SqliteBinding` GAP 1 reached for. Two unrelated libraries asking for the
+// same construct is the strongest argument yet that it is the one to design.
+
+// vim: ft=kotlin
