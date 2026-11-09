@@ -1,0 +1,10 @@
+import { Package, Version } from elp.package
+
+@Package(
+	name = "sheet",
+	version = .new(0, 1, 0, 0),
+	entry = "sheet.elp",
+	kind = .Library,
+)
+
+// vim: ft=kotlin

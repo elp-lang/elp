@@ -243,21 +243,71 @@ The rules:
 - In `a && b`, `b` is checked under `a`'s true-narrowing.
 - In `a || b`, `b` is checked under `a`'s false-narrowing.
 
-### Why this is sound for reactive `var`s too
+### Why this is sound for reactive `var`s too — within one turn
 
 Narrowing a local is obviously safe. Narrowing a component `var` looks
 unsafe, because a `var` is a cell and something else could write it
 between the test and the use.
 
-Nothing else can. **Cells are confined to one logical thread and a turn
-is not preemptible** (`reactivity.md`), so no other code interleaves
-with straight-line code in the same turn. The only thing that can
-invalidate a narrowing is this code writing the cell, which the compiler
-sees.
+Within one turn nothing else can. **Cells are confined to one logical
+thread and a turn is not preemptible** (`reactivity.md`), so no other
+code interleaves with straight-line code in the same turn.
 
 This is the third thing thread confinement has paid for, after the
 user-written re-entrancy guard and check-then-act atomicity. It was
 adopted because all three platforms force it anyway.
+
+### The amendment: a call ends the turn
+
+This section originally said *"the only thing that can invalidate a
+narrowing is this code writing the cell, which the compiler sees."*
+**That is wrong, and the probes found it.**
+
+A blocking call ends the turn, other turns run before it resumes, and
+one of them may write the cell — which the compiler does **not** see.
+And because `reactivity.md` rejected function colouring, there is no
+`await` to mark the boundary: **any call may be a yield point.**
+
+```elp
+if post != nil {
+	const extra = fetchDetails()    // yields; another turn may clear post
+	Text(post.title)                // unsound
+}
+```
+
+So the rule is narrowed to match what is actually true:
+
+**An in-place narrowing of a cell holds until the first call in the
+narrowed scope, and is invalidated by it.** Locals and parameters are
+unaffected, because no other turn can write them.
+
+That keeps the common shape legal — `home.velp`'s
+`if err != nil { Text(err.asString()) }` reads the cell before anything
+yields — while rejecting the dangerous one, where a call sits between
+the test and the use. The diagnostic is the point: *"the narrowing of
+`err` is invalidated by the call to `log` on line N; bind it with
+`match` instead."*
+
+A first draft of this amendment said a cell could never be narrowed in
+place. That was too strong and would have outlawed every conditional in
+the corpus's markup for no safety gain.
+
+Binding is the unconditional form, sound across any number of yields,
+because it produces a *local* that no other turn can write:
+
+```elp
+match post {
+	nil -> return
+	p   -> Text(p.title)            // p is a local copy
+}
+```
+
+This is `patterns.md`'s "Optional narrowing by binding", and the
+amendment retroactively explains why that form is the primary mechanism
+rather than a convenience. The `&&`/`||` rules above are unaffected:
+both operands of one expression are inside a single yield-free run
+unless a call sits between them, and if one does, the same restriction
+applies.
 
 ## Open
 

@@ -1,0 +1,38 @@
+import { History } from ...internal.history
+
+// Both callback-prop forms, side by side, now that `functions.md` has
+// settled them: `*fn` declares a required one, and an optional one is an
+// ordinary prop with an optional function type. Undo is always wired up;
+// redo is not, because a toolbar embedded in a read-only preview has
+// nothing to redo.
+component Toolbar {
+	export var history Binding<History>
+
+	export *fn onUndo()
+	export var onRedo Optional<fn()>
+
+	fn undoLabel() -> string {
+		return match history.pendingLabel() {
+			nil   -> "Nothing to undo"
+			label -> "Undo {label}"
+		}
+	}
+
+	return Row(style = Styles.bar) {
+		Button(onPress = onUndo, disabled = !history.canUndo()) {
+			Text(undoLabel())
+		}
+
+		// A bare `match` in markup position, the same way `home.velp` writes a
+		// bare `if`. Binding `callback` rather than testing `onRedo != nil`
+		// is what lets it be passed onward as a prop.
+		match onRedo {
+			nil      -> nil
+			callback -> Button(onPress = callback, disabled = !history.canRedo()) {
+				Text("Redo")
+			}
+		}
+	}
+}
+
+// vim: ft=kotlin

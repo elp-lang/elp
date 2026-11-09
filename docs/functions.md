@@ -129,6 +129,147 @@ This is also why rejecting both is safe. The construct that would
 produce long chains is stdlib's own property, so the restriction above
 never stands in its way.
 
+## Function values
+
+### The type spelling
+
+```
+fn(T1, T2) -> R        // `-> R` omitted for a function that returns nothing
+```
+
+Already in the corpus: `fn Store.ask<T>(&self, build fn(Channel<T>) -> StoreMsg) -> T`.
+
+**A function type has no parameter names.** `generics.md` made names part
+of a signature in order to resolve overloads, and a function *value* has
+no overload set — there is exactly one thing to call, so a label has
+nothing to disambiguate. `onSubmit(email, password)` is necessarily
+positional.
+
+The names on `*fn onSubmit(username string, password Protected<string>)`
+survive because that is a **declaration form**, not a type. It declares
+a prop, documents the names for a reader, and its type is
+`fn(string, Protected<string>)`.
+
+### `*fn` declares a required callback prop
+
+**A callback prop follows its declared type like every other prop.** It
+is required, and the compiler checks at every use site that one was
+supplied.
+
+This makes `ChatRoom/components/login-form.velp` a corpus bug.
+`memory-model.md`'s Finding 4 observed that `*fn` was *"still nilable at
+runtime despite being marked as a required callback"*, because the
+component calls `onSubmit.isNil()`. That is a special implicit rule for
+one prop kind, in a file whose line directly above spells its optionality
+out: `export var email Optional<string>`.
+
+**An optional callback is an ordinary prop with an optional function
+type:**
+
+```elp
+export var onSubmit Optional<fn(string, Protected<string>)>
+```
+
+So `*fn` is sugar for the common case and the general mechanism covers
+the rare one. A trailing `?` on the declaration form was considered and
+rejected: `*fn f(a A) -> B?` cannot say whether the `?` applies to `B`
+or to the function.
+
+### Why the `*` earns its place
+
+Without it, a bodiless `fn` inside a component body is indistinguishable
+from a method whose body the author forgot — and it would silently
+become a prop. With it, a bodiless `fn` *without* `*` is an error.
+
+### Closure literals
+
+```elp
+fn (a, b) { return b.total.compareTo(a.total) }
+fn { dispatch(.LOG_IN { name }) }               // no params: no parens
+```
+
+Parameter types are omitted and taken from the expected type, and may be
+written when there is no expected type or when clarity wants them.
+
+This is not the problem `generics.md` built mandatory type arguments to
+avoid. There is **exactly one** expected function type at the position,
+so this is propagation, not constraint solving — the Swift pathology
+comes from an overload set and there is none here. Mandatory type
+*arguments* remain mandatory; a closure parameter type is not one.
+
+### `return` is always explicit
+
+**A function body is a statement block and needs `return` to produce a
+value. This includes closures.**
+
+```elp
+rows.sorted(fn (a, b) { return b.total.compareTo(a.total) })
+self.ask<[Link]>(fn (reply) { return .LIST(reply) })
+```
+
+Every corpus closure originally omitted it while every named function
+used it, so the corpus was already running two rules. One rule, and it
+is the explicit one — consistent with mandatory type arguments, `&` at
+every writable call site, and conformances written out.
+
+**`return` in a closure returns from the closure**, not from the
+enclosing function. There is therefore no way to return from an outer
+function out of a closure body, which is Swift's and Rust's behaviour
+and not Ruby's.
+
+This reads oddly against `patterns.md`'s rule that a `match` arm's block
+*does* produce its final expression, and the two are reconciled there:
+`return` exits a **function**, and an arm does not exit a function. A
+statement block needs a keyword to hand a value back; an expression
+position does not. The asymmetry is forced rather than chosen.
+
+One consequence worth naming: in `Worker`'s message loop, `return` from
+the `background` closure is simultaneously the loop exit and the
+coroutine's end, because the loop is the closure's last statement. That
+works, and it is why the absence of `break` is a gap
+(`core-language-probes.md`).
+
+### Captures
+
+Captures follow ordinary value rules — a `Copy` type is copied, anything
+else moves unless borrowed. A closure is `Sendable` **iff every capture
+is**, which is conditional conformance and needs nothing new
+(`generics.md`).
+
+**A closure's own tier is field-wise too**, which `aliasing.md` makes the
+general rule: a closure is `Copy` iff every capture is, exactly as it is
+`Sendable` iff every capture is. One reading covers both, and it is why
+capturing a mutable alias twice needs two `.alias()` calls rather than a
+capture list — `examples/Buffer`'s `View.hooks`.
+
+`background(fn { ... })` in `LinkShortener` capturing `inbox` is exactly
+that, and `Store implements Sendable` one line above is what makes it
+legal. `reactivity.md` is where the cell-side consequence lives: a
+reactive cell, a `Binding<T>` and a `Confined<T>` never conform, so a
+`background` closure cannot touch component state or any thread-confined
+shared state.
+
+**A function type carries no capture information**, and should not —
+`fn(int)` says nothing about whether the value behind it may cross a
+thread. So thread-eligibility is a property of a *value*, not something
+a signature can promise, and `examples/Buffer`'s `Hooks` is the shape
+where that matters: an ordinary-looking pair of callbacks that cannot
+cross `background`, with the error landing wherever someone eventually
+tries.
+
+Two capture questions the probes raised are still open, and both are in
+`examples/Undo`: a capture that outlives its frame, and one value
+captured by two closures at once.
+
+### A name is a value; a bound method is not
+
+`Composer(onPosted = handlePosted)` works — a plain function name is a
+value, and it takes no `&`, which is reserved for writable bindings.
+
+**A bound method reference is refused.** `money.add` as a value would
+silently capture `money`; write `fn (x) { return money.add(x) }` and the
+capture is visible. No corpus site wants the shorter form.
+
 ## Open
 
 - **Collection combinators on `Array<T>`** — `map`, `filter`,

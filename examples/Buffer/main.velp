@@ -1,0 +1,56 @@
+import { Buffer } from .types.buffer
+import { View, scrollPast, appendBanner } from .internal.view
+
+// Two panes on one buffer. The program is small because the finding did not
+// need a big one: `Copy` appeared four times in this corpus entry and meant
+// two incompatible things.
+//
+// It now reads as the fix. Every site that shares says `.alias()`, every
+// site that borrows says `&`, and the two are different words.
+component App {
+	var buffer = Buffer.open("notes.txt")
+
+	// `.alias()`, not `buffer` — `Buffer` is `Move`, so handing it over
+	// would consume this component's handle and `addLine` below could not
+	// use it. The old version read `View.new(buffer)` and compiled only
+	// because `Buffer` was wrongly `Copy`.
+	var left = View.new(buffer.alias())
+	var right = left.split()
+	var draft = ""
+
+	fn addLine() {
+		if draft.trim().length() == 0 {
+			return
+		}
+
+		// Goes through the shared cell, so both panes show it immediately.
+		// No `&var buffer` anywhere: `insert` takes `&self` because the
+		// object does not change, only the cell it points at.
+		buffer.insert(buffer.lineCount(), draft)
+		draft = ""
+	}
+
+	// The observable difference, and the signatures now carry it.
+	//
+	// `scrollPast` takes a `Cursor` by value because `Cursor` is `Copy`.
+	// `appendBanner` takes `&Buffer` because `Buffer` is `Move` and passing
+	// it by value would consume the handle. After this runs, `left.cursor`
+	// is untouched and the buffer has a new first line that every pane
+	// sees — which is what the two spellings predict.
+	fn demonstrate() {
+		const moved = scrollPast(left.cursor, 10)              // left.cursor unchanged
+		appendBanner(&buffer, "// scrolled to {moved.line}")   // everyone changed
+	}
+
+	return Column(style = Styles.page) {
+		Row {
+			Pane(&left, label = "left")
+			Pane(&right, label = "right")
+		}
+
+		TextInput(&draft, placeholder = "New line", onSubmit = addLine)
+		Button(onPress = demonstrate) { Text("Demonstrate") }
+	}
+}
+
+// vim: ft=kotlin

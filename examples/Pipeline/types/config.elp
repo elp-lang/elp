@@ -1,0 +1,106 @@
+// The immutable half of the aliasing design, which had no corpus witness
+// until this file.
+//
+// `examples/Buffer` and `examples/Sheet` both share *mutably*, so both
+// migrated onto `Confined<T>` and left `Shared<T>` with no users at all.
+// That was worth noticing: a type nothing uses is a type nothing has
+// tested, and `Shared<T>` carries the one conditional conformance in
+// `aliasing.md` that has to be sound.
+//
+// A build pipeline is the natural shape for it. One configuration is loaded
+// once, read by every worker, and written by nobody.
+
+export object Config {
+	const sourceRoot  string,
+	const outputRoot  string,
+	const minify      bool,
+	const ignore      [string],
+}
+
+// `Copy` by the field-wise rule. `[string]` is not `Copy`, so neither is
+// this — which is exactly why the field below is a handle rather than the
+// record itself.
+//
+// GAP — is `[string]` `Copy` or `Duplicate`?
+//
+// `collections.md` says a value read out of a collection is a copy, and
+// `aliasing.md` lists `[T]` under `Duplicate`. So `Config` holding one is
+// `Move`, and every worker would need `.copy()` of the whole ignore list.
+// That is the case `Shared<Config>` exists to avoid, but the question of
+// what `[T]`'s own tier is has never been written down.
+Config implements Move
+
+export fn Config.load(path string) -> Either<Self, Error> {
+	return Ok(Self {
+		sourceRoot = path,
+		outputRoot = path + "/dist",
+		minify     = true,
+		ignore     = [".git", "node_modules"],
+	})
+}
+
+export fn Config.isIgnored(&self, name string) -> bool {
+	for pattern in self.ignore {
+		if name == pattern {
+			return true
+		}
+	}
+
+	return false
+}
+
+// A `Shared<Config>` is what crosses to the workers.
+//
+// Three things are true of it at once, and each one is load-bearing:
+//
+//  1. It is `Copy`, for any `T`, because an immutable alias cannot be
+//     distinguished from an independent copy — two holders have no
+//     operation through which either can observe the other. So handing one
+//     to each of eight workers is eight pointer copies and no syntax.
+//
+//  2. Therefore `Settings` below is `Copy` too, by the field-wise rule,
+//     even though `Config` itself is `Move`. That is the one case where a
+//     handle makes its holder *more* duplicable rather than less, and it
+//     is the whole reason `Shared<T>` is a separate type from
+//     `Confined<T>`.
+//
+//  3. It is `Sendable` when `Config` is, and that conditional conformance
+//     is sound for a stated reason: there are no writers to order.
+//     `Confined<Config>` would be the same shape and unsound.
+export object Settings {
+	const config  Shared<Config>,
+	const verbose bool,
+}
+
+Settings implements Copy
+
+export fn Settings.new(config Config, verbose bool) -> Self {
+	return Self { config = .new(config), verbose }
+}
+
+// GAP — what does `.get()` return?
+//
+// This was first written `-> Config`, which cannot work: `Config` is `Move`,
+// so handing it out by value would move it out of the shared cell and leave
+// every other holder pointing at nothing.
+//
+// So `.get()` returns `&T`, for both `Shared<T>` and `Confined<T>`, and that
+// is consistent with the rest of the language rather than a special case:
+//
+//  - `aliasing.md` asserts `.get()` without ever saying what it returns.
+//  - `memory-model.md` Finding 5 already allows borrow-returns
+//    (`pure fn firstWord(s &string) -> &string`), so the shape exists.
+//  - `examples/Buffer` writes `self.lines.get().copy().insert(...)`, which
+//    reads correctly under `&T`: `.copy()` on a borrow yields an owned
+//    duplicate, exactly as Finding 6 describes for `*`.
+//
+// What is *not* settled is how long that borrow lives. A `&T` out of a
+// `Confined<T>` is invalidated by any `.set()` on the same cell, and
+// `operators.md`'s amendment says a call may yield — so the same "a call
+// ends the turn" reasoning that governs narrowing has to govern this, and
+// nothing says so yet.
+export fn Settings.config(&self) -> &Config {
+	return self.config.get()
+}
+
+// vim: ft=kotlin

@@ -67,7 +67,24 @@ self.name()) }` can call `self.name()` (another trait method) but has no
 way to see a struct's actual fields, no matter who implements the trait.
 No exceptions, including for `Copy`/`Move` — see below.
 
-## Why `Copy`/`Move` don't get a default method
+## Why `Copy`/`Duplicate`/`Move` don't get a default method
+
+**`aliasing.md` amends this section's cast.** There are three
+duplication conformances, not two: `Copy` (implicit, independent),
+`Duplicate` (explicit via `.copy()`, independent, possibly deep) and
+`Move`. Everything below applies unchanged to all three, and
+`Duplicate` is the one that most wants the derive — `examples/Sheet`
+forces four duplication functions and three of them contain no decision
+at all.
+
+**Eligibility, as against implementation, is not hand-written.** `Copy`
+is **field-wise**: a type is `Copy` only if every field is. That is a
+compiler rule and not a default method, so the isolation rule is
+untouched — the compiler reads the field list, which no elp code is
+allowed to do. `aliasing.md` has the consequences, the important one
+being that `Confined<T>` and `Synchronized<T>` are `Duplicate` rather
+than `Copy`, so any type holding one is not `Copy` either, transitively,
+with no special rule.
 
 Their natural default — "copy/move every field, whatever they happen to
 be" — needs field access, which the isolation rule above categorically
@@ -119,6 +136,26 @@ never does.
    doesn't have the new `implements` declaration form built yet either.
    Ordinary follow-up implementation work once the design above is acted
    on, not a design question.
+
+5. **Conditional conformance has an unstated soundness premise, and
+   nothing guards it.** `Channel<T: Sendable> implements Sendable`
+   (`generics.md`) is sound because a channel is *internally
+   synchronized* — its own operations already order concurrent access,
+   so the contents really are the only open question. That premise is
+   nowhere in the syntax. Nothing stops a library author writing
+   `MyCache<T: Sendable> implements Sendable` over an unsynchronized
+   cache and getting a silent data race, and `aliasing.md` had to rule
+   out `Confined<T: Sendable> implements Sendable` by hand for exactly
+   this reason.
+
+   The orphan rule does not help: the author owns `MyCache`, so the
+   conformance is legally theirs to declare. **Open**, and the options
+   are narrow — restrict conditional conformance on `Sendable`
+   specifically to stdlib types, require some marker that says "this
+   container orders its own access", or accept it as the one place a
+   conformance can lie and lint it. Worth settling before any
+   concurrency work lands, because it is the only hole in `Sendable`
+   that `aliasing.md` could not close from outside.
 
 ## Interface dependencies
 
@@ -392,7 +429,10 @@ returns generated code, run at a pre-compile stage before normal
 compilation starts. That needs:
 
 - elp's own AST exposed as data a macro can pattern-match and construct
-  (a reflection API over the compiler's own types).
+  (a reflection API over the compiler's own types). `macros.md` adds the
+  bound those types carry: they are **compile-time only** — no runtime
+  representation, checked field-wise like `Copy` — so this is a reflection
+  API that cannot become a runtime one.
 - Some execution model for actually *running* macro code before the rest
   of the program compiles — macros are themselves ordinary elp, subject
   to all the same rules as any other elp code (including needing `Copy`/

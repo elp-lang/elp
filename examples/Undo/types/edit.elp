@@ -1,0 +1,92 @@
+// An undo stack built from closures, which is the ordinary way to write one
+// and the reason this probe exists: it puts function values in a *field*, in
+// a *collection*, and makes them outlive the call that produced them.
+//
+// Leans on undesigned constructs: function-typed fields, escaping captures,
+// a closure captured by two closures at once, recursive closures, and
+// whether a `{ }` match arm produces a value.
+
+export object Document {
+	var lines [string],
+}
+
+export fn Document.new() -> Self {
+	return Self { lines = [] }
+}
+
+// GAP 1 — a function type as a field type.
+//
+// The corpus has function types in a parameter position
+// (`build fn(Channel<T>) -> StoreMsg`) and as a callback prop (`*fn onAdd`),
+// never as an ordinary field. `memory-model.md` found that a closure is
+// neither `Copy` nor `Move` on its own and has to be held behind an `Arc`,
+// which means `Edit` is not `Copy` either — and so `[Edit]` below is a
+// collection of non-copyable values.
+//
+// The `&var Document` parameter is also new: a function type whose parameter
+// is a mutable reference.
+export object Edit {
+	const label  string,
+	const apply  fn(&var Document),
+	const revert fn(&var Document),
+}
+
+// GAP 2 — escaping captures.
+//
+// Both closures capture `at` and `line`, which are parameters of a function
+// that has already returned by the time either one runs. Nothing in the
+// design says a capture may outlive its enclosing frame. Every corpus
+// closure so far was called immediately or within the same component's
+// lifetime, so the question never came up:
+//
+//   fn (req) { route(req, store) }          — called by Server.listen
+//   fn (reply) { .PUT { link, reply } }     — called inside `ask`
+//   fn { dispatch(.LOG_IN(name)) }          — lives as long as the component
+//
+// These do not. They are stored in a Document's history and may run minutes
+// later, so the capture is by value and `Edit` owns it.
+export fn Edit.insert(at int, line string) -> Self {
+	return Self {
+		label  = "insert line {at}",
+		apply  = fn (doc) { doc.lines.insert(at, line) },
+		revert = fn (doc) { doc.lines.remove(at) },
+	}
+}
+
+export fn Edit.delete(at int, previous string) -> Self {
+	return Self {
+		label  = "delete line {at}",
+		apply  = fn (doc) { doc.lines.remove(at) },
+		revert = fn (doc) { doc.lines.insert(at, previous) },
+	}
+}
+
+// GAP 3 — one value captured by two closures.
+//
+// `apply` and `revert` both capture `steps`. A closure is not `Copy`, so
+// `[Edit]` is not `Copy`, so capturing it is a move — and the same value
+// cannot move into two different closures.
+//
+// This is the case that forces a decision. Either captures of a non-`Copy`
+// value are shared (an `Arc`, implicitly, which contradicts how explicit
+// everything else in the memory model is), or this program is illegal and a
+// composite edit has to be written some other way. Rust makes you choose:
+// two closures capturing one non-`Copy` value is an error, and `Rc::clone`
+// into each is the fix.
+export fn Edit.composite(label string, steps [Edit]) -> Self {
+	return Self {
+		label,
+		apply = fn (doc) {
+			for step in steps {
+				step.apply(&var doc)
+			}
+		},
+		revert = fn (doc) {
+			for step in steps.reversed() {
+				step.revert(&var doc)
+			}
+		},
+	}
+}
+
+// vim: ft=kotlin

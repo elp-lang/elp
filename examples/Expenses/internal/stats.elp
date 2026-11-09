@@ -57,7 +57,7 @@ export pure fn breakdown(expenses [Expense]) -> [CategoryTotal] {
 
 	// Descending by total. Reversing the operands is the whole trick, and
 	// it reads as one because the return value is three-valued and named.
-	return rows.sorted(fn (a, b) { b.total.compareTo(a.total) })
+	return rows.sorted(fn (a, b) { return b.total.compareTo(a.total) })
 }
 
 export pure fn largest(expenses [Expense]) -> Optional<Expense> {

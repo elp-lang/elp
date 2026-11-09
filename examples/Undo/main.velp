@@ -1,0 +1,83 @@
+import { Document, Edit } from .types.edit
+import { History, retrying } from .internal.history
+import { Toolbar } from .components.toolbar
+
+// A notes editor whose whole point is the undo stack. Everything interesting
+// is in types/edit.elp and internal/history.elp; this file is here to show
+// the closures being created and replayed from a reactive component, which
+// is where their lifetimes stop being obvious.
+component App {
+	var document = Document.new()
+	var history = History.new()
+	var draft = ""
+
+	fn addLine() {
+		if draft.trim().length() == 0 {
+			return
+		}
+
+		// The closures inside this Edit capture `draft`'s current value and
+		// outlive this function. If a capture were by reference rather than
+		// by value, every undo entry would see the same `draft` and the
+		// history would collapse to whatever was typed last.
+		history.push(&var document, Edit.insert(document.lines.length(), draft))
+		draft = ""
+	}
+
+	fn removeLine(at int) {
+		history.push(&var document, Edit.delete(at, document.lines[at]))
+	}
+
+	// A single undoable step built from several, which is what a "format
+	// document" or "indent block" command is. See GAP 3 in types/edit.elp:
+	// `steps` is captured by two closures at once.
+	fn clearAll() {
+		var steps [Edit] = []
+		var i = document.lines.length() - 1
+
+		while i >= 0 {
+			steps.append(Edit.delete(i, document.lines[i]))
+			i -= 1
+		}
+
+		history.push(&var document, Edit.composite("clear all", steps))
+	}
+
+	// GAP 7 — a closure passed to a helper that may call it repeatedly, from
+	// inside a component. `retrying` is an ordinary function, so nothing
+	// marks this closure as component-scoped, and nothing says what happens
+	// if the component unmounts between attempts. `effect` exists for
+	// exactly that and is deliberately not used here, because the question
+	// is whether a plain closure escaping a component body is legal at all.
+	fn save() {
+		retrying(3, fn {
+			return Storage.write<[string]>("notes", document.lines).isOk()
+		})
+	}
+
+	return Column(style = Styles.page) {
+		Toolbar(
+			&history,
+			onUndo = fn { history.undo(&var document) },
+			onRedo = fn { history.redo(&var document) },
+		)
+
+		TextInput(&draft, placeholder = "New line", onSubmit = addLine)
+
+		for line in document.lines by line {
+			Row {
+				Text(line)
+				Button(onPress = fn { removeLine(document.lines.indexOf(line)) }) {
+					Text("x")
+				}
+			}
+		}
+
+		Row {
+			Button(onPress = clearAll) { Text("Clear") }
+			Button(onPress = save) { Text("Save") }
+		}
+	}
+}
+
+// vim: ft=kotlin

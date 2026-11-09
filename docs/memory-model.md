@@ -226,6 +226,59 @@ That's dropped — it's not needed once capturability is a property of the
 *type* rather than the *capture site*, and it would have been redundant
 with the `Copy`/`Move` interface check besides.
 
+## Amendment to Finding 3 — superseded by `aliasing.md`
+
+Finding 3 concludes that `Arc<T>` and `Reactive<T>` implement `Copy` and
+calls this *"one mechanism (type-level `Copy`), not two."*
+
+**That economy is false, and `examples/Buffer` was written to prove it.**
+A split-pane editor needs both semantics in one program, and under
+Finding 3's rule both are spelled the same way:
+
+```elp
+Cursor implements Copy      // duplicates are INDEPENDENT
+Buffer implements Copy      // duplicates ALIAS the same cell
+```
+
+The full design, the corpus evidence, and the three drafts rejected on
+the way to it are in **`aliasing.md`**, which is authoritative. Only the
+corrections to *this* document are recorded here.
+
+### What it changes in Finding 3
+
+- `Reactive<T>` is a lowering name, not an elp type. The user-facing
+  aliasing types are `Shared<T>` (immutable, `Copy`), `Confined<T>`
+  (mutable, one thread) and `Synchronized<T>` (mutable, cross-thread).
+- The last two are **`Move`, not `Copy`**, and a second handle comes
+  from `.alias()`. So a type holding one is not `Copy`, transitively,
+  by the ordinary field-wise rule and not by a special one.
+- `Duplicate` is a third conformance alongside `Copy` and `Move`,
+  naming the `.copy()` the corpus has used since the beginning. It
+  promises **independence**, which is why the aliasing handles are not
+  in it: `.copy()` never aliases and `.alias()` always does.
+- Finding 3's claimed benefit survives in a better form: a capture or
+  pass-by-value site still asks **one** question — "is this type
+  duplicable" — and the *type* now carries whether duplicates alias
+  instead of hiding it in a conformance.
+
+### What it confirms in Finding 6
+
+Finding 6 put references in a free tier: *"a reference (`&T`, for any
+`T`) is unconditionally cheap to copy… the same `Arc<T>`/`Reactive<T>`
+pattern — a cheap-to-copy handle whose own copyability is entirely
+independent of whether the thing it points to is copyable."*
+
+`Shared<T>` is exactly that rule given an owning form — `&T` with a
+refcount instead of a lifetime — so it is `Copy` for any `T`, including
+`Shared<[string]>`. Finding 6 generalised correctly; it just had no type
+to name.
+
+Where Finding 6 was too broad is the `Arc`/`Reactive` half of that
+sentence: a *mutable* handle is cheap to duplicate and the duplicate is
+**not** independent, so it belongs in `Duplicate` rather than the free
+tier. The reference half is unaffected, because a `&T` cannot be written
+through without `&var`.
+
 ## Finding 4 — `&x` doesn't need a mutable/immutable spelling, resolved
 
 elp's grammar has one ref-type spelling: `&type`, `&self`, `&ident`. Rust
@@ -547,15 +600,26 @@ Give fields the marker and the question answers itself:
 
 | declaration | outside the type |
 |---|---|
-| `field T` | not visible |
+| `const field T` | not visible |
 | `var field T` | not visible |
-| `export field T` | read |
+| `export const field T` | read |
 | `export var field T` | read and write — `&obj.field` is legal |
 
-Bare is immutable, so `var` is written only where mutation is
-intended and the default stays closed. `const` is **not** accepted on a
-field: it is the default, and two spellings for the default is one
-more than the language needs.
+**Amended by `aliasing.md`.** This table originally had a bare `field T`
+form and said `const` is *"**not** accepted on a field: it is the
+default, and two spellings for the default is one more than the language
+needs."* The corpus writes `const` on 72 fields and bare on none, so the
+rule was both unimplemented and unloved — and it gave two spellings for
+immutable against one for mutable. **A field now spells `const` or
+`var`, exactly like a local, and bare is an error.** One spelling each,
+zero migration, and a reader never has to decide whether a missing word
+meant immutable or meant the author forgot.
+
+The marker governs **rebinding only**. Whether anything can be written
+*through* the field is a property of the field's type — a
+`Confined<Style>` is writable through a `const` field — and that is what
+decides `Copy` eligibility. Two independent axes; see `aliasing.md`,
+"`Copy` is field-wise".
 
 **The migration cost is zero.** No object field in the corpus is ever
 mutated in place — `Post`, `Content`, `ApiError`, `ChatAppState`,
@@ -592,9 +656,15 @@ the field, not the object".
 | `*x` at a call site (`x` itself a reference) | Deref-and-copy the referent; legal iff referent type is `Copy` | **Decided** (Finding 6); `*` prefix parses today, `Copy`-gating is Phase 2 |
 | A value read out of a collection | A **copy**; mutating it does not touch the collection, and a write-back (`map.set(k, v)`) is required and explicit | **Decided** (`core-language-probes.md`, `store.elp`) |
 | `&T` itself (the reference, not its referent) | Unconditionally `Copy` for any `T`, compiler-intrinsic — same "free" tier as primitives, not ordinary nominal conformance | **Decided** (Finding 6) |
+| `Shared<T>` (immutable alias) | Refcounted handle, `Copy` for any `T` — the owning form of the row above | **Decided** (`aliasing.md`) |
+| `Confined<T>` / `Synchronized<T>` (mutable alias) | Refcounted handle, `Move`; a second handle via `.alias()`, never `Copy` — so any type holding one is not `Copy`, field-wise | **Decided** (`aliasing.md`) |
 
 Every row in this table is now decided in rule; nothing here is left
-genuinely open. What remains is implementation, not design: `Copy`/`Move`
+genuinely open. Two rows were reopened after this sentence was first
+written and are now closed again by `aliasing.md` — the capture/
+pass-by-value rows said `Copy`/`Move` when the tier they needed was
+`Duplicate`, and the two aliasing rows above did not exist because the
+types did not. What remains is implementation, not design: `Copy`/`Move`
 depend on `interfaces.md`'s open questions (nominal-conformance syntax,
 whether default methods can depend on other interfaces) being settled
 first; the `var`/`&mut` usage-inference rule needs the same callee-body

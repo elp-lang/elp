@@ -1,0 +1,65 @@
+// Axis-aligned geometry for the quad-tree. Both types are small and
+// immutable, so they are copied rather than referenced.
+
+export object Point {
+	const x int,
+	const y int,
+}
+
+Point implements Copy + Equatable
+
+export fn Point.equals(&self, other &Self) -> bool {
+	return self.x == other.x && self.y == other.y
+}
+
+// Half-open on both axes — [minX, maxX) x [minY, maxY) — so four quadrants
+// tile their parent exactly and a point lands in precisely one of them.
+// Closed ranges would put points on a shared edge into two children at once,
+// which is the classic quad-tree bug.
+export object Rect {
+	const minX int,
+	const minY int,
+	const maxX int,
+	const maxY int,
+}
+
+Rect implements Copy
+
+// UNDESIGNED: a boolean expression broken across lines.
+//
+// The lexer emits a Newline token (see the "Meaningful whitespace support"
+// work), so a line break is syntactically significant. Nothing says whether
+// an expression may continue over one, or how the parser knows this `return`
+// has not finished. Every language with significant newlines needs an answer:
+// Python has an implicit continuation inside brackets plus a backslash,
+// Swift and Kotlin continue when the line cannot yet be a complete statement,
+// Go inserts semicolons and so forbids it outright.
+//
+// Written here the way a person would write it. If elp chooses Go's rule,
+// this file does not compile and the condition has to be parenthesised or
+// kept on one very long line.
+export fn Rect.contains(&self, p &Point) -> bool {
+	return p.x >= self.minX && p.x < self.maxX
+		&& p.y >= self.minY && p.y < self.maxY
+}
+
+export fn Rect.intersects(&self, other &Rect) -> bool {
+	return self.minX < other.maxX && other.minX < self.maxX
+		&& self.minY < other.maxY && other.minY < self.maxY
+}
+
+// The four children, in the order a branch node stores them:
+// north-west, north-east, south-west, south-east.
+export fn Rect.quadrants(&self) -> [Rect] {
+	const midX = self.minX + (self.maxX - self.minX) / 2
+	const midY = self.minY + (self.maxY - self.minY) / 2
+
+	return [
+		Rect { minX = self.minX, minY = self.minY, maxX = midX,      maxY = midY },
+		Rect { minX = midX,      minY = self.minY, maxX = self.maxX, maxY = midY },
+		Rect { minX = self.minX, minY = midY,      maxX = midX,      maxY = self.maxY },
+		Rect { minX = midX,      minY = midY,      maxX = self.maxX, maxY = self.maxY },
+	]
+}
+
+// vim: ft=kotlin

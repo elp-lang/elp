@@ -1,0 +1,52 @@
+import { Style } from .style
+
+export enum Value {
+	EMPTY,
+	NUMBER { amount int },
+	TEXT { content string },
+}
+
+Value implements Copy
+
+// A cell: an independent value and a shared style.
+//
+// This is `examples/Buffer`'s `View` again, one layer down, and the point of
+// repeating it is what happens *above* it. `Style` holds a `Confined`, so
+// `Style` is `Move`, so `Cell` is `Move` — field-wise `Copy` applied twice,
+// with no rule mentioning either type.
+export object Cell {
+	var value   Value,
+	const style Style,
+}
+
+Cell implements Move
+
+// FINDING — "deep-copy the values, share the styles" is a third kind of
+// duplication, and the language does not have a tier for it.
+//
+// It is not `Copy`: that is implicit and this needs a decision. It is not
+// `Duplicate` either, and that is the interesting half — `Duplicate`
+// promises an **independent** result, and the duplicate below shares a
+// style with its original. It is not `.alias()`, which would share the
+// value too.
+//
+// So it is a **domain operation with a domain name**, and that is the right
+// answer rather than a gap: the three language tiers describe uniform
+// duplication, and a mixed one belongs to whoever knows what the mix means.
+// `Cell` stays `Move` and `duplicated` is an ordinary method.
+//
+// What it costs is recorded in sheet.elp: because `Cell` is not
+// `Duplicate`, nothing above it can be either, so every level up the
+// workbook writes its own forwarding method by hand.
+export fn Cell.duplicated(&self) -> Self {
+	return Self {
+		value = self.value,            // copied: independent
+		style = self.style.alias(),    // shared: these cells restyle together
+	}
+}
+
+export fn Cell.empty(style Style) -> Self {
+	return Self { value = .EMPTY, style }
+}
+
+// vim: ft=kotlin

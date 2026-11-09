@@ -1,0 +1,10 @@
+import { Package, Version } from elp.package
+
+@Package(
+	name = "quad_tree",
+	version = .new(0, 1, 0, 0),
+	entry = "tree.elp",
+	kind = .Library,
+)
+
+// vim: ft=kotlin

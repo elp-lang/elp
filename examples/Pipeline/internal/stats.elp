@@ -1,0 +1,112 @@
+// The cross-thread half: `Synchronized<T>`, and the `.with()` surface.
+//
+// `examples/Worker`'s GAP 4 was *"server-side shared state on a target with
+// no cell thread has no mechanism"*. This is that mechanism, under the one
+// workload that forces it — N workers all accumulating into one counter.
+
+export object Stats {
+	const built   int,
+	const skipped int,
+	const bytes   int,
+}
+
+Stats implements Copy
+
+export fn Stats.zero() -> Self {
+	return Self { built = 0, skipped = 0, bytes = 0 }
+}
+
+// `Synchronized<Stats>` is `Sendable` because `Stats` is, and the
+// conditional conformance is sound for a stated reason: the lock is in the
+// type. `aliasing.md` requires every legal use of that form to owe such a
+// reason, because `Confined<Stats>` would be the identical shape and a data
+// race.
+export object Collector {
+	const stats Synchronized<Stats>,
+}
+
+// `Move`, field-wise, and a second holder comes from `.alias()`. Note this
+// is the same shape as `Style` in `examples/Sheet` — a mutable alias behind
+// a domain type — with only the thread discipline different.
+Collector implements Move
+
+export fn Collector.new() -> Self {
+	return Self { stats = .new(Stats.zero()) }
+}
+
+export fn Collector.alias(&self) -> Self {
+	return Self { stats = self.stats.alias() }
+}
+
+// WHY THE SURFACE IS A CLOSURE AND NOT `.get()`/`.set()`.
+//
+// Write this with the `Confined<T>` surface and it is memory-safe and still
+// wrong:
+//
+//   const current = self.stats.get()                      // worker A reads
+//   self.stats.set(current.copyWith(built = ...))         // worker B read already
+//
+// Two workers interleave between the read and the write and one increment
+// is lost. `Confined<T>` can expose that pair precisely because the cell
+// thread makes the sequence atomic; off the cell thread nothing does.
+//
+// FINDING — the surface is **two closures, not one**, and this corrects
+// `aliasing.md`, which proposed a single `.with(fn (v &var T) { ... })`.
+//
+// Writing it that way needs two things the language has not settled: a
+// `&var T` *parameter* spelling, which `memory-model.md` Finding 4
+// deliberately does not have (mutability is inferred from usage, and `&x`
+// is the only form), and assignment of a whole new value through a
+// reference, which is `examples/QuadTree`'s GAP 4.
+//
+// Splitting it by direction needs neither:
+//
+//   .update(fn (T) -> T)        read-modify-write, atomically
+//   .with(fn (&T) -> R) -> R    read under the lock, return something derived
+//
+// `update` takes a **pure transform**. That is a better fit than a mutating
+// body for three reasons beyond dodging the gaps: it cannot forget to write
+// back, it composes with `copyWith` which the corpus already uses
+// everywhere, and it makes the critical section obviously total — there is
+// no path through the closure that leaves the cell unwritten.
+export fn Collector.recordBuilt(&self, bytes int) {
+	self.stats.update(fn (s) {
+		return s.copyWith(built = s.built + 1, bytes = s.bytes + bytes)
+	})
+}
+
+export fn Collector.recordSkipped(&self) {
+	self.stats.update(fn (s) { return s.copyWith(skipped = s.skipped + 1) })
+}
+
+// `*s` is the deref-and-copy from `memory-model.md` Finding 6, legal here
+// because `Stats` is `Copy`. If it were not, the borrow would have to stay
+// inside the closure — which is the point of `with` returning `R` rather
+// than handing the reference out.
+export fn Collector.snapshot(&self) -> Stats {
+	return self.stats.with(fn (s) { return *s })
+}
+
+// GAP — what is forbidden inside `update`/`with`, and who checks it?
+//
+// `aliasing.md` says the body may not call `background`, receive from a
+// channel, or reach into another `Synchronized`, because yield points are
+// invisible (`operators.md`) and holding a lock across one deadlocks with
+// nothing in the source to see.
+//
+// That is a restriction on a *closure body by position*, which the language
+// has no other instance of. `pure fn` restricts a body by declaration — the
+// marker is on the function, where a reader finds it. Here the identical
+// body would be legal passed anywhere else, so the restriction lives in the
+// signature of whatever `update` is.
+//
+// Which suggests the answer: the parameter type is `pure fn(T) -> T`, and
+// `pure` does most of the work already — `grammar-script-notes.md`'s "no
+// external calls" rule rules out `background` and channel receives outright.
+// That would make `update` an ordinary stdlib method after all, with no new
+// mechanism, which is the first reading of this that does not require one.
+//
+// `functions.md` does not currently say whether `pure fn(T) -> T` is a
+// writable *function type* as opposed to a declaration form.
+
+// vim: ft=kotlin

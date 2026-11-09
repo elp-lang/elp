@@ -1,0 +1,14 @@
+import { Package, Version } from elp.package
+
+@Package(
+	name = "undo",
+	version = .new(0, 1, 0, 0),
+	entry = "main.velp",
+	kind = .App,
+	targets = [.iOS, .Android, .Web],
+	dependencies = [
+		.stdlib("1.0.0"),
+	],
+)
+
+// vim: ft=kotlin

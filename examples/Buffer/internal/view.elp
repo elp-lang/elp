@@ -1,0 +1,116 @@
+import { Cursor, Selection } from ..types.cursor
+import { Buffer } from ..types.buffer
+
+// FINDING 2, RESOLVED — a composite where one field aliases and two do not.
+//
+// A pane onto a buffer. Two panes share the text and each keeps its own
+// cursor, which is exactly what a split view is.
+//
+// Under the old design both field types were `Copy`, so `View` was `Copy`,
+// and copying a `View` gave an *independent cursor* and *the same buffer* —
+// the behaviour the editor wants, and behaviour nobody could predict from
+// reading the declaration. `View implements Copy` was true and useless.
+//
+// Now `Buffer` is `Move`, so `View` is `Move`, because `Copy` is field-wise.
+// There is no `View implements Copy` line to misread, and `View.split()`
+// below has to say what it shares.
+export object View {
+	const buffer   Buffer,
+	var cursor     Cursor,
+	var selected   Selection,
+}
+
+View implements Move
+
+export fn View.new(buffer Buffer) -> Self {
+	const origin = Cursor { line = 0, column = 0 }
+
+	return Self {
+		buffer,
+		cursor = origin,
+		selected = Selection { anchor = origin, head = origin },
+	}
+}
+
+// FINDING 3, RESOLVED — the two signatures no longer have the same shape.
+//
+// These were `scrollPast(c Cursor, ...)` and `appendBanner(b Buffer, ...)`:
+// identical shapes, opposite effects, both taking a `Copy` value by value.
+//
+// `Cursor` is `Copy`, so it still passes by value and the caller is
+// unaffected. `Buffer` is `Move`, so passing it by value would *consume* the
+// caller's handle — an error at the call site the moment the caller uses it
+// again. The signature has to be `&Buffer`, and now the two differ exactly
+// where their behaviour differs.
+
+// Caller is unaffected. `c` is an independent duplicate.
+export fn scrollPast(c Cursor, lines int) -> Cursor {
+	var local = c
+	local.line += lines
+
+	return local
+}
+
+// Caller IS affected, and every other pane on the same buffer with it.
+// `&Buffer` is a borrow of the handle; the writes land in the shared cell.
+export fn appendBanner(b &Buffer, text string) {
+	b.insert(0, text)
+}
+
+// FINDING 4, RESOLVED — a split that copies half of itself.
+//
+// This was `var next = self; next.cursor = self.cursor.moved(1)`, which
+// delivered the right behaviour by accident of which fields happened to hold
+// handles. `View` is `Move` now, so that form does not compile and the
+// duplication is written out:
+export fn View.split(&self) -> Self {
+	return Self {
+		buffer   = self.buffer.alias(),       // shared: the same text
+		cursor   = self.cursor.moved(1),      // copied: independent
+		selected = self.selected,             // copied: independent
+	}
+}
+
+// FINDING 5, RESOLVED — two closures over the same handle.
+//
+// This was `examples/Undo`'s GAP 3 with the opposite answer. There, two
+// closures captured one `[Edit]`, which was not `Copy`, and the second
+// capture was illegal. Here both captured `buffer`, which *was* `Copy`, so
+// both succeeded and both pointed at the same cell — and whether capturing
+// twice was legal and whether the two closures shared state were decided by
+// the same single word.
+//
+// Both questions now have their own answer. Capturing twice is legal because
+// `.alias()` produced two handles; they share because `.alias()` is what
+// sharing is called. Neither fact is inferred from a conformance.
+export object Hooks {
+	const onIndent  fn(int),
+	const onOutdent fn(int),
+}
+
+export fn View.hooks(&self) -> Hooks {
+	const indenting  = self.buffer.alias()
+	const outdenting = self.buffer.alias()
+
+	return Hooks {
+		onIndent  = fn (line) { return indenting.insert(line, "\t" + indenting.lineAt(line)) },
+		onOutdent = fn (line) { return outdenting.remove(line) },
+	}
+}
+
+// REMAINING GAP — these closures are not `Sendable` and nothing says so at
+// the declaration.
+//
+// `Hooks` holds two closures that captured a `Confined`, so neither may
+// cross `background`. Conformance is field-wise, so the compiler knows; the
+// error surfaces at whatever `background(fn { hooks.onIndent(0) })` site
+// someone eventually writes, not here.
+//
+// That is the right place for the error, but `Hooks` still reads as an
+// ordinary pair of callbacks. `functions.md`'s `fn(int)` spelling carries no
+// capture information at all, which is correct — a function type should not
+// — and it means thread-eligibility is a whole-program property of a value
+// rather than something a signature can promise. Worth knowing before
+// callbacks get stored across thread boundaries.
+
+// vim: ft=kotlin

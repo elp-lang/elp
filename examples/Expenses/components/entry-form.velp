@@ -59,7 +59,7 @@ export component EntryForm(draft Binding<string>) {
 			TextInput(&draft, placeholder = "0.00", keyboard = .Decimal)
 		}
 
-		Picker(&category, options = Category.all(), label = fn (c) { c.label() })
+		Picker(&category, options = Category.all(), label = fn (c) { return c.label() })
 
 		Button(type = .FORM_SUBMIT) {
 			Text("Add")

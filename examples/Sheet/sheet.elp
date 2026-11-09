@@ -1,0 +1,146 @@
+// The depth test.
+//
+// `examples/Buffer` proved that `Copy` meant two incompatible things. This
+// file tests the fix by depth: one shared `Style` at the leaf, four levels
+// above it, and "duplicate this sheet" as a real user action meaning
+// *deep-copy the values, share the styles*.
+//
+// If field-wise `Copy` survives that, it survives anything a real program
+// will do. It does survive. What it costs is the finding below, and the cost
+// is larger than the first draft of `aliasing.md` claimed.
+
+import { Style } from .types.style
+import { Cell, Value } from .types.cell
+
+export object Row {
+	var cells [Cell],
+}
+
+export object Sheet {
+	const name string,
+	var rows   [Row],
+}
+
+export object Workbook {
+	const title string,
+	var sheets  [Sheet],
+	const theme Style,
+}
+
+// All three are `Move`. Nothing here declares that — `Style` holds a
+// `Confined`, and `Copy` being field-wise does the rest, four levels up,
+// with one rule applied four times rather than a propagation rule.
+Row implements Move
+Sheet implements Move
+Workbook implements Move
+
+// FINDING — the duplication boilerplate is real, and a derive does not fix
+// it. This corrects the first draft of the amendment, which claimed it did.
+//
+// Each of the next three functions is mechanical: map a collection, forward.
+// Only `Cell.duplicated` (types/cell.elp) contains a decision, plus
+// `Workbook`'s `theme` line at the bottom.
+//
+// The reason a `@Duplicate` derive cannot close this is `Cell`: it is
+// `Move`, because "copy the value, share the style" is neither `Copy` nor
+// `Duplicate` nor `.alias()`. So `Row` cannot be `Duplicate` either — its
+// field is `[Cell]` — and neither can `Sheet` or `Workbook`. The whole chain
+// is domain methods, and a derive that generates `Duplicate` conformances
+// helps at none of the four levels.
+//
+// A derive would have to generate a *named method* from per-field
+// directives, something in the shape of
+//
+//   @Duplicated(value = .copy, style = .alias)
+//
+// which is honest — the decision is written once, at the type that knows
+// it — but it is not the `@Duplicate` the amendment proposed, and its
+// spelling is undesigned. Recorded as open rather than claimed as solved.
+
+export fn Row.duplicated(&self) -> Self {
+	var copied [Cell] = []
+
+	for cell in self.cells {
+		copied.append(cell.duplicated())
+	}
+
+	return Self { cells = copied }
+}
+
+export fn Sheet.duplicated(&self, as name string) -> Self {
+	var copied [Row] = []
+
+	for row in self.rows {
+		copied.append(row.duplicated())
+	}
+
+	return Self { name, rows = copied }
+}
+
+export fn Workbook.duplicated(&self, as title string) -> Self {
+	var copied [Sheet] = []
+
+	for sheet in self.sheets {
+		copied.append(sheet.duplicated(as = sheet.name))
+	}
+
+	// `theme` is shared on purpose: a duplicated workbook tracks the
+	// original's theme. `.alias()` is the word for that, written at the one
+	// site a reader will look.
+	return Self { title, sheets = copied, theme = self.theme.alias() }
+}
+
+// A SECOND FINDING, which survived into the design unchanged.
+//
+// The corpus already used a fourth operation and had for a long time:
+//
+//   posts.copy().prepend(post)                      SocialFeed/screens/home.velp
+//   state.messages.copy().append(...)               ChatRoom/main.velp
+//   self.lines.get().copy().insert(at, line)        Buffer/types/buffer.elp
+//
+// `.copy()` is **explicit, possibly deep, independent** duplication of
+// something that is not implicitly `Copy` — otherwise nobody would have to
+// call it. That is `Duplicate`, and it is Rust's `Clone`.
+//
+// Where elp ends up better placed than Rust is that `Duplicate` keeps its
+// promise. Rust puts `Arc<T>` and `Vec<T>` in the same trait, so "this type
+// is `Clone`" tells you nothing about whether cloning it aliased. Here
+// `.copy()` never aliases and `.alias()` always does, so neither call site
+// needs its receiver's type checked to be read correctly.
+
+export fn Sheet.blank(name string, rows int, columns int, style Style) -> Self {
+	var made [Row] = []
+	var r = 0
+
+	while r < rows {
+		var cells [Cell] = []
+		var c = 0
+
+		while c < columns {
+			// `.alias()` per cell: every cell in the sheet points at the one
+			// style that was passed in. Passing `style` bare would move it
+			// and fail on the second iteration, which is the loop making
+			// `Move` do exactly the job it is for.
+			cells.append(Cell.empty(style.alias()))
+			c += 1
+		}
+
+		made.append(Row { cells })
+		r += 1
+	}
+
+	return Self { name, rows = made }
+}
+
+// The payoff the sharing exists for: one call restyles every cell in every
+// sheet of the workbook, because they all hold aliases of the same Style.
+//
+// This is also the line that cannot be written with an immutable
+// `Shared<T>`. Immutable sharing cannot broadcast — reaching N holders
+// without enumerating them is what a mutable alias is *for* — which is why
+// `Confined<T>` has to exist alongside it rather than instead of it.
+export fn Workbook.emboldenTheme(&self) {
+	self.theme.setBold(true)
+}
+
+// vim: ft=kotlin

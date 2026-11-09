@@ -1,0 +1,264 @@
+// The FFI boundary, and the one place in elp where duplication semantics
+// cannot be inferred.
+//
+// `aliasing.md` closes on an assumption: mutable aliasing is obtainable only
+// from `Confined<T>`, `Synchronized<T>`, or a closure that captured one, so
+// field-wise conformance always sees it and nothing needs declaring. That
+// holds because elp has no user-constructible interior mutability — the
+// unsafe surface is `@external` and nothing else.
+//
+// This file is that boundary. A `sqlite3*` is a pointer: copying it aliases
+// a database connection, and no amount of looking at elp source can tell.
+// So this is the single surface where a declaration has to state what the
+// compiler would otherwise work out, and this file exists to put the cases
+// on the page. Not all of the spellings below are decided.
+//
+// `@external(.OBJC)` already exists in the corpus
+// (`BlogStyle/internal/api.elp`) and the parser already accepts body-less
+// declarations for it. What it never carried is *which library* a symbol
+// comes from, which is what `library =` adds here against the `links`
+// allow-list in `Package.elp`.
+//
+// An earlier draft of this file invented an `extern` keyword. That was
+// wrong twice over: `@external` already does the job, and `reactivity.md`
+// rejects new lowercase intrinsic keywords as a matter of policy — it is why
+// `&mut` is not a spelling either.
+//
+// The block form below is the reason that keyword is not missed, and it is
+// not an FFI feature. A macro is not an entry in the program at all — it
+// receives the AST of what follows it and generates the declarations the
+// program actually contains (`macros.md`). A declaration list is an AST node
+// like any other, so `library = "sqlite3"` is written once because the
+// attribute is written once.
+//
+// Which is also why the braces introduce no scope and no namespace:
+// `sqlite3_open` is `sqlite3_open`, because these braces are never in the
+// program. They are the generator's input. What reaches this module is the
+// macro's output — ordinary module-level declarations.
+
+// GAP 1 — an opaque handle has no declarable duplication semantics.
+//
+// `sqlite3*` is a pointer to a struct the C library owns. Three questions
+// have to be answered and elp has no syntax for any of them:
+//
+//   - duplicating the handle: independent, aliasing, or illegal?
+//     (For SQLite: aliasing. Two `sqlite3*` of equal value are one
+//     connection, and closing through either invalidates both.)
+//   - may it cross a thread?
+//   - who releases it, and is exactly-once guaranteed?
+//
+// A strawman, written to be argued with rather than adopted. It reuses
+// `type` from `dispatch.md`'s associated types and `@external`'s existing
+// argument shape, so it needs no new grammar — and the block is where it
+// wants to live, because both handles answer all three the same way:
+//
+//   @external(.C, library = "sqlite3", duplication = .aliasing, threads = .confined) {
+//           export type Sqlite3
+//           export type Sqlite3Stmt
+//   }
+//
+// That is a sharpening the first draft missed. Written per-declaration, the
+// three answers read as properties of one symbol; written on the block, they
+// read as properties of *this library's handles*, which is what they are.
+//
+// `release = sqlite3_close` would be the natural fourth argument and is the
+// one that does not fit: elp has no destructors, no `defer`, and nothing
+// that runs at scope exit. See `db.elp`.
+@external(.C, library = "sqlite3") {
+	export type Sqlite3
+	export type Sqlite3Stmt
+}
+
+// One block for the whole library's functions. Note what stayed on each
+// line: `export`. Nothing distributes it, and nothing distributes anything —
+// the macro was handed declarations that said `export` and emits
+// declarations that say `export`. So a block of mixed visibility is writable
+// for free, which this file would need the moment one symbol went internal.
+@external(.C, library = "sqlite3") {
+	// GAP 2 — SQLite's thread discipline is a **runtime** value, and
+	// `Confined`/`Synchronized` is a **static** distinction.
+	//
+	// `sqlite3_threadsafe()` returns which of three modes the library was
+	// compiled with: single-thread, multi-thread (one connection per
+	// thread), or serialized (connections shared freely). The answer is not
+	// knowable when elp compiles.
+	//
+	// This is the sharpest thing in this file, because `aliasing.md` assumes
+	// the discipline is a property of the type. Here it is a property of a
+	// build of a library discovered at startup. The honest options:
+	//
+	//   - declare the strictest (`.confined`) and lose the serialized mode's
+	//     capability for everyone;
+	//   - expose both types and make the caller pick, with a runtime check
+	//     that panics on mismatch;
+	//   - make the discipline a type parameter resolved at link time, which
+	//     no part of this language does today.
+	//
+	// Nothing in `aliasing.md`, `reactivity.md` or `dispatch.md` covers a
+	// capability that is real but not statically known. That is new — and
+	// `name-resolution.md`'s `minimumVersion` gap is the same shape, which
+	// makes it a pattern rather than a one-off.
+	export fn sqlite3_threadsafe() -> int
+
+	// GAP 3 — out-parameters have no mapping.
+	//
+	// The C signature is:
+	//
+	//   int sqlite3_open(const char *filename, sqlite3 **ppDb)
+	//
+	// An `int` status and a handle written through a pointer-to-pointer. elp
+	// has `Either<T, Error>` and `error-handling.md` is emphatic that a
+	// failure is a value — so the binding wants
+	//
+	//   fn sqlite3_open(path string) -> Either<&Sqlite3, Error>
+	//
+	// but that is a *different signature* from the C one, and something has
+	// to perform the translation. Whether an `@external` declaration may
+	// describe the elp-facing shape and have the compiler synthesise the
+	// shim, or whether a hand-written wrapper does it (the Rust `-sys` crate
+	// convention), is undecided. The second is more honest and much more
+	// verbose.
+	//
+	// Declared in raw form, so the translation is visible in `db.elp` rather
+	// than hidden here.
+	export fn sqlite3_open(path &CString, out &OpaqueHandle) -> int
+	export fn sqlite3_close(db &Sqlite3) -> int
+	export fn sqlite3_errmsg(db &Sqlite3) -> &CString
+
+	export fn sqlite3_prepare_v2(
+		db &Sqlite3,
+		sql &CString,
+		bytes int,
+		out &OpaqueHandle,
+		tail &OpaqueHandle,
+	) -> int
+
+	export fn sqlite3_step(stmt &Sqlite3Stmt) -> int
+	export fn sqlite3_finalize(stmt &Sqlite3Stmt) -> int
+	export fn sqlite3_bind_text(stmt &Sqlite3Stmt, index int, value &CString, bytes int, free &OpaqueHandle) -> int
+	export fn sqlite3_bind_int(stmt &Sqlite3Stmt, index int, value int) -> int
+	export fn sqlite3_column_int(stmt &Sqlite3Stmt, column int) -> int
+
+	// GAP 5 — a returned pointer whose lifetime is governed by an unrelated
+	// call.
+	//
+	// `sqlite3_column_text` returns a pointer into SQLite's own buffer that
+	// is invalidated by the next `sqlite3_step`, `sqlite3_reset` or
+	// `sqlite3_finalize` on the same statement. Nothing in the *type* says
+	// so.
+	//
+	// elp's borrow story (`memory-model.md` Finding 4) infers `&T`/`&mut T`
+	// from callee usage, which cannot express "this borrow dies when some
+	// other method is called on a different object". Rust cannot express it
+	// either without a hand-written lifetime, which is why every real
+	// binding copies the bytes out immediately. So the rule is probably "a
+	// borrow out of an `@external` fn must be consumed before the next
+	// external call on a related handle", and nobody has written that down.
+	export fn sqlite3_column_text(stmt &Sqlite3Stmt, column int) -> &CString
+}
+
+// GAP 4, RESOLVED — `library = "sqlite3"` was written fourteen times, and
+// the fix was not the one this file proposed.
+//
+// The draft offered "`library =` is required only when the package links
+// more than one", and rejected it as the kind of conditional requirement
+// this language refuses everywhere else. It then rejected grouping too, on
+// the grounds that a grouping form is a new declaration shape, which is what
+// `@external` being an attribute was supposed to avoid.
+//
+// Both objections were about the wrong thing. The grouping form is not a
+// form of `@external` — it is what a macro's input is allowed to be, and a
+// macro is a code generator rather than a participant in the program. So
+// nothing about FFI is involved and `@CodeGen(Copy) { ... }` over a run of
+// records gets it for the same reason.
+//
+// Worth recording: because the macro receives the *group*, it can generate
+// code that spans the group — three types plus an enum over them plus one
+// dispatch table — which N separate expansions cannot. An intermediate
+// draft made the block a desugaring into N copies of the attribute, which
+// was safe and strictly weaker, and that is the capability it gave up.
+//
+// The lesson generalises past this file. The repetition read as an argument
+// for weakening the attribute's own rules, and it was really a question
+// about what a macro may be handed.
+
+// A second block, because the arguments differ. Whether a nested
+// `@external` inside the block above would be an error or an override is
+// `@external`'s own business rather than a rule of the language — it
+// receives the AST and it decides. Written as two blocks either way, so a
+// reader never computes a declaration's real arguments from two places.
+//
+// GAP 6 — `CString` and `OpaqueHandle` are invented here and belong in the
+// stdlib.
+//
+// `strings.md` decides that `string` is a sequence of Unicode scalar values
+// with guaranteed UTF-8. A `const char *` is neither: it is bytes with a
+// terminator and no encoding guarantee, and SQLite will hand back whatever
+// was stored. So conversion is fallible in one direction and allocating in
+// the other, and `strings.md`'s open "byte access" question is on the
+// critical path for any FFI at all.
+//
+// `OpaqueHandle` is standing in for `void*` / `T**`, which is worse: it is
+// the thing the type system exists to prevent, needed in exactly one place.
+//
+// GAP 8's resolution gives this a second, harder reason to be stdlib's —
+// see below.
+@external(.C) {
+	export type CString
+	export type OpaqueHandle
+}
+
+// GAP 7 — a C callback cannot be an elp closure.
+//
+// `sqlite3_exec` takes `int (*callback)(void*, int, char**, char**)`: a bare
+// function pointer plus a `void*` for state. elp closures capture
+// (`functions.md`), and a capturing closure has no C representation — which
+// is why the `void*` exists in the C API in the first place.
+//
+// `functions.md` says the function-type spelling is `fn(T1, T2) -> R` with
+// no parameter names and says nothing about whether a non-capturing closure
+// is a distinct type. It would have to be, for this to be declarable at all.
+//
+// Left undeclared rather than guessed. `error-handling.md` already notes
+// that a panic crossing an `extern "C"` boundary aborts the process, so an
+// elp callback invoked from C is a boundary in both directions.
+
+// GAP 8, RESOLVED — two packages could declare the same symbol differently,
+// and the orphan rule has no analogue because there is no contract on the
+// far side of a shared library.
+//
+// The problem: any other elp package could write its own
+// `@external(.C, library = "sqlite3") fn sqlite3_open(...)` with a
+// *different* signature, each locally correct. One program has one C symbol
+// namespace, C has no namespacing, and the linker resolves by name — so both
+// get the same address and one of them is wrong.
+//
+// Why the orphan rule cannot reach it: it works because elp owns both
+// operands. Some package defines `T`, some package defines `I`, and "only
+// those two may declare the conformance" names a real party either way.
+// Nobody defines `sqlite3_open`. It is a name in a symbol table with no
+// types attached and no author to appeal to.
+//
+// `name-resolution.md` now imposes the uniqueness one level up instead: the
+// symbol has no owner, but **a library has exactly one claimant** — a
+// `links` entry is exclusive across a program, like a package version. That
+// is the orphan rule's shape moved from the type to the package, and Cargo
+// reached the same rule under the same key name. What exclusivity leaves
+// (one package disagreeing with itself, two libraries exporting one name) is
+// caught by a whole-program agreement check, which elp can afford because
+// resolution is already global.
+//
+// A NEW FINDING falls out of that check, and it is why GAP 6 is now
+// load-bearing rather than tidy-up. Comparing two declarations of
+// `sqlite3_open` cannot compare *elp* types: this file declares its own
+// `CString` and `OpaqueHandle`, and another package would declare its own
+// with its own names. Two ABI-identical signatures would read as a
+// disagreement, and two genuinely different ones could read as a match.
+//
+// So the agreement check compares ABI, not elp type identity — or `CString`
+// and `OpaqueHandle` are stdlib's, there is one of each in the program, and
+// the comparison is ordinary type equality. The second is obviously better
+// and it means GAP 6 has to be closed before GAP 8's check can be
+// implemented at all.
+
+// vim: ft=kotlin

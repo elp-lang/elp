@@ -1,0 +1,112 @@
+// A static-site build: read one config, render N pages in parallel, count
+// what happened.
+//
+// `kind = .Binary` on macOS and Linux, so there is **no cell thread**. That
+// is the point — every rule in `aliasing.md` that leans on cell-thread
+// confinement has to say what it does here, and this is the file where it
+// has to.
+
+import { Config, Settings } from .types.config
+import { Collector, Stats } from .internal.stats
+import { background } from elp.concurrency
+
+export object Page {
+	const path  string,
+	const title string,
+}
+
+Page implements Copy + Move
+
+// The fan-out. `settings` and `collector` both cross into `background`, for
+// two different reasons, and the pair is the whole demonstration.
+export fn build(settings Settings, pages [Page]) -> Stats {
+	const collector = Collector.new()
+
+	for page in pages {
+		// `settings` is `Copy` — it holds a `Shared<Config>`, which is `Copy`
+		// for any `T` — so it crosses with no syntax at all. Eight workers,
+		// eight pointer copies, one config.
+		//
+		// `collector.alias()` is explicit, because a mutable alias always
+		// is. The reader can see that these closures write to one place.
+		const worker = collector.alias()
+
+		background(fn {
+			return renderOne(settings, worker, page)
+		})
+	}
+
+	return collector.snapshot()
+}
+
+fn renderOne(settings Settings, into Collector, page Page) {
+	const config = settings.config()
+
+	if config.isIgnored(page.path) {
+		into.recordSkipped()
+		return
+	}
+
+	const rendered = render(page, config)
+	into.recordBuilt(rendered.length())
+}
+
+fn render(page Page, config &Config) -> string {
+	if config.minify {
+		return "<title>{page.title}</title>"
+	}
+
+	return "<html>\n\t<title>{page.title}</title>\n</html>"
+}
+
+// THE REFUSAL, which is the thing this file exists to put on the page.
+//
+// A per-run memo cache is the obvious thing to add next, and the obvious way
+// to write it is a mutable alias:
+//
+//   const cache = Confined.new(Map<string, string>.new())
+//
+//   background(fn {
+//       cache.set(...)           // <- rejected here
+//   })
+//
+// `Confined<T>` never declares `Sendable`, under any `T`, so the capture is
+// refused — and the error lands on the capture the developer wrote rather
+// than inside a generic instantiation:
+//
+//   `cache` cannot cross into `background` — `Confined<Map<string, string>>`
+//   is confined to one thread. Use `Synchronized<Map<string, string>>`, or
+//   send the values it needs and write the result back.
+//
+// The tempting rule is `Confined<T: Sendable> implements Sendable`, and it
+// is unsound for a reason that has nothing to do with `T`: two workers
+// read-modify-write the same cell and one update is lost. `Map` being
+// perfectly `Sendable` does not help. **`T: Sendable` constrains what is in
+// the box; the race is the box.**
+//
+// On the three client targets this never comes up, because cells are
+// confined to the platform UI thread. Here there is no such thread, so the
+// distinction between `Confined` and `Synchronized` is not a nicety — it is
+// the only thing standing between this program and a silent data race.
+
+// GAP 1 — `Collector.snapshot()` reads before the workers finish.
+//
+// `reactivity.md` says `background` **blocks its caller and returns the
+// value**, and that parallelism comes from having several coroutines rather
+// than a second form of `background`. But `build` is an ordinary `fn`, not a
+// coroutine, and the loop above never collects anything to wait on.
+//
+// So either `background` returns a handle this should join, or `build` must
+// itself be a coroutine and the loop must `effect`-like fan out. Neither is
+// designed. `examples/Worker` reaches the same wall from the channel side;
+// this reaches it from the `background` side, which is new.
+
+// GAP 2 — `Page implements Copy + Move` above is probably illegal.
+//
+// Written deliberately to ask the question `aliasing.md` lists as open:
+// whether a type may sit in two duplication tiers. It should not be able to
+// — `Copy` and `Move` answer the same question differently — and this ought
+// to be a diagnostic rather than a silent precedence rule. The line is left
+// in because a corpus entry that asks is more useful than one that guesses.
+
+// vim: ft=kotlin

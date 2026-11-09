@@ -1,0 +1,33 @@
+// Pure values. Copying one produces an independent duplicate: writing
+// through the copy cannot be observed through the original.
+//
+// This is the `Copy` a reader expects, and it is what `Money`, `Point`,
+// `Rect` and `JobId` elsewhere in the corpus mean by it.
+
+export object Cursor {
+	var line   int,
+	var column int,
+}
+
+Cursor implements Copy + Equatable
+
+export fn Cursor.equals(&self, other &Self) -> bool {
+	return self.line == other.line && self.column == other.column
+}
+
+export fn Cursor.moved(&self, byLines int) -> Self {
+	return Self { line = self.line + byLines, column = self.column }
+}
+
+export object Selection {
+	var anchor Cursor,
+	var head   Cursor,
+}
+
+Selection implements Copy
+
+export fn Selection.isEmpty(&self) -> bool {
+	return self.anchor.equals(&self.head)
+}
+
+// vim: ft=kotlin
