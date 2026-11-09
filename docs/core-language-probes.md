@@ -406,21 +406,36 @@ compile.
 
 These surfaced while writing the probes and belong to other docs.
 
-### A hyphen in a module path does not lex
+### ~~A hyphen in a module path does not lex~~ — resolved
 
 `main.velp` contains `import { EntryForm } from .components.entry-form`,
 for the file `components/entry-form.velp`. That tokenises as
 `entry - form`.
 
 The old corpus has `login-form.velp` and **never imports it**, so the
-collision has been latent the whole time. Either hyphens are banned in
-file names, or a module path segment is lexed differently from an
-identifier. `name-resolution.md` says a path segment is always a file;
-it does not say what a file may be called.
+collision was latent the whole time.
+`examples/VulkanTriangle/internal/vk-types.elp` is the second witness and
+the worse one: three files import it, so the path is load-bearing rather
+than decorative.
 
-`examples/VulkanTriangle/internal/vk-types.elp` is a second witness and a
-worse one: three files import it, so the path is load-bearing rather than
-decorative. Kept hyphenated on purpose for that reason.
+**Resolved** in `name-resolution.md`: a path segment may contain internal
+hyphens. It needs no lexer mode, because the thing after `from` is a path
+and never an expression, so the path parser accepts `Ident (Minus Ident)*`
+as one adjacent segment and `-` keeps meaning subtraction everywhere it
+could. And it is not an exception to the no-magic rule — that doc already
+said a path segment *is* a file, so a segment was never an identifier.
+`examples/BlogStyle`'s `[postId].velp` makes the same point harder, and
+the corpus shows the workaround people reach for without the rule:
+`components/feeditem.velp`, spelling `FeedItem` run together because no
+separator worked.
+
+Rejected: mapping a hyphenated name to `.entryForm` *or* `.entry_form`
+automatically, because two spellings for one file means two module paths
+and one-file-per-module-path is what keys the no-cycles graph. Picking one
+still breaks `grep` both ways and is not injective.
+
+What a filename may contain *otherwise* is still open, and is a routing
+question rather than a lexing one.
 
 ### The server has no UI thread
 

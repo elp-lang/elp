@@ -9,12 +9,17 @@
 // So `@external` has to describe a type **with** fields, and that is a
 // different thing in three ways. Each is a GAP below.
 //
-// A note on this file's own name. It is `vk-types.elp`, imported as
-// `.vk-types`, which does not lex — `core-language-probes.md` records that a
-// hyphen in a module path tokenises as subtraction, found in `Expenses` and
-// latent in the old corpus because the hyphenated file was never imported.
-// Kept hyphenated deliberately: this is the second witness, and the first
-// where the import is load-bearing rather than absent.
+// A note on this file's own name, which was a gap when this file was written
+// and is now a rule. `vk-types.elp` is imported as `.vk-types`, which used to
+// tokenise as `entry - form` does — found in `Expenses`, latent in the old
+// corpus because the hyphenated file there was never imported, and
+// load-bearing here because three files import this one.
+//
+// `name-resolution.md` now allows internal hyphens in a path segment, and not
+// as an exception: it already said a segment *is* a file, so a segment was
+// never an identifier. The path parser reads `Ident (Minus Ident)*` as one
+// adjacent segment, which works because nothing after `from` is ever an
+// expression.
 
 import { OpaqueHandle, CString } from .vulkan
 

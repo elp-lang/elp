@@ -57,6 +57,58 @@ a path points at.
 those three may exist. Two files differing only in extension is a
 compile error. The path never encodes which dialect it found.
 
+### A path segment is a filename, not an identifier
+
+**A module path segment may contain internal hyphens**, so
+`from .components.entry-form` names `components/entry-form.velp` and reads
+exactly as the file is named.
+
+The problem it fixes is that `.components.entry-form` tokenises as
+`entry - form`, which `core-language-probes.md` found in
+`examples/Expenses` and which was latent for a long time because the
+corpus's other hyphenated file was never imported. `examples/VulkanTriangle`
+made it load-bearing: three files import `internal/vk-types.elp`.
+
+**It needs no lexer mode, because there is nothing to disambiguate
+from.** The thing after `from` is a path and only ever a path — never an
+expression — and the leading-dot shorthand that makes `.components` look
+ambiguous exists only in expression position. So the lexer keeps emitting
+`Ident(entry) Minus Ident(form)` and the *path* parser accepts
+`Ident (Minus Ident)*` as a single segment, requiring adjacency, which
+token spans already carry. `a - b` is still subtraction everywhere it
+could be.
+
+**And it is not an exception to anything**, which is the part worth
+stating. The rule below already says a path segment *is* a file. So a
+segment was never an identifier: it denotes a filename, and filenames
+legitimately contain what identifiers cannot. `examples/BlogStyle` has
+`[postId].velp`, a dynamic route segment, which is the same point made
+more strongly.
+
+Two alternatives were rejected, and the second is the interesting one:
+
+- **Banning hyphens in file names.** Simplest, no new rule, and it costs
+  a filename convention that people reach for — the corpus already shows
+  someone working around its absence, with `components/feeditem.velp`
+  spelling `FeedItem` run together in lowercase because no separator
+  worked.
+- **Mapping a hyphenated name to an identifier automatically**, so
+  `entry-form.velp` imports as `.entryForm` or `.entry_form`. Rejected on
+  *"either"*: two spellings for one file means two module paths, and
+  one-file-per-module-path is what keys the no-cycles graph and the
+  direct-dependency check. Picking one spelling fixes that and leaves
+  three costs — the mapping is not injective (`vk-types` and `vk_types`
+  both reach `vkTypes`, so co-existing files need a collision rule),
+  `grep` stops finding the file from the import and the import from the
+  file, and the precedent is genuinely split: types and functions are
+  camelCase while 7 of 14 package names are snake_case
+  (`hello_world_blog`, `link_shortener`, `social_feed`, `quad_tree`).
+
+**Still open: what else a filename may contain.** Hyphens are decided.
+`[postId].velp` is a routing question — a route file is discovered by the
+router rather than imported — and routing resolution is undesigned, so
+whether such a file is ever a path segment is not settled here.
+
 ### No nested namespace imports
 
 The corpus has exactly one import whose last segment names a *type*
