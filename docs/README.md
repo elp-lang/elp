@@ -1,10 +1,13 @@
 # Elp grammar & spec docs
 
-This directory holds the language specification artifacts. None of these
-files are consumed by the compiler — the production lexer and parser are
-hand-written in `crates/lexer` and `crates/parser`, and they are the
-final authority on what the language is. These docs are the design
-record behind them.
+This directory holds the language specification artifacts, and right now
+they are the only authority on what the language is. There is no compiler
+in this repository: the hand-written lexer, parser and CST crates were
+removed because the design is still moving and a front end built against a
+moving design is rework. Where a doc cites `crates/lexer` or
+`crates/parser` as evidence, it is citing that removed front end, and the
+observation stands as a record of what had been built rather than as
+something to go and read.
 
 ## Files
 
@@ -55,9 +58,14 @@ document that chases it.
 
 ## Workflow when changing the language
 
-1. Edit `crates/lexer` / `crates/parser` (the production change).
-2. Run `cargo test -p parser` to catch regressions against the example
-   corpus in `crates/parser/test_projects/`.
-3. Record the *decision* — not the syntax — in the relevant doc above.
-   These files explain why the language is shaped the way it is; the
-   code explains what it accepts.
+1. Probe the question in `examples/` — a program that uses the construct,
+   with its unanswered parts written down as comments in the file.
+2. Record the *decision*, and the reasoning that forced it, in the
+   relevant doc above. These files explain why the language is shaped the
+   way it is.
+3. Migrate the corpus onto the decision, so the examples and the docs
+   never disagree.
+
+Step 3 used to be checked by a corpus parse test in `crates/parser`. With
+the front end removed, nothing enforces it, so it is a manual discipline
+until there is a compiler again.

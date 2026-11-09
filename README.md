@@ -3,7 +3,16 @@
 [![https://good-labs.github.io/greater-good-affirmation/assets/images/badge.svg](https://good-labs.github.io/greater-good-affirmation/assets/images/badge.svg)](https://good-labs.github.io/greater-good-affirmation/participate/)
 [![codecov](https://codecov.io/gh/elp-lang/elp/graph/badge.svg?token=YKcXc1uHNW)](https://codecov.io/gh/elp-lang/elp)
 
-GNU Licensed compiler for the Ellipsis ('elp) language, very much a work in progress programming language inspired by the likes of modern; platform-specific, UI languages and tools such as Swift UI and Jetpack Compose. Compiles to native binaries for Android, iOS, Mac, Windows and Linux and html/css/javascript for the web.
+GNU Licensed compiler for the Ellipsis ('elp) language, very much a work in progress programming language inspired by the likes of modern; platform-specific, UI languages and tools such as Swift UI and Jetpack Compose. Intended to compile to native binaries for Android, iOS, Mac, Windows and Linux and html/css/javascript for the web.
+
+## Status: design, not implementation
+
+There is no compiler in this repository. The hand-written lexer, parser and
+CST crates were removed deliberately: the language design is still moving,
+and a front end built against a moving design is rework rather than
+progress. What is here is the design record in [docs](./docs) and the
+exploratory corpus in [examples](./examples), which is where the language
+is being worked out. Implementation resumes once the design is settled.
 
 
 ## Elp?

@@ -1,3 +1,0 @@
-[workspace]
-resolver = "2"
-members = [ "crates/android-jni","crates/android-jni-generator", "crates/cst", "crates/lexer", "crates/parser"]
