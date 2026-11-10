@@ -651,10 +651,28 @@ cannot answer **even in principle**.
    thread calls — which costs a synchronous comparator callback access to
    confined state, and connects to finding 7 of §10.
 
-   What it exposed and did not close: `Synchronized<T>` is a mutex, and a
-   real-time audio callback must not take a lock. So elp can write a
-   *safe* audio callback and not yet a *correct* one. The shape of the fix
-   is an additional cell kind rather than a change to anything above it.
+   What it exposed, and what closed next: `Synchronized<T>` is a mutex, and
+   a real-time audio callback must not take a lock — so elp could write a
+   *safe* audio callback and not yet a *correct* one. Closed by
+   `aliasing.md`'s `Atomic<T>`, a third cell kind restricted to word-sized
+   `T`, sequentially consistent with no orderings exposed, plus
+   `@abi(.C, realtime)` in `functions.md` to make the guarantee mean
+   something. **The boundary table did not change**, which is the test of
+   whether `Opaque<T>` was drawn at the right level: it names how C sees a
+   thing, the cell kind names the discipline, and the two stay orthogonal.
+
+   Two hazards worth recording because they are not the obvious ones. A
+   refcount decrement reaching zero **deallocates**, so a deadline thread
+   must never hold the last handle to anything — which the no-retain rule
+   on `Opaque<T>` already guaranteed, for a reason it was not chosen for.
+   And a CAS retry loop is unbounded in the worst case, which is why
+   `Atomic<T>` is load/store rather than a transform even though its
+   siblings are transforms.
+
+   Still open, and the one that cost the most time in practice: a
+   single-producer/single-consumer ring buffer. Not the atomics — the
+   **invalidations**, and the difficulty of seeing from the source which
+   thread produces what.
 6. ~~**A native dependency is not a package dependency.**~~ **Resolved**
    in `name-resolution.md`, "Native libraries": three questions, three
    places. `links` on `@Package` is an **allow-list** — the complete

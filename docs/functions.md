@@ -335,6 +335,38 @@ Everything else follows from machinery that exists:
 - **Its parameter and return types must be C-representable**, which is what
   `Opaque<T>` and `Buffer<T>` are for (`memory-model.md`).
 
+### `@abi(.C, realtime)` — a deadline is a property of the body
+
+`aliasing.md` adds `Atomic<T>` for a thread that must not take a lock, and
+on its own that type is decoration: nothing stops an `@abi(.C)` body
+calling `Synchronized.update`, interpolating a string, or appending to a
+`[T]`. The guarantee has to be checked where the code is, so the marker
+carries it:
+
+```elp
+@abi(.C, realtime)
+fn onAudio(state Opaque<Atomic<int>>, frames int, output &Buffer<float>) -> int
+```
+
+An argument rather than a second directive, because it is a stronger form
+of a check `@abi(.C)` already performs rather than a different kind of
+thing.
+
+**It is `pure fn`'s shape, not a new effect system.** `pure` already
+propagates through calls and already bans external calls — `background`,
+channel receives, I/O. The distance between pure and real-time-safe is one
+further property: **allocation**. So the rule is purity's propagation plus
+a ban on naming any operation that allocates, rather than a new analysis
+over bodies.
+
+The cost, stated plainly: stdlib operations have to carry an
+allocates/does-not-allocate property, propagated through calls. That is
+the first thing the language would track about a function body other than
+purity, and it is real weight. What it buys is that the **diagnostic
+becomes the teaching** — *"`\"{frame}\"` allocates; a real-time body may
+not allocate"*, pointing at the line nine calls deep that would otherwise
+be found as an intermittent glitch under load.
+
 ### Spelling it as an `@external fn` with a body was rejected
 
 It is tempting, since the block already establishes the C world. But

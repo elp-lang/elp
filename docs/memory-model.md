@@ -1081,6 +1081,12 @@ It is a borrow, and the registration's own field is what keeps the cell
 alive. See `aliasing.md` for the callback rules and `functions.md` for
 `@abi(.C)`.
 
+The table is drawn at the level of *how C names a thing*, deliberately
+not at the level of what discipline governs access. That is what lets a
+new cell kind arrive without touching it: `aliasing.md` adds `Atomic<T>`
+for threads that cannot take a lock, and `Opaque<Atomic<int>>` works with
+no change here.
+
 `Opaque<T>` earns a spelling of its own for one reason: it is the only
 place in the language where **a type is a claim rather than a fact**, since
 C may hand back any `void*` at all. That parallels an `@external type`'s
@@ -1096,8 +1102,12 @@ declared tier being the one place a user gets stdlib's privilege.
   single external call *except* by the retention forms above, and those
   move the buffer out of elp's hands entirely. The one hazard is a C
   library that calls back into elp and appends during a retained call.
-- **Alignment and over-alignment** for SIMD and GPU. A constructor,
-  additive.
+- **Alignment and over-alignment.** For SIMD and GPU it is a constructor
+  and additive. **Not** additive for a lock-free ring buffer, whose
+  producer and consumer indices must sit on separate cache lines or every
+  write invalidates the other core's copy — so a stdlib `Ring<T>` is the
+  first consumer that cannot wait, and field-level alignment is a
+  different question from buffer over-alignment.
 - **Mapped and adopted storage.** It wants `Scoped` release, which an
   ordinary heap buffer must not have — which is evidence it is a *different
   type*, not another constructor on this one.

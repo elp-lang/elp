@@ -131,6 +131,83 @@ calls" rule rules out both hazards outright. Whether `pure fn(T) -> T`
 is a writable *function type* as opposed to a declaration form is a
 question for `functions.md`.
 
+### `Atomic<T>` — mutable sharing with a deadline
+
+`Synchronized<T>` is a mutex, and a thread with a hard deadline must not
+take one: it blocks on a lower-priority holder, misses the deadline, and
+the failure is load-dependent and intermittent. A real-time audio callback
+is the forcing case, and `examples/VulkanTriangle`'s foreign-callback work
+is what surfaced it.
+
+**`T` is restricted to what fits a machine word** — `int`, `bool`, the
+fixed-width integers, a payload-free enum. Nothing that allocates, so no
+`string`, no `[T]`, no `Buffer<T>`. `Move` and `Sendable`, refcounted like
+its siblings.
+
+```elp
+fn Atomic<T>.load(&self) -> T
+fn Atomic<T>.store(&self, value T)
+fn Atomic<T>.exchange(&self, value T) -> T
+fn Atomic<T>.compareExchange(&self, expected T, value T) -> bool
+```
+
+**Load and store, deliberately not a transform.** The sibling symmetry
+argues for `update(pure fn(T) -> T)`, and over a word that is a
+compare-and-swap retry loop rather than a lock — the "no external calls"
+rule makes a pure transform free of consequence to retry, so the surface
+would even be *sound*. It is still the wrong spelling, because a CAS loop
+is unbounded in the worst case and the retry is exactly the part a
+real-time programmer needs to see. Whoever wants the loop writes three
+visible lines.
+
+**A lock-free `Synchronized<T>` was rejected on the same grounds.** Making
+that type use CAS whenever `T` fits a word and a mutex otherwise would be
+a performance optimisation applied conditionally, which is the single
+worst property for code with a deadline: the failure is silent and
+load-dependent. The guarantee has to be static and visible in the type,
+which is the same reason `Confined<T>` and `Synchronized<T>` are two types
+rather than one type with a mode.
+
+#### Sequential consistency only, with no orderings exposed
+
+No `relaxed`, `acquire`, `release` or `seqcst` argument. Three reasons:
+
+- Exposing orderings means elp has to **specify a memory model**, which is
+  a document every language that has one regrets the first draft of.
+- Most callers would reach for `relaxed` because it reads as "faster", and
+  the resulting bug is unreproducible.
+- Relaxing later is **additive**; tightening is not.
+
+The cost is real and lands worst on the targets that matter most — a
+barrier on every operation, and `.iOS` and `.Android` are ARM. It is
+affordable because the operations this exists for happen once per buffer
+rather than once per sample.
+
+#### What must not happen on a thread with a deadline
+
+Three are obvious: no lock, no allocation, no blocking call. Two are not,
+and both bear on decisions already recorded:
+
+- **A refcount decrement that reaches zero deallocates.** Cloning a handle
+  is an atomic increment and costs nothing; the *last* drop calls the
+  allocator, which takes a lock. So such a body must never hold the last
+  handle to anything. `memory-model.md`'s rule that passing a cell as
+  `Opaque<T>` **does not retain** already guarantees it — argued there on
+  leak grounds, and load-bearing for this second reason too.
+- **An owned parameter might be the thing that frees.** So a real-time
+  body's parameters may be borrows and `Opaque` cells and never owned
+  `Move` values: `&Buffer<T>`, never `Buffer<T>`.
+
+#### `Opaque<T>` and the cell kind stay orthogonal
+
+`Opaque<T>` says how C names a thing; the cell kind says what discipline
+governs access to it. `Opaque<Atomic<int>>` therefore works the day
+`Atomic<T>` exists, with **no change to `memory-model.md`'s three boundary
+forms** — which is the test of whether that table was drawn at the right
+level, and it passes. Collapsing the two would mean an `Opaque` variant
+per discipline, and the C side would be carrying information C does not
+have.
+
 ## Three conformances, and only one rule
 
 `Copy`, `Duplicate`, `Move`. There is **no `Shared` interface** — see
