@@ -245,28 +245,87 @@ than atomics, precisely because exactly one thread ever touches them.
 
 elp has nowhere obvious to put them. A local does not survive the call, and
 a package-level variable does not exist — `memory-model.md` forbids globals
-outright. So the state has to arrive through the `void*`, which makes it a
-field of the object the registration passed, and the control thread holds
-that object.
+outright. So the state has to arrive through the `void*`.
 
-**The resolution is that this is a visibility problem, not a concurrency
-one.** `memory-model.md` already scopes private to the type, reached
-through `self`, so a private field of a render-state type is unreachable
-from anything but that type's own methods. Nothing has to be atomic,
-nothing has to be split, and — the point — nothing on the hot path pays for
-synchronisation it does not need.
+**And that settles what holds it, before any question of who may touch
+it.** The boundary table's cell row is `Opaque<Cell<T>>`, never `Opaque<T>`
+over a bare object, and the out-of-line principle says why: a bare elp
+value is in-line and moves, so there is nothing for C to hold the address
+of. Only a cell's contents and a `Buffer<T>`'s elements qualify. So private
+deadline state sits **in a cell**, and the kind is forced rather than
+chosen:
+
+| | |
+|---|---|
+| `Shared<T>` | immutable — no |
+| `Synchronized<T>` | a lock, forbidden on a deadline thread — no |
+| `Atomic<T>` | word-sized, and puts a private value back into shared memory to pay a barrier no other thread wants — no |
+| `Confined<T>` | mutable, unsynchronised, out-of-line — **yes** |
+
+**Which answers something that looked like a missing mutability
+spelling.** A deadline body updating its cursor needs no `&var self` and no
+`&var T` parameter, because the mutation does not go through the receiver:
+it goes through the cell, and `.set()` takes `&self`. `examples/Sheet` had
+already written the sentence — *“`&self`, not `&var self`: the object is
+unchanged, the cell it points at is not”* — so there was never a gap here.
+There was a boundary form written as `Opaque<T>` over a bare object, which
+is not one of the three.
+
+**Privacy remains the answer to who may touch it.** `memory-model.md`
+scopes private to the type, reached through `self`, so the cell is
+unreachable from anything but the deadline type's own methods. The two
+mechanisms answer different questions and both are needed: `Confined<T>`
+for what *holds* the state, privacy for what may *reach* it.
 
 The discipline, stated so it can be checked by reading:
 
 - state **shared** across the boundary is an `Atomic<T>`, a `Ring<T>`
   endpoint or a `Published<T>` endpoint, and lives on the shared half;
-- state **private** to the deadline body is a plain `var` field, private,
-  on a type whose own methods are the only way in.
+- state **private** to the deadline body is a `Confined<T>` of a `Copy`
+  object, held by a type whose own methods are the only way in, and never
+  aliased.
 
-Writing that as two types behind one registration reads correctly, but the
-split is convention as far as the package boundary: within a package,
-nothing stops a third type reaching the private half. Whether that wants
-enforcement is left open below.
+#### `Confined<T>` off the cell thread, and the one sanctioned crossing
+
+`Confined<T>` is `Rc<RefCell<T>>` and is sound above *“only because of
+cell-thread confinement”*, which is where the name comes from. A deadline
+thread is not the cell thread, so that justification is unavailable here —
+and the conclusion survives for a narrower reason.
+
+**Exactly one holder.** `examples/Sheet` justifies the read/`copyWith`/write
+idiom by cell-thread serialisation, so that a read-modify-write cannot be
+interleaved. On a deadline thread the same idiom is atomic because nothing
+else holds the cell at all. `Move` supplies that and `.alias()` takes it
+away, so:
+
+> A `Confined<T>` that crosses to a foreign thread is **moved in once and
+> never aliased.**
+
+`Confined<T>` is never `Sendable` under any `T`, and handing one to C to be
+called back on another thread *is* a crossing — so this is an exception and
+has to be named as one. **`Opaque<Confined<T>>` in an `@abi(.C, realtime)`
+parameter is the one sanctioned crossing of a non-`Sendable` cell.**
+
+And it is weaker than the parallel it invites. `Buffer<T>` by value is sound
+because the value is *gone*: the hazard is absent, not checked. Here the
+registration must keep holding the cell, since `Opaque<T>` does not retain
+and something has to keep it alive. What is relinquished is **access**, not
+the handle — and privacy is what relinquishes it.
+
+So privacy is load-bearing for *soundness* at this one boundary rather than
+for tidiness, which turns the open item below from a style question into a
+real one.
+
+**One consequence the corpus had not met before: a cell holding a `Move`
+aggregate cannot have its fields updated at all.** `Confined<T>`'s only
+write is `.set(whole)`, so the idiom needs `T` to be `Copy`, and a `Move`
+field cannot be taken out of the `&T` that `.get()` returns either. Every
+cell in the corpus until now held a `Copy` payload — `examples/Sheet`'s
+`StyleValues`, `examples/Pipeline`'s `Stats` — so this is the first place
+the restriction bites. It is “collections hold values, not places” reaching
+cells rather than a new rule, and it means a registration holding `Move`
+resources *and* mutable private state needs a nested cell per mutable part,
+whose own teardown then has no spelling. Open below.
 
 #### And this is why `Atomic<T>` does **not** get the endpoint split
 
@@ -459,9 +518,18 @@ to find what the language needs, and sometimes the answer is nothing.
 
 - **Whether a deadline body's private state wants enforcement.** Privacy
   keeps the control thread out of a render cursor, but only as far as the
-  package boundary; inside a package it is convention. A marker meaning
-  "reachable only from an `@abi(.C, realtime)` body" would close it, and
-  may not be worth a concept.
+  package boundary; inside a package it is convention. That convention is
+  now load-bearing for soundness rather than tidiness, which is the argument
+  for a marker meaning "reachable only from an `@abi(.C, realtime)` body".
+- **Releasing a `Move` resource held inside a cell.** Wrapping a
+  registration in the `Confined<T>` the boundary form requires leaves its
+  teardown unexpressible: `.get()` hands back a borrow, a `Move` field
+  cannot leave one, and `.set(whole)` needs `Copy`. Three candidates — a
+  consuming `.take() -> T` on a uniquely-held cell, `Scoped` reaching
+  through a cell it is the last holder of, or keeping the `Move` resources
+  *beside* the cell rather than inside it. The third is probably right and
+  is an architectural claim: what a deadline thread must *read* and what the
+  program must *release* are different sets.
 - **Waiting on the non-deadline side.** A UI thread wants to sleep until
   something arrives, and a deadline thread must not signal a condvar —
   that is a syscall. Polling and a lossy wakeup are the two honest

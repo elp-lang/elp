@@ -1143,6 +1143,83 @@ corrects.
     package claims nor a dependency the build acquires, and
     `name-resolution.md` has no row for it.
 
+### What migrating it then found
+
+Findings 7–9 and 11 were recorded as resolved and the probe was migrated onto
+those resolutions. The migration produced five more findings and one new gap,
+which is the strongest argument available for doing step 3 of the workflow
+rather than treating a decision as finished when it is written down.
+
+15. **The `&var self` question dissolved, and the real defect was a boundary
+    form.** The recorded answer to finding 7 said private deadline state is
+    "a plain `var` field, private", which collides with `&var self` for a
+    mutating method. It was wrong, and the probe itself contained the defect:
+    it declared the callback parameter `Opaque<PlaybackState>` over a bare
+    object, and `memory-model.md`'s table has only `Opaque<Cell<T>>`. The
+    out-of-line principle says why — a bare elp value is in-line and moves,
+    so there is nothing for C to point at.
+
+    Correcting it to `Opaque<Confined<PlaybackState>>` removes the question
+    entirely: mutation goes through the cell, `.set()` takes `&self`, and
+    `examples/Sheet/types/style.elp` had written the sentence years of design
+    time earlier — *"`&self`, not `&var self`: the object is unchanged, the
+    cell it points at is not."* No new spelling, and the cell kind is forced
+    rather than chosen, since `Shared` is immutable, `Synchronized` is a lock
+    and `Atomic` would put a private value back into shared memory.
+
+16. **`Confined<T>` off the cell thread is sound for a different reason than
+    on it.** `examples/Sheet` justifies read/`copyWith`/write by cell-thread
+    serialisation. A deadline thread has none, and the idiom is still atomic
+    because nothing else holds the cell — which `Move` gives and `.alias()`
+    takes away. So `Opaque<Confined<T>>` at an `@abi(.C, realtime)` boundary
+    is the one sanctioned crossing of a non-`Sendable` cell, and it is
+    **weaker** than the `Buffer<T>`-by-value parallel it invites: there the
+    value is gone and the hazard is absent, here the registration must keep
+    holding the cell and only *access* is relinquished. Privacy is what
+    relinquishes it, so privacy is load-bearing for soundness at this one
+    boundary.
+
+17. **A cell holding a `Move` aggregate cannot have its fields updated at
+    all.** `Confined<T>`'s only write is `.set(whole)`, which needs `T` to be
+    `Copy`, and a `Move` field cannot be taken out of the `&T` that `.get()`
+    returns. Every cell in the corpus until now held a `Copy` payload, so this
+    is the first place it bites — and it forces a nested cell per mutable
+    field of a `Move` aggregate.
+
+18. **GAP 6 — and the teardown of such a cell has no spelling.** Wrapping the
+    registration in the cell the boundary form requires leaves
+    `release(self)` unable to reach the `Move` handle it must destroy.
+    Candidates: a consuming `.take() -> T` on a uniquely-held cell, `Scoped`
+    reaching through a cell it is the last holder of, or keeping the `Move`
+    resources *beside* the cell rather than inside it. The third is probably
+    right and is an architectural claim rather than a workaround — what a
+    deadline thread must **read** and what a program must **release** are
+    different sets, and the probe had them in one object only because the
+    original could hold both in a class.
+
+19. **A private field forces a factory, and that generalises.** The
+    registration used to be constructed field-by-field from `main.elp`. It
+    cannot be once the render cursor is private, so construction moved into
+    the sequencer's own module. The rule worth keeping: **a type with a field
+    only one thread may touch cannot have a public initialiser.**
+
+20. **A boundary payload belongs with the reader, not the writer.** The
+    transport word had to be declared alongside `Playhead` rather than in the
+    sequencer, because the reader's `estimate` needs it for the generation
+    check and the sequencer already imports the reader's module — so
+    declaring it on the writing side would have made the two files import each
+    other, which `name-resolution.md` forbids. The no-cycles rule picked the
+    filing, and the principle it picked is the right one: both threads need
+    these types and the reader is the side that interprets them.
+
+Two of the four resolutions also came out *cheaper* in the migrated probe than
+on paper. The payload already carried the producer's rate before finding 1 was
+resolved, so "the producer publishes its rate" cost nothing. And both reader
+policies — the extrapolation cap and the stale-generation discard — ended up
+in one `pure fn`, which is the clearest available statement of why finding 11
+needs no feature: legitimate reader policy is a total function of the value,
+and the illegitimate move was never a policy at all but a call to `stop()`.
+
 ## Suggested order
 
 1. **Operators**, including `==`/`===` and whether they are
