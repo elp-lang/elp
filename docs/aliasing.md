@@ -440,7 +440,7 @@ one:
 |---|---|---|---|
 | **owned handle** | yes, exactly once | **`Move`** | `sqlite3*`, `sqlite3_stmt*`, `GLFWwindow*`, `VkInstance`, `VkDevice` |
 | **borrowed handle** | no — it dies with its parent | **`Copy`** | `VkQueue`, `VkPhysicalDevice`, `GLFWmonitor*` |
-| **transient view** | no — invalidated by the next call | *none fits* | `const char*` from `sqlite3_column_text`, `const GLFWvidmode*` |
+| **transient view** | no — invalidated by the next call | **none — it is a borrow**, not a value | `const char*` from `sqlite3_column_text`, `const GLFWvidmode*`, `float *out` in an audio callback |
 
 The first two are both handled by rule 3 with no further machinery, and
 they land on *different* tiers — which is the clearest evidence that a
@@ -448,6 +448,16 @@ mandatory declaration beats a default. `Move` is right for a `VkDevice`
 because you call `vkDestroyDevice` once; `Copy` is right for a `VkQueue`
 because you never destroy it, duplicating it is free, and two copies of it
 have nothing to observe about each other that matters.
+
+**The third row is answered, and not by a tier.** It was recorded as
+having no tier that fits, and the reason is that it is not a value at all:
+a transient pointer is a **borrow**, so it may not be a field, may not be
+captured, and dies with the call. `memory-model.md` settles that under
+`Buffer<T>`, where the forcing case is a foreign callback's `float *out`
+parameter. Two things then need no declaration: such a view is never
+`Sendable`, because it cannot be captured and so cannot cross; and it
+cannot outlive the call that delivered it, because borrows already cannot
+escape.
 
 **What the second row does *not* get is validity.** A `VkQueue` is valid
 only while its `VkDevice` lives, and nothing in the tier says so.
@@ -509,6 +519,64 @@ it, and that may be a block of declarations (`macros.md`), so one
 argument inside it. The attribute says where the symbol comes from; the
 conformance says how the value behaves. Those were conflated in the first
 draft and they are different questions.
+
+### A C callback runs on a thread elp never created
+
+A library that calls *into* elp — an audio driver, a sort comparator, a
+`sqlite3_exec` row handler — raises a question the three aliasing types were
+not written for: whose thread is this? `Confined<T>` is confined to one
+*logical* thread, and on the client targets that thread is the platform UI
+thread. An audio thread is categorically not it, and elp never saw the
+thread created.
+
+**A foreign callback body is checked exactly as a `background` body is.**
+Everything it reaches must be `Sendable`, `Confined<T>` is refused, and a
+value elp also reads must be `Synchronized<T>`. No new rule, and the
+diagnostic already exists — `examples/Pipeline/main.elp` writes it out.
+
+Two constraints then fall out rather than being imposed:
+
+- **A foreign callback is a top-level `fn`, never a closure.** A C function
+  pointer carries no environment, so there is nowhere for a capture to
+  live. State arrives through the `void*` parameter and nowhere else, which
+  is `Opaque<Cell<T>>` in `memory-model.md`'s table.
+- **A value that drives UI must hop.** The callback writes a
+  `Synchronized<T>`; the cell thread reads it and writes the `Binding<T>`.
+  `Binding<T>` is tied to the cell thread, so the hop is mandatory and the
+  language should say so rather than let it look like an optimisation.
+
+### Thread safety for storage, in one rule
+
+> **C and elp never touch one extent concurrently, because the only way C
+> gets an extent is for elp to give it up.**
+
+`Buffer<T>` is `Sendable when T: Sendable`, and it is safe for precisely the
+reason `Confined<T>` is not. The premise above — *`T: Sendable` constrains
+what is in the box; the race is the box* — does not apply, because
+`Buffer<T>` is not a box: it is `Move`, so there is exactly one holder and
+no alias to race through.
+
+There is deliberately **no `Shared<Buffer<T>>`** and no aliasing form for
+storage. Two elp threads that need one extent use
+`Synchronized<Buffer<T>>`, access goes through the lock, and C cannot
+participate in that at all — which is the honest statement, not a
+limitation worked around.
+
+### Two residuals a callback cannot discharge
+
+Both are irreducible rather than gaps, and both are discharged by the
+`Scoped` registration pattern rather than by the type system:
+
+- **The type claim.** elp cannot verify that the `void*` C returns is the
+  one it was given. `Opaque<T>` is a claim, and C may hand back anything.
+- **The retention window.** elp cannot see that C *kept* the pointer past
+  the call that delivered it. A borrow's rules cannot express it, because
+  the escape happens in C.
+
+This is the same posture already taken above, where a tier answers *may I
+duplicate this* and says nothing about *is this still alive*. Any language
+accepting C callbacks has exactly these two; Rust spells them `unsafe` and
+documents them.
 
 ## What this corrects
 

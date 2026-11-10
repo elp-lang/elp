@@ -57,8 +57,8 @@ one.
 
 ```elp
 @external(.C, library = "sqlite3") {
-	export fn sqlite3_open(path &CString, out &OpaqueHandle) -> int
-	export fn sqlite3_close(db &Sqlite3) -> int
+	export fn sqlite3_open(path &CString, db &Optional<Sqlite3>) -> int
+	export fn sqlite3_close(db Sqlite3) -> int
 	export fn sqlite3_errmsg(db &Sqlite3) -> &CString
 }
 ```
@@ -203,7 +203,7 @@ wearing an `@` is, and the answer was already on the page:
 | | emits | spelling | examples |
 |---|---|---|---|
 | **macro** | declarations | Capitalised | `@CodeGen`, `@Duplicate`, `@Screen`, `@Reducer` |
-| **directive** | nothing — it tells the compiler something | lowercase | `@external`, `@error`, `@default`, `@allow` |
+| **directive** | nothing — it tells the compiler something | lowercase | `@external`, `@abi`, `@error`, `@default`, `@allow` |
 | **a value** | nothing — it *is* one | Capitalised, being a type | `@Package` |
 
 Every elp attribute in the corpus obeys this, which makes it evidence

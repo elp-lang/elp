@@ -212,13 +212,22 @@ name meaningful to you.
 
 ### What fails, and stays imported
 
-`Error`, `Http`, `UUID`, and every widget.
+`Error`, `Http`, `UUID`, `Buffer`, and every widget.
 
 `Error` is the instructive one. It feels intrinsic, it is in 6 of 24
 files, and it is still an ordinary library interface: `Either<T, E>`
 takes any `E`, and `throw` does not require `Error`. The compiler has
 no rule that mentions it, so it does not qualify. The corpus already
 imports it in all six files.
+
+`Buffer<T>` is the second instructive one, and it arrived later
+(`memory-model.md`). It is contiguous storage with an addressable extent,
+so it feels as primitive as `[T]` — but `[T]` qualifies through *grammar*
+and nothing in the grammar or in any desugaring produces a `Buffer<T>`.
+The criterion earns its keep here: it also disposes of a collision for
+free, since `examples/Buffer` declares its own `Buffer` — a text-editor
+handle with entirely unrelated semantics — and simply does not import the
+stdlib one.
 
 ### One prelude, not three
 
@@ -526,8 +535,8 @@ this awkward in other toolchains:
 
 ```
 @external(.C, library = "sqlite3") {
-	fn sqlite3_open(path &CString, out &OpaqueHandle) -> int
-	fn sqlite3_close(db &Sqlite3) -> int
+	fn sqlite3_open(path &CString, db &Optional<Sqlite3>) -> int
+	fn sqlite3_close(db Sqlite3) -> int
 }
 ```
 

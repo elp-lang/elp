@@ -166,9 +166,13 @@ imported stdlib type, not a primitive.
   costs nothing the way `s[i]` would. A stdlib conformance, but forced
   by the definition above.
 - **Byte access for I/O.** `LinkShortener` speaks HTTP, so bytes exist
-  somewhere. Whether that is `[uint8]`, a distinct `Bytes` type, or
-  `string`'s UTF-8 view is undecided — and the integer-width question
-  is undesigned too.
+  somewhere. Partly answered: `memory-model.md` settles that contiguous
+  storage is `Buffer<T>`, so this is `Buffer<uint8>` rather than `[uint8]`
+  or a distinct `Bytes` type, and `s.bytes()` **copies**. The zero-copy
+  form is a view over the string's own UTF-8, and views are reserved
+  (borrow-shaped, spelled `Span<T>`) rather than designed. The
+  integer-width question is still undesigned, so `uint8` is a placeholder
+  for whatever the numeric tower calls it.
 - **Is `char` `Comparable`?** Scalar ordering is well-defined, so this
   is cheaply yes, but it should be a stated conformance rather than
   assumed.

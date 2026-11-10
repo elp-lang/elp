@@ -893,26 +893,231 @@ spelling (`map.get(k)` yielding a mutable place, or an `update(k, fn)`
 helper) can be built in elp later without changing the semantics. A
 language rule that hands out hidden aliases cannot be walked back.
 
-### Open: contiguous storage, and the one case this rule blocks
+## `Buffer<T>` — contiguous storage, and where an address may exist
 
-**There is no way to hand out the backing storage of a collection**, which
-is correct for every corpus use and wrong for one: an array
-out-parameter. `vkEnumeratePhysicalDevices(instance, &count, buffer)` is
-called twice — once with a null buffer to learn the count, once with an
-allocation the driver writes into — and the second call needs the
-*address* of contiguous memory, which this rule says does not exist.
+The rule above leaves one thing unsayable, and it is correct for every
+corpus use but one: **there is no way to hand out the backing storage of a
+collection.** An array out-parameter needs exactly that.
+`vkEnumeratePhysicalDevices(instance, &count, devices)` is called twice —
+once with no buffer to learn the count, once with an allocation the driver
+writes into — and the second call needs the *address* of contiguous memory.
 
-`Optional<T>` answers the scalar case (Finding 4), and cannot answer this
-one, because there is no single slot. So a named primitive is wanted —
-`examples/VulkanTriangle` writes `Buffer<T>` with `withCapacity(n)` and
-`.storage()` to make the shape visible — and it is **undesigned**.
+`Optional<T>` answered the scalar case (Finding 4) and cannot answer this
+one, because there is no single slot. So this is a named type, and the
+design below is deliberately scoped: it settles identity, ownership and who
+may hold an address, and defers element formats, growth, alignment and
+mapped memory, because those can be added without contradicting anything
+here.
 
-Worth stating what it is *not*, so the open item is scoped: it is not a
-relaxation of the rule above. A `Buffer<T>` would be a type whose whole
-purpose is contiguous storage with an addressable extent, distinct from
-`[T]`, rather than `[T]` growing a method that leaks its interior. The
-question is what that type is and what else in the language wants it —
-byte access for `strings.md`, image and vertex data, and anything
-mapping a file or a GPU allocation all point at the same place, and it
-should be designed once with those in view rather than carved to fit
-`vkEnumeratePhysicalDevices`.
+### Five demands, and the fifth is a different type
+
+| demand | wants | from |
+|---|---|---|
+| array out-parameter | an addressable extent C writes into | `examples/VulkanTriangle` |
+| byte access for `string` | a UTF-8 sequence read as bytes | `strings.md`, open |
+| `CString` conversion | bytes plus a terminator | `examples/SqliteBinding` |
+| vertex and image data | typed elements, tightly packed | Vulkan, unwritten |
+| mapped memory | **a view over storage someone else owns** | Vulkan, `mmap`, unwritten |
+
+The first four want storage. The fifth wants a view, and collapsing the two
+into one type is the mistake this section exists to avoid. It would go
+wrong in three places the language has already taken a position on: a view
+is a borrow and `aliasing.md` says a field may not hold a borrow, while an
+owner can be a field; an owner frees and a view does not, so their tiers
+differ; and `Glfw.release` invalidating every `Monitor` is the same failure
+as a view outliving its storage, so the validity gap applies to views and
+not to owners.
+
+So: **`Buffer<T>` owns. Views are a separate thing, and a view is a
+borrow** — see "Views are borrows" below.
+
+### The decisions
+
+**1. `Buffer<T>` is not `[T]`, and not a mode of it.** `[T]` is a
+collection of values: it hands out copies, it is `Duplicate`, it grows, and
+it has no addressable interior. `Buffer<T>` is contiguous storage with an
+extent. Conversion is explicit in both directions (`Buffer.from(xs)`,
+`buffer.toArray()`). The rule above therefore stands **unqualified**, with
+no exception carved into it, and `Buffer<T>` is simply not a collection.
+The cost is one conversion at the boundary, which is where it belongs.
+
+**2. There is no address-producing expression in elp.** No `.storage()`, no
+`.pointer()`, no cast. `&buffer` passed to an elp `fn` is an ordinary
+borrow and carries no address; the address appears only in the lowering of
+an `@external` call. This is what keeps "collections hold values, not
+places" true of `Buffer<T>` as well: its *elp face* is values-not-places
+like every other collection, and `at(i)` returns a copy. The
+`examples/VulkanTriangle` draft's `.storage()` spelling is deleted, the way
+`out` was.
+
+**3. At an `@external` boundary, `&Buffer<T>` lowers to `T*`** — a pointer
+to the first element, not a `{ptr, len, cap}` struct. Length travels as its
+own parameter, as it does in C. Writability needs nothing new: `&T` at an
+`@external` declaration is already conservatively read-write.
+
+**4. Capacity is fixed at construction; `0 <= length <= capacity`; `at(i)`
+traps for `i >= length`.** So no uninitialised element is reachable from
+elp, by construction rather than by discipline.
+
+**5. The only way to get `length > 0` is to supply every element.**
+`Buffer<T>.filled(n, value)`, `Buffer<T>.from(xs [T])`, or `append`. There
+is **no `setLength`, no `assumeFilled` and no `Zeroable`** — and that
+matters more here than it would in Rust, because `aliasing.md` makes
+`unsafe` an FFI-only *concept* with no block form, so an
+assert-initialised operation would have nowhere to live.
+
+**6. Therefore an array out-parameter of handles is
+`&Buffer<Optional<T>>`.** This is the scalar rule at a second arity, not a
+new mechanism:
+
+```elp
+export fn vkEnumeratePhysicalDevices(instance VkInstance, count &Optional<int>, devices &Buffer<Optional<VkPhysicalDevice>>) -> int
+```
+
+```elp
+var gpus = Buffer<Optional<VkPhysicalDevice>>.filled(found, nil)
+vkEnumeratePhysicalDevices(instance, &count, &gpus)
+```
+
+Every slot is initialised to `nil` before the call, the driver overwrites
+some prefix, and an unwritten slot reads back `nil` — which is *true*. It
+leans on `Optional<T>` being layout-compatible with `T`, and **that promise
+was already made** for `vkCreateInstance(..., instance &Optional<VkInstance>)`:
+spending it a second time costs nothing new. It should be written down as a
+boundary layout guarantee rather than left implied, which is the existing
+`@external` struct-layout open item.
+
+This works because a handle has a null niche. For an element type that is a
+**declared** C struct there is no niche, and none is needed: `filled(n,
+zeroStruct)` satisfies decision 5 directly. Both routes initialise every
+element, which is the only thing decision 5 asks.
+
+**7. `Buffer<T> implements Move`.** Not `Duplicate`, deliberately, although
+`Duplicate` is defensible for an owning allocation and `[T]` has it. Three
+reasons: adding a conformance later is additive and removing one is not;
+`[T]` already covers "a duplicable sequence"; and `Move` turns out to be
+load-bearing for FFI retention below, which was not the reason it was
+chosen but is the better one. `Sendable when T: Sendable`.
+
+**8. `Buffer<T>` is imported, not atmospheric.** It fails
+`name-resolution.md`'s criterion — the compiler cannot name it in a
+diagnostic without help, since no grammar or desugaring produces one. That
+also disposes of a name collision for free: `examples/Buffer` declares its
+own `Buffer`, a text-editor handle with entirely different semantics, and
+simply does not import the stdlib one.
+
+**9. `Buffer<T>` conforms to `Index` and `Iterable<T>`** — the same
+trapping `[]` / `Optional`-returning `get` table as every other collection,
+so there is nothing extra to learn.
+
+### Views are borrows, and that answers the transient-pointer row
+
+A view is wanted for sub-ranges, for zero-copy bytes out of a `string`, for
+mapped memory, and — the case that forced the question — for a **parameter
+of a foreign callback**. An audio callback receives `float *out`: storage
+the host owns, valid for the duration of the call and not one instruction
+longer.
+
+That is exactly the third row of `aliasing.md`'s foreign-pointer table, the
+one recorded as having no tier that fits. It has one now: **it is not a
+value, it is a borrow.** A borrow may not be a field, may not be captured
+by a closure (Finding 3), and dies at the end of the call — which *is* the
+transient-pointer contract, obtained from rules decided for other reasons.
+
+Two consequences fall out with no declaration needed. A view is **never
+`Sendable`**, under any `T`, because it cannot be captured and therefore
+cannot cross. And a view cannot outlive the callback that received it,
+because borrows already cannot escape.
+
+The spelling is reserved (`Span<T>`) and the surface is deferred. What is
+*decided* is that it is borrow-shaped rather than a `Copy` value, because
+that is the part which would be unfixable later.
+
+### Where C may hold an address — the out-of-line principle
+
+Decision 2 says no elp expression produces an address. A C API that retains
+a pointer — an audio driver, a persistently mapped buffer, `io_uring` —
+needs one to exist anyway, so the question is what may be pointed at. The
+answer is not "whatever C asks for":
+
+> **C may hold the address of elp memory only where that memory is
+> out-of-line and kept alive by something other than a stack frame.**
+
+Two things in elp qualify, and probably nothing else ever will:
+
+- **a `Buffer<T>`'s elements** — the allocation is out-of-line, so moving
+  the `Buffer<T>` *value* (ptr/len/cap) does not move the storage. That is
+  a representation promise and is stated here deliberately, because it is
+  what makes retention safe at all.
+- **a cell's contents** — `Confined<T>` and `Synchronized<T>` are
+  refcounted, so the allocation outlives any particular handle.
+
+A bare elp value never qualifies: it is in-line and it moves. So "address
+of a local" is not a feature elp lacks — it is a thing that cannot be sound
+here, and this is the principle that says why.
+
+### The three boundary forms, and nothing else
+
+| spelling | C sees | kept valid by |
+|---|---|---|
+| `&Buffer<T>` | `T*` to the elements | the call |
+| `Buffer<T>` by value | `T*` to the elements | ownership transferred; the registration reclaims |
+| `Opaque<Cell<T>>` | `void*` to the cell contents | the registration's own field |
+
+The first two mirror a distinction already decided for handles:
+`sqlite3_close(db Sqlite3)` takes its handle by value and
+`sqlite3_step(stmt &Sqlite3Stmt)` borrows, and that already means *retained*
+versus *borrowed for this call*. Storage means the same thing one layer
+down. And because `Buffer<T>` is `Move` (decision 7), the by-value form
+**removes it from the caller** — so the lifetime hazard is not checked, it
+is absent. elp cannot race C for an extent it no longer has.
+
+`Opaque<T>` is a **boundary spelling, not a value type.** It appears only
+in `@external` and `@abi` signatures; an elp body passes a cell and
+receives a cell, and the `void*` exists only in the lowering. Passing a
+cell as `Opaque<T>` does **not** retain it — nothing increments a refcount
+for C, because C cannot decrement one and every registration would leak.
+It is a borrow, and the registration's own field is what keeps the cell
+alive. See `aliasing.md` for the callback rules and `functions.md` for
+`@abi(.C)`.
+
+`Opaque<T>` earns a spelling of its own for one reason: it is the only
+place in the language where **a type is a claim rather than a fact**, since
+C may hand back any `void*` at all. That parallels an `@external type`'s
+declared tier being the one place a user gets stdlib's privilege.
+
+### Open within contiguous storage
+
+- **Element reinterpretation** — `buffer.view<Vertex>()`, planar versus
+  packed pixels, endianness, stride. Kept deliberately *out* of
+  `Buffer<T>`'s identity so there is no format parameter to be stuck with.
+  It needs a layout answer, which is already open.
+- **Growth beyond capacity.** Safe to add later: no address outlives a
+  single external call *except* by the retention forms above, and those
+  move the buffer out of elp's hands entirely. The one hazard is a C
+  library that calls back into elp and appends during a retained call.
+- **Alignment and over-alignment** for SIMD and GPU. A constructor,
+  additive.
+- **Mapped and adopted storage.** It wants `Scoped` release, which an
+  ordinary heap buffer must not have — which is evidence it is a *different
+  type*, not another constructor on this one.
+- **`string` byte access.** `s.bytes() -> Buffer<uint8>` copies, and that
+  is correct but not free; the zero-copy form arrives with views. Still
+  gated on the undesigned numeric tower.
+- **The nullable buffer argument is now unspellable, and that is
+  progress.** `vkEnumeratePhysicalDevices(instance, &count, null)` passes
+  `NULL` where `&Buffer<...>` is expected, and `Optional<&T>` is barred by
+  "a field may not hold a borrow". It is genuinely two operations, so the
+  honest fix is two elp declarations over one C symbol — a `symbol =`
+  argument on `@external`. That is an FFI gap rather than a storage one,
+  and this design is what exposes it.
+- **`&var T` as a non-receiver parameter** is used in 16 corpus call sites
+  and in `collections.md`'s own `fn hash(&self, into &var Hasher)`, and
+  `examples/Pipeline/internal/stats.elp:56` records that Finding 4
+  deliberately does not have it. That contradiction is unrelated to storage
+  and is listed here only because it surfaced alongside it. The leaning is
+  that `collections.md`'s own argument for `&var self` — an interface
+  method has no body, so a mutating requirement cannot be inferred —
+  applies verbatim to a non-receiver parameter, so the spelling has to
+  exist and the **call sites** are what Finding 4 forbids (`&var doc`
+  should be `&doc`).

@@ -58,7 +58,7 @@ import { VkInstance, VkSurfaceKHR, CString, OpaqueHandle } from .vulkan
 	// Worth recording as a *consequence* rather than a gap: exclusivity was
 	// argued for on symbol-collision grounds and it also buys type identity
 	// across binding packages, which is what makes multi-library FFI work.
-	export fn glfwCreateWindowSurface(instance &VkInstance, window &GLFWwindow, allocator OpaqueHandle, out &OpaqueHandle) -> int
+	export fn glfwCreateWindowSurface(instance &VkInstance, window &GLFWwindow, allocator OpaqueHandle, surface &Optional<VkSurfaceKHR>) -> int
 }
 
 // Owned by this program: created by `glfwCreateWindow`, destroyed by

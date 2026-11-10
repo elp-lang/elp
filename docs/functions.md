@@ -270,6 +270,79 @@ value, and it takes no `&`, which is reserved for writable bindings.
 silently capture `money`; write `fn (x) { return money.add(x) }` and the
 capture is visible. No corpus site wants the shorter form.
 
+## A C function pointer, in both directions
+
+`examples/VulkanTriangle` reaches this twice: `vkGetInstanceProcAddr`
+*returns* a C function value, and any callback-based library
+(`new_fluid_audio_driver2`, `sqlite3_exec`) *takes* one. A function type
+here says nothing about calling convention, so neither was spellable.
+
+Five things are needed, and only one of them is new.
+
+### Inside an `@external` block, `fn(A, B) -> R` is a C function pointer
+
+No new type constructor. **An `@external` block is already a context that
+re-reads the types inside it** — `memory-model.md`'s FFI amendment made
+`&T` mean read-and-write there, because there is no callee body to infer
+from. Reading `fn(...)` as a C function pointer in the same context is the
+same move, not a new kind of rule.
+
+```elp
+@external(.C, library = "fluidsynth") {
+	export type FluidSettings
+	export type FluidAudioDriver
+
+	export fn new_fluid_audio_driver2(
+		settings &FluidSettings,
+		callback fn(Opaque<Synchronized<Playhead>>, int, &Buffer<float>) -> int,
+		data     Opaque<Synchronized<Playhead>>,
+	) -> Optional<FluidAudioDriver>
+
+	export fn delete_fluid_audio_driver(driver FluidAudioDriver)
+}
+```
+
+That also types `vkGetInstanceProcAddr`'s return value, which was the other
+half of the gap.
+
+### `@abi(.C)` marks a definition callable from C
+
+A calling convention is a property of a *definition*, not of a use site, so
+it needs a marker there. It is lowercase, emits nothing, and is a compiler
+intrinsic — a **directive** by `macros.md`'s table, with `.C` as the
+dialect exactly as `@external(.C, ...)` has it.
+
+```elp
+@abi(.C)
+fn onAudio(state Opaque<Synchronized<Playhead>>, frames int, output &Buffer<float>) -> int {
+	render(output, frames)
+	state.update(pure fn (p Playhead) -> Playhead { return p.advanced(frames) })
+	return 0
+}
+```
+
+Everything else follows from machinery that exists:
+
+- **Only a top-level `fn` can be one.** A C function pointer carries no
+  environment, so a closure can never be converted — nothing is refused by
+  a rule, there is simply nowhere for captures to live.
+- **The conversion is by naming the function.** `new_fluid_audio_driver2(settings, onAudio, state.alias())`
+  takes `onAudio` as a value, with no cast and no `&`, consistent with
+  `Composer(onPosted = handlePosted)` above.
+- **The body is checked as a `background` body** — see `aliasing.md`. The
+  ABI does not say which thread calls it, so this is unconditional, which
+  costs a synchronous comparator callback access to `Confined` state.
+- **Its parameter and return types must be C-representable**, which is what
+  `Opaque<T>` and `Buffer<T>` are for (`memory-model.md`).
+
+### Spelling it as an `@external fn` with a body was rejected
+
+It is tempting, since the block already establishes the C world. But
+`library =` is meaningless on a function elp defines, and the direction
+silently inverts — a reader seeing a brace-bodied `fn` inside
+`@external(.C, library = "fluidsynth")` cannot tell which side owns it.
+Two directions want two markers.
+
 ## Open
 
 - **Collection combinators on `Array<T>`** — `map`, `filter`,
@@ -280,3 +353,9 @@ capture is visible. No corpus site wants the shorter form.
   `rows.sorted(fn (a, b) { ... })`, but the type spelling, capture
   rules and whether a method reference is a value are undesigned.
   Probe gap #7.
+- **Whether a callback's thread affinity may be declared.** `@abi(.C)`
+  bodies are checked for an unknown thread unconditionally, because the C
+  ABI does not say. The alternative is for the `@external` declaration
+  *taking* the callback to state it, which is the already-open
+  "main-thread affinity as a property of a call" question arriving from a
+  second direction.

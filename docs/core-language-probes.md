@@ -630,6 +630,31 @@ cannot answer **even in principle**.
 5. **A C callback cannot be an elp closure**, because elp closures
    capture and a capturing closure has no C representation — which is why
    the C API carries a `void*` for state in the first place.
+
+   **Followed up, and it was a bigger hole than it looked.** Asking what a
+   playback callback writing a caret position would take — FluidSynth
+   shaped, a C library calling *into* elp on its own audio thread — found
+   that elp could not receive a C callback **at all**: no outbound calling
+   convention, and no way to hand C a pointer to elp state. Both closed in
+   `functions.md` ("A C function pointer, in both directions") for less
+   than expected: inside an `@external` block `fn(A, B) -> R` *is* a C
+   function pointer, because that block is already a context that re-reads
+   the types in it, and only the definition side needed a marker,
+   `@abi(.C)`. The closure restriction above then stops being a rule and
+   becomes an observation — a C function pointer carries no environment,
+   so there is nowhere for captures to live.
+
+   The thread question needed nothing new either: **a foreign callback
+   body is checked exactly as a `background` body is** (`aliasing.md`), so
+   `Confined<T>` is refused and anything elp also reads must be
+   `Synchronized<T>`. Unconditionally, because the ABI does not say which
+   thread calls — which costs a synchronous comparator callback access to
+   confined state, and connects to finding 7 of §10.
+
+   What it exposed and did not close: `Synchronized<T>` is a mutex, and a
+   real-time audio callback must not take a lock. So elp can write a
+   *safe* audio callback and not yet a *correct* one. The shape of the fix
+   is an additional cell kind rather than a change to anything above it.
 6. ~~**A native dependency is not a package dependency.**~~ **Resolved**
    in `name-resolution.md`, "Native libraries": three questions, three
    places. `links` on `@Package` is an **allow-list** — the complete
@@ -804,13 +829,29 @@ FFI works because of a rule adopted for a different reason.
    does not have — so a `.Binary` on macOS has an affinity requirement the
    language cannot state. Swift's answer is `@MainActor`, already noted
    there as a comparison and declined.
-8. **The count-then-fill out-parameter needs a place.**
-   `vkEnumeratePhysicalDevices(instance, &count, null)` then again with a
-   buffer: a nullable argument whose nullness changes the function's
-   meaning, an in-out count, and a destination that wants an elp array's
-   backing storage. `collections.md` says collections hold values, not
-   places. `SqliteBinding` found single out-parameters awkward; an array
-   out-parameter is a different problem.
+8. ~~**The count-then-fill out-parameter needs a place.**~~ **Resolved**
+   in `memory-model.md`, "`Buffer<T>` — contiguous storage": a type whose
+   purpose is an addressable extent, distinct from `[T]` so that
+   "collections hold values, not places" keeps its unqualified form. The
+   answer turned out to be **the scalar rule at a second arity** rather
+   than a new mechanism — `&Optional<T>` for one slot,
+   `&Buffer<Optional<T>>` for n — leaning on a layout promise
+   `vkCreateInstance` had already needed. Because length can only grow by
+   supplying every element, there is no uninitialised memory and no
+   operation that asserts there isn't, which matters here specifically
+   because `unsafe` is an FFI-only *concept* with no block form and an
+   assert-initialised operation would have nowhere to live.
+
+   Two things it opened. The **nullable** first call is still unspellable,
+   and that is the honest signal that one C symbol is two operations — so
+   the fix is two declarations over one symbol (`symbol =` on
+   `@external`), not a nullable borrow. And deciding where an address may
+   exist at all produced a principle worth more than the feature:
+   **C may hold the address of elp memory only where that memory is
+   out-of-line and kept alive by something other than a stack frame.** Two
+   things qualify — a `Buffer<T>`'s elements and a cell's contents — so
+   "address of a local" is not missing, it is unsound here, and now
+   something says why.
 9. **Extension functions are loaded by name and called as values.**
    `vkGetInstanceProcAddr` returns a generic function pointer to cast.
    There is no symbol for the allow-list to check, and the result is a

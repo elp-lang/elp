@@ -243,6 +243,14 @@ rows.sorted(fn (a, b) { b.total.compareTo(a.total) })
   `patterns.md`: it is record destructuring, named with `as`, and
   applies to anything an iterator yields.
 - **Capacity and growth**: whether `Array` and `Map` expose reservation,
-  and whether that is language-visible at all.
+  and whether that is language-visible at all. Partly answered from the
+  other side: `memory-model.md` gives contiguous storage its own type,
+  `Buffer<T>`, rather than letting `[T]` expose capacity or hand out its
+  interior. **`Buffer<T>` is not a collection** — it is storage with an
+  addressable extent, `Move` rather than `Duplicate`, and conversion both
+  ways is explicit. So "collections hold values, not places" stands
+  unqualified, with no exception carved into it, and `Buffer<T>`'s own elp
+  face obeys it too: `at(i)` returns a copy and no expression anywhere
+  produces an address.
 - ~~**`Char`**~~ **Resolved** by `strings.md`: `char`, lowercase, one
   Unicode scalar value.

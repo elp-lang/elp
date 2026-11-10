@@ -3,6 +3,9 @@
 // reverse order, with nothing in the language saying so.
 
 import { Error } from elp.types
+// `Buffer<T>` is imported, not atmospheric: it fails `name-resolution.md`'s
+// criterion because no grammar or desugaring produces one.
+import { Buffer } from elp.memory
 import { Window } from .window
 import {
 	VkInstance,
@@ -110,17 +113,18 @@ export fn Renderer.new(window &Window) -> Either<Self, Error> {
 	// written, and the C ABI does not relate the two returns.
 	const instance = instanceSlot ?? throw RenderError.NO_INSTANCE { code = 0 }
 
-	// GAP 3 — the count-then-fill call. The scalar half is settled and the
-	// array half is not.
+	// GAP 3, RESOLVED — the count-then-fill call, now writable.
 	//
-	// `count` is `&Optional<int>` by `memory-model.md` Finding 4, with nothing
-	// invented. The buffer is `&Buffer<VkPhysicalDevice>` against a type that
-	// does not exist — "collections hold values, not places" means there is no
-	// way to hand out an array's backing storage, and this is the one case in
-	// the corpus that needs exactly that.
+	// `count` is `&Optional<int>` by `memory-model.md` Finding 4. The buffer
+	// is `Buffer<Optional<VkPhysicalDevice>>`, which is the same rule at a
+	// second arity: a slot that may be empty, n of them, contiguous. Every
+	// element is `nil` before the call because `Buffer<T>`'s length can only
+	// grow by supplying every element — so there is no uninitialised memory
+	// here and no operation that asserts there isn't.
 	//
-	// Written out so the shape is on the page: the first call passes no buffer
-	// and learns the count, the second fills it.
+	// The first call still passes `null`, which `&Buffer<...>` cannot express;
+	// that is the one piece left open, and it is a signal that one C symbol is
+	// two operations rather than a weakness in the storage design.
 	var count Optional<int> = null
 	vkEnumeratePhysicalDevices(instance, &count, null)
 
@@ -130,13 +134,19 @@ export fn Renderer.new(window &Window) -> Either<Self, Error> {
 		throw RenderError.NO_GPU
 	}
 
-	var gpus = Buffer<VkPhysicalDevice>.withCapacity(found)
+	var gpus = Buffer<Optional<VkPhysicalDevice>>.filled(found, nil)
 	vkEnumeratePhysicalDevices(instance, &count, &gpus)
 
 	// Elided: ~80 lines picking a GPU with a graphics queue family that can
-	// present to this surface. It is `for` over two arrays and asks nothing
+	// present to this surface. It is `for` over two extents and asks nothing
 	// new.
-	const physical = gpus.at(0)
+	//
+	// The unwrap is the same irreducible residual as `instanceSlot` above: the
+	// status code is the only evidence the driver wrote this slot, and the C
+	// ABI does not relate the two returns. A binding package would do it once
+	// in a wrapper returning `[VkPhysicalDevice]`, which is what a wrapper is
+	// for.
+	const physical = gpus.at(0) ?? throw RenderError.NO_GPU
 
 	var surfaceSlot Optional<VkSurfaceKHR> = null
 
