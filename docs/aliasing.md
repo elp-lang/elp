@@ -144,6 +144,43 @@ fixed-width integers, a payload-free enum. Nothing that allocates, so no
 `string`, no `[T]`, no `Buffer<T>`. `Move` and `Sendable`, refcounted like
 its siblings.
 
+**`T` may also be a `Copy` object whose layout fits that word.** Probe 11
+found real code packing a transport flag and a generation counter into one
+integer, because two separate atomics permit a combination that never
+existed to be observed and a single load is the fix. That *defends* the
+word-size restriction — packing is what an implementation does anyway — but
+the hand-rolled form is an `int` plus two shifting accessors, which is
+exactly the code that goes wrong silently:
+
+```elp
+export object Transport {
+	const playing    bool,
+	const generation int32,
+}
+
+Transport implements Copy
+
+const stopped = Transport { playing = false, generation = 0 }
+const transport = Atomic<Transport>.of(stopped)
+```
+
+The constraint is `T implements Copy` **and** `T`'s layout fitting one
+machine word, checked at the use site:
+
+> `Atomic<Transport>` requires `Transport` to fit in 8 bytes; `Transport`
+> is 12 bytes.
+
+That needs the compiler to compute a concrete layout for an object, which
+is the capability `@external` struct fields already demand (probe 10,
+finding 3) arriving from a third direction — so it is affordable, and the
+two should be settled together. `Atomic<int>` and `Atomic<bool>` become the
+degenerate cases of one rule rather than the whole surface.
+
+The word size is a **target** property, so an object that fits on a 64-bit
+target and not on a 32-bit one is a per-target error. That is unpleasant
+and nothing in the design makes it avoidable: the guarantee being bought is
+a single-instruction load.
+
 ```elp
 fn Atomic<T>.load(&self) -> T
 fn Atomic<T>.store(&self, value T)
@@ -197,6 +234,73 @@ and both bear on decisions already recorded:
 - **An owned parameter might be the thing that frees.** So a real-time
   body's parameters may be borrows and `Opaque` cells and never owned
   `Move` values: `&Buffer<T>`, never `Buffer<T>`.
+
+#### Where a deadline body's private state lives
+
+A deadline callback needs state that **persists between calls and is
+private to it** — a read cursor into an event buffer, the generation it
+last applied, whether it was playing on the previous call. Probe 11 found
+all three in production, and found them as plain mutable fields rather
+than atomics, precisely because exactly one thread ever touches them.
+
+elp has nowhere obvious to put them. A local does not survive the call, and
+a package-level variable does not exist — `memory-model.md` forbids globals
+outright. So the state has to arrive through the `void*`, which makes it a
+field of the object the registration passed, and the control thread holds
+that object.
+
+**The resolution is that this is a visibility problem, not a concurrency
+one.** `memory-model.md` already scopes private to the type, reached
+through `self`, so a private field of a render-state type is unreachable
+from anything but that type's own methods. Nothing has to be atomic,
+nothing has to be split, and — the point — nothing on the hot path pays for
+synchronisation it does not need.
+
+The discipline, stated so it can be checked by reading:
+
+- state **shared** across the boundary is an `Atomic<T>`, a `Ring<T>`
+  endpoint or a `Published<T>` endpoint, and lives on the shared half;
+- state **private** to the deadline body is a plain `var` field, private,
+  on a type whose own methods are the only way in.
+
+Writing that as two types behind one registration reads correctly, but the
+split is convention as far as the package boundary: within a package,
+nothing stops a third type reaching the private half. Whether that wants
+enforcement is left open below.
+
+#### And this is why `Atomic<T>` does **not** get the endpoint split
+
+The obvious reading of probe 11's cursor bug — a seek clobbered by the next
+callback's write-back — is that cells want `Ring<T>`'s two-endpoint
+treatment, so that one side writes and the other cannot.
+
+That is the wrong lesson, and the production fix says so. The cursor did
+not get a constrained writer; it **stopped being shared at all**. It became
+private to the deadline body, and what crosses the boundary is a *request*
+that the next callback applies. An endpoint split would have fixed the
+symptom and left a word being written across a thread boundary for no
+reason.
+
+The decisive argument against it is that **multi-writer atomics are the
+normal case**, not an abuse: a CAS on a shared list head, a refcount, a
+work-stealing index — and in that same probe, the transport word, which
+*both* threads compare-exchange. Constraining the general primitive to one
+writer would break every one of those to fix something privacy already
+fixes.
+
+So the split stays where it was earned, and the tiers on an endpoint pair
+are not boilerplate — they state which discipline is being enforced:
+
+| | writing end | reading end | what the tiers enforce |
+|---|---|---|---|
+| `Ring<T>` | `Move` | `Move` | single producer **and** single consumer |
+| `Published<T>` | `Move` | `Copy` | single writer, any number of readers |
+| `Atomic<T>` | one undivided handle | | nothing, deliberately |
+
+`Ring<T>`'s consumer is `Move` because a second consumer races on the read
+index. `Published<T>`'s reader is `Copy` because a seqlock read is
+re-entrant by construction, and several components sampling one playhead is
+the expected use rather than an abuse of it.
 
 #### `Opaque<T>` and the cell kind stay orthogonal
 
@@ -307,8 +411,57 @@ endpoint. `Published<T>`'s **reactive** read is deliberately not settled
 here: it is the only piece that touches `reactivity.md`, and it deserves
 its own pass rather than riding in on a concurrency decision.
 
+#### All speed on the writer, all policy on the reader
+
+Three of probe 11's findings looked like three problems and are one. The
+deadline side must be wait-free and unconditional; the reading side has a
+whole frame, may branch, may retry, and may be wrong without anything
+dying. So **every decision belongs on the reader**, and the writer's only
+job is to be fast.
+
+**Staleness is a reader decision.** An age measures staleness, not elapsed
+time: extrapolating a playhead from its age is right while audio flows and
+wrong the instant it stops, because past some threshold an age stops
+meaning "this much has happened" and starts meaning "the producer died" —
+opposite instructions from the same number. The fix is *not* for the
+publish to carry a threshold, which was the first instinct. The producer
+publishes **its rate**, which it knows; the reader derives a cap from that
+rate and decides what to do past it. The same information, and no policy on
+the hot path.
+
+**Validity is a reader decision.** A position published after playback
+restarted mid-buffer is stale and must not replace the new start's. The
+instinct is a guarded publish — `publish(value, ifEpoch = word)` — and it
+is wrong twice: the epoch belongs to the transport rather than to the
+position, so the primitive would be checking a condition it cannot see, and
+it puts a branch and a re-read on the one thread that must have neither.
+
+Put the epoch **in the payload** instead. The writer publishes a
+`{ frame, generation }` unconditionally; the reader samples the transport
+too, and discards a reading whose generation does not match. So `publish`
+genuinely never fails, the table above is right as recorded, and the
+finding is about how the primitive is used rather than what it is.
+
+**What the reader may *not* do is act on the producer.** A playhead that
+decided playback was over killed the transport during the release tail, so
+a loop never survived its first pass. "All policy on the reader" means
+policy about the *value* — what to show, what to discard, how far to
+extrapolate — and never control over the *producer*.
+
+**And there is no language feature for that.** A read-only endpoint would
+not have helped, because the offending call was on a different object
+entirely; enforcing it needs a capability system, which costs more than
+every bug of this shape put together. It is recorded as a design rule with
+its evidence attached, and that is the honest outcome — the corpus exists
+to find what the language needs, and sometimes the answer is nothing.
+
 #### Still open
 
+- **Whether a deadline body's private state wants enforcement.** Privacy
+  keeps the control thread out of a render cursor, but only as far as the
+  package boundary; inside a package it is convention. A marker meaning
+  "reachable only from an `@abi(.C, realtime)` body" would close it, and
+  may not be worth a concept.
 - **Waiting on the non-deadline side.** A UI thread wants to sleep until
   something arrives, and a deadline thread must not signal a condvar —
   that is a syscall. Polling and a lossy wakeup are the two honest

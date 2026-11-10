@@ -985,9 +985,14 @@ corrects.
    resumes. The working fix caps the run-ahead at about two render buffers.
    Past a threshold an age stops meaning "this much has happened" and starts
    meaning "the producer stopped" — opposite instructions — so handing out a
-   bare duration is a loaded gun. The better fix is for the **producer** to
-   carry the threshold, since it is a property of its own publish rate and the
-   reader is guessing.
+   bare duration is a loaded gun.
+
+   **Resolved** in `aliasing.md` under "All speed on the writer, all policy on
+   the reader" — and the resolution revises this finding's own proposal. The
+   threshold is not the producer's to carry either, because a threshold is
+   policy and the producer is the thread that must not branch. The producer
+   publishes **its rate**, which it alone knows; the reader derives the cap
+   from that rate and decides what to do past it.
 
 2. **A display-link-backed `frame` clock is wrong on iOS**, which kills one
    sentence of that clock's justification. The platform throttles its display
@@ -1044,9 +1049,10 @@ corrects.
 
 **What it opened.**
 
-7. **Single-writer discipline wants the endpoint split for *cells*, not just
-   queues.** `aliasing.md` found that `Move` on a ring's two ends makes SPSC
-   unconstructible rather than documented. The production bug here is the same
+7. ~~**Single-writer discipline wants the endpoint split for *cells*, not just
+   queues.**~~ **Resolved, and the opposite way.** `aliasing.md` found that
+   `Move` on a ring's two ends makes SPSC unconstructible rather than
+   documented. The production bug here is the same
    discipline on a single value: when the control thread moved the play cursor
    itself, a seek landing mid-callback was clobbered by that callback's
    write-back, and a note-on fired after the control thread's all-notes-off
@@ -1055,20 +1061,43 @@ corrects.
    applies. `Atomic<T>` has one undivided handle, so nothing in the language
    expresses that.
 
-8. **Two values must sometimes be read as one, and real code packs them.** A
+   `aliasing.md` **rejects** the split for cells. Multi-writer atomics are the
+   normal case rather than an abuse — a CAS on a list head, a refcount, and
+   the transport word in this very probe, which both threads
+   compare-exchange — so constraining the general primitive would break them
+   all. And the production fix was not a constrained writer: the cursor
+   stopped being shared at all, which makes this a **visibility** problem that
+   private fields already solve, with nothing on the hot path paying for
+   synchronisation it does not need. Recorded as "Where a deadline body's
+   private state lives" and "And this is why `Atomic<T>` does **not** get the
+   endpoint split".
+
+8. ~~**Two values must sometimes be read as one, and real code packs them.**~~
+   **Resolved** — `Atomic<T>` now admits a `Copy` object whose layout fits a
+   machine word, with a use-site size diagnostic, and the layout computation
+   is the one §10 finding 3 already demanded for `@external` struct fields. A
    transport flag and a generation counter in one word, read with a single
    load, because split atomics allow a combination that never existed to be
    observed. That *defends* `Atomic<T>`'s word-size restriction — packing is
    what an implementation does anyway — and argues that `Atomic<T>` should
    accept a **record** that fits a word rather than only a primitive, since
    `Transport { playing bool, generation int32 }` says what the bits mean and
-   an `int` plus two shifting helpers does not.
+   an `int` plus two shifting helpers does not. The residual cost is that word
+   size is a target property, so an object that fits on 64-bit and not on
+   32-bit is a per-target error.
 
-9. **`publish` does not always want to succeed.** The position store is
-   guarded by re-reading the transport word: if playback restarted mid-buffer,
-   this callback's stale position must not replace the new start's.
-   `aliasing.md` says the deadline side's publish never fails, which is true
-   of the mechanism and wrong about the usage.
+9. ~~**`publish` does not always want to succeed.**~~ **Resolved, and the
+   mechanism was right.** The position store is guarded by re-reading the
+   transport word: if playback restarted mid-buffer, this callback's stale
+   position must not replace the new start's.
+
+   The guarded publish — `publish(value, ifEpoch = word)` — is wrong twice:
+   the epoch belongs to the transport rather than to the position, so the
+   primitive would be checking a condition it cannot see, and it puts a branch
+   and a re-read on the one thread that must have neither. The epoch goes in
+   the **payload** instead, and the reader discards a reading whose generation
+   does not match the transport it also sampled. So `publish` never fails
+   after all, and the finding was about usage rather than mechanism.
 
 10. **Production reaches for relaxed ordering, and would lose nothing to
     sequential consistency.** Every atomic in the real sequencer is relaxed
@@ -1083,13 +1112,18 @@ corrects.
     nobody reads for its value, which is the one shape where relaxed is
     genuinely free and seq-cst is genuinely waste.
 
-11. **A view must not get a vote on the thing it is a view of.** The playhead
-    deciding playback was over killed the transport during the release tail,
-    before the sequencer could re-arm, so looping never survived its first
-    pass while the score was on screen. A reader of a `Published<T>` is
+11. ~~**A view must not get a vote on the thing it is a view of.**~~
+    **Resolved as a design rule, with no feature.** The playhead deciding
+    playback was over killed the transport during the release tail, before
+    the sequencer could re-arm, so looping never survived its first pass
+    while the score was on screen. A reader of a `Published<T>` is
     syntactically free to act on what it read, and a read-only endpoint would
     not have helped, because the stop call was on a different object. "Which
-    side may act" is a real axis the language says nothing about.
+    side may act" is a real axis the language says nothing about — and will
+    not, because enforcing it needs a capability system that costs more than
+    every bug of this shape put together. `aliasing.md` records it as the
+    boundary on "all policy on the reader": policy about the *value*, never
+    control over the *producer*.
 
 12. **A derived value that recomputes equal should probably notify nobody** —
     which would make a reactive graph's fan-out depend on `Equatable`. This is
