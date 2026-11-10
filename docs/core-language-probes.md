@@ -1,6 +1,6 @@
 # Core language probes
 
-Eleven programs written to put pressure on the parts of elp the original
+Twelve programs written to put pressure on the parts of elp the original
 corpus never exercised. They are **design probes, not specimens** — they
 use constructs the language does not have, written in the most plausible
 spelling, so the gaps can be read rather than listed.
@@ -953,6 +953,161 @@ nothing to infer from. An `Out<T>` slot type was considered and dropped as
 `&Optional<T>` with extra vocabulary — and because its closest relative,
 `Binding<T>`, is a refcounted reactive cell tied to the cell thread, which
 is machinery that has no business near `sqlite3_open`.
+
+## 11. A real-time thread and a UI — `examples/Playhead`, held locally
+
+The first probe **ported from a real application** rather than invented: the
+playback and rendering loop of a released audio app driving a C synthesiser
+from a platform audio callback.
+
+**The entry is not in this repository.** It derives from closed-source
+work, and this is a public repo, so `examples/Playhead/` is gitignored and
+lives only on the author's machine. What is recorded here are the
+*language* findings, which is the part the design needs; the provenance is
+noted so a reader knows why the one probe that corrected three decisions
+cannot be opened. Everything below is a general real-time engineering
+pattern or an elp conclusion, not an implementation detail of that app.
+
+Its value is that every finding is something that broke in production and
+was fixed, rather than a hazard imagined at a whiteboard. It was written to
+test the `Buffer<T>`, `Atomic<T>`, `Ring<T>`, `@abi(.C, realtime)` and
+`Published<T>` decisions against a real implementation. Three of them it
+corrects.
+
+**What it corrected.**
+
+1. **An age is a measure of staleness, not of elapsed time**, and
+   `Published<T>`/`Aged<T>` as recorded invites the bug. Extrapolating a
+   playhead from its age is right while audio flows and wrong the instant it
+   stops: an interruption, an output route change or a stalled engine freezes
+   the published position, and unbounded extrapolation then runs the line on
+   through music nobody is hearing before snapping it back when sound
+   resumes. The working fix caps the run-ahead at about two render buffers.
+   Past a threshold an age stops meaning "this much has happened" and starts
+   meaning "the producer stopped" — opposite instructions — so handing out a
+   bare duration is a loaded gun. The better fix is for the **producer** to
+   carry the threshold, since it is a property of its own publish rate and the
+   reader is guessing.
+
+2. **A display-link-backed `frame` clock is wrong on iOS**, which kills one
+   sentence of that clock's justification. The platform throttles its display
+   link during the system-gesture gate, so a cold play immediately after a
+   scroll — the most ordinary way a user starts playback — stalls the first
+   frame and reads as a hang. A plain main-queue timer keeps firing and the
+   layer still composites. So `frame`'s contract is **"ticks at roughly
+   display rate"**, not "ticks on vsync", and on `.iOS` the implementation must
+   be a timer. Demand-driven survives untouched, because the battery argument
+   never depended on vsync. The genuinely open part is the **first** tick: it
+   has to be dispatched rather than fired synchronously, and `reactivity.md`
+   says nothing about a write that lands during the mount pass.
+
+3. **`Ring<T>` is not the default shape for a deadline thread.** This probe was
+   expected to be its first corpus use and is not. The strongest design
+   available deletes the concurrency problem instead of solving it: generate
+   the whole event list up front, sort it once, and keep it **immutable** for
+   the duration of playback — then the deadline thread needs no lock, because
+   there is no producer to wait for. In elp that is a `Buffer<MidiEvent>`
+   moved in **by value**, and the move is what makes the immutability a
+   type-level fact rather than a convention, since the control thread no
+   longer has the buffer. `Ring<T>` keeps a narrower justification: live
+   input, where there is nothing to generate up front.
+
+   Twice in this entry the correct real-time answer is immutability rather
+   than synchronisation — the event buffer, and a `Copy` timing table read by
+   both threads. Worth naming as a pattern: on a deadline thread the
+   language's job is mostly to make *"this cannot change"* expressible, and
+   `Copy` plus `Move` already do.
+
+**What it confirmed, and one of them strongly.**
+
+4. **Avoiding a refcount on the audio thread required an unsafe unowned
+   capture, with its safety proof written in a comment.** That is exactly
+   `aliasing.md`'s non-obvious hazard — a refcount decrement reaching zero
+   calls the allocator, which takes a lock — met in production. An ordinary
+   strong capture retains and releases per callback, and the release is the
+   one that can free. The host language had no way to say "borrow this for the
+   callback's lifetime", so the author asserted it unsafely, and the proof was
+   *"no callback can run after the engine is stopped and the node detached"*.
+   elp's `Opaque<T>` no-retain rule was argued from leaks and landed in the
+   same place, with that proof's ordering clause being `Scoped` release order.
+   The strongest single piece of evidence in the entry: the design rule and
+   the shipped workaround agree, and only one of them is checked.
+
+5. **Keeping reinterpretation out of `Buffer<T>`'s identity was right.**
+   Interleaved stereo — the most common real audio layout there is — is
+   expressed by a C call taking *offset and stride as arguments* over one
+   allocation. A `Buffer<T>` that carried a layout would have had to carry
+   this one twice over the same memory.
+
+6. **The host's output buffer is a transient view**, confirming that row of
+   the foreign-pointer table has to be a borrow and not a value.
+
+**What it opened.**
+
+7. **Single-writer discipline wants the endpoint split for *cells*, not just
+   queues.** `aliasing.md` found that `Move` on a ring's two ends makes SPSC
+   unconstructible rather than documented. The production bug here is the same
+   discipline on a single value: when the control thread moved the play cursor
+   itself, a seek landing mid-callback was clobbered by that callback's
+   write-back, and a note-on fired after the control thread's all-notes-off
+   stuck on. The fix was that the deadline thread became the *only* writer and
+   the control thread merely **requests** a start, which the next callback
+   applies. `Atomic<T>` has one undivided handle, so nothing in the language
+   expresses that.
+
+8. **Two values must sometimes be read as one, and real code packs them.** A
+   transport flag and a generation counter in one word, read with a single
+   load, because split atomics allow a combination that never existed to be
+   observed. That *defends* `Atomic<T>`'s word-size restriction — packing is
+   what an implementation does anyway — and argues that `Atomic<T>` should
+   accept a **record** that fits a word rather than only a primitive, since
+   `Transport { playing bool, generation int32 }` says what the bits mean and
+   an `int` plus two shifting helpers does not.
+
+9. **`publish` does not always want to succeed.** The position store is
+   guarded by re-reading the transport word: if playback restarted mid-buffer,
+   this callback's stale position must not replace the new start's.
+   `aliasing.md` says the deadline side's publish never fails, which is true
+   of the mechanism and wrong about the usage.
+
+10. **Production reaches for relaxed ordering, and would lose nothing to
+    sequential consistency.** Every atomic in the real sequencer is relaxed
+    except the transport word, which is acquire/release because it orders the
+    event buffer behind it. The rates are the defence and they are measurable
+    rather than argued: the position is stored about 43 times a second (one
+    render buffer at 1024 frames and 44.1 kHz is 23 ms) and loaded about 60,
+    so a full barrier on ARM is not detectable by any instrument a user owns.
+    The author chose relaxed out of discipline, not measurement — the right
+    instinct in a language that offers the choice, and an irrelevance in one
+    that does not. The single exception worth noting is a liveness counter
+    nobody reads for its value, which is the one shape where relaxed is
+    genuinely free and seq-cst is genuinely waste.
+
+11. **A view must not get a vote on the thing it is a view of.** The playhead
+    deciding playback was over killed the transport during the release tail,
+    before the sequencer could re-arm, so looping never survived its first
+    pass while the score was on screen. A reader of a `Published<T>` is
+    syntactically free to act on what it read, and a read-only endpoint would
+    not have helped, because the stop call was on a different object. "Which
+    side may act" is a real axis the language says nothing about.
+
+12. **A derived value that recomputes equal should probably notify nobody** —
+    which would make a reactive graph's fan-out depend on `Equatable`. This is
+    the real content of the proposed structural-position lint: "which bar is
+    under the playhead" changes a few times a second but is *derived from* a
+    value that changes sixty times a second, so a naive markup `if`
+    re-evaluates at the clock's rate rather than the answer's. Real renderers
+    memoise it by hand.
+
+13. **The cell thread has a deadline too**, and only the audio thread's is
+    marked. 16 ms instead of 23, a dropped frame instead of a click, the same
+    discipline — and `@abi(.C, realtime)` says nothing about a `pure fn`
+    called once per frame from a markup read.
+
+14. **A platform API is a third category** alongside `links` and
+    `dependencies`. The system audio graph is neither a shared library the
+    package claims nor a dependency the build acquires, and
+    `name-resolution.md` has no row for it.
 
 ## Suggested order
 

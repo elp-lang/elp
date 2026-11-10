@@ -66,3 +66,8 @@ buildNumber.properties
 
 # macOS
 .DS_Store
+
+# A probe ported from a real, closed-source application's playback loop. The
+# language findings it produced are recorded in docs/core-language-probes.md
+# section 11; the entry itself stays out of this public repository.
+examples/Playhead/
