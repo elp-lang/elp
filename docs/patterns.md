@@ -103,7 +103,7 @@ is already the opt-in.
 |---|---|
 | a `for` binding | **yes** — `for { key, value } in totals` |
 | a `match` arm pattern | **yes** — it is one of the pattern productions below |
-| a `const`/`var` binding | open; see below |
+| a `const`/`var` binding | **yes** — `const { producer, consumer } = Ring<Event>.of(256)`. See "Destructuring an owned aggregate" |
 | a function parameter | **no.** A signature is an explicit contract and its parameter names are part of it (`generics.md`). Destructuring there would hide the contract behind the implementation's convenience |
 
 ### This resolves `for k, v in map` without a special case
@@ -124,6 +124,47 @@ for { key as category, value as amount } in byCategory(expenses) { ... }
 Longer than the positional form, and that is the trade the ruling makes:
 the reader no longer has to know `Entry`'s field order to know which
 binding is which.
+
+## Destructuring an owned aggregate
+
+`const { producer, consumer } = Ring<Event>.of(256)` is the forcing case
+(`aliasing.md`): one constructor hands back two endpoints, and splitting
+them is what makes a lock-free queue's single-producer precondition a
+property of the types rather than a line in its documentation.
+
+The worry it raises is not the binding form, it is **what happens when the
+aggregate gains a field upstream.** A library adding a third field to
+`Ring<T>` must not cause consumer code to start silently discarding it.
+Three rules, and together they make the hazard absent rather than
+diagnosed:
+
+**1. Destructuring an owned aggregate is exhaustive.** Every field is
+named or explicitly `_`. So the upstream change is a compile error at
+every destructuring site, which is the signal that was wanted. This is the
+same posture as `collections.md` rejecting `..` as a catch-all and leaving
+`_` as the only one.
+
+**2. Destructuring never destroys; it transfers.** Each bound field is
+owned by its binding afterwards. Nothing is implicitly dropped, so there
+is no "silently discards" case left to warn about.
+
+**3. `_` on a `Scoped` field is an error.** Binding it would owe a
+release, and `_` cannot discharge one:
+
+```
+`cleanup` must be released; `_` cannot discharge a `Scoped` field
+```
+
+### It is not reflection, and the direction is why
+
+Field-name destructuring reads like code enumerating a type's shape, which
+is what `macros.md` confines to compile time and keeps out of userland.
+The distinction is the direction information flows: **reflection asks a
+type what it has; a pattern states what you expect and is checked.**
+`@CodeGen` enumerates fields it has never seen and produces declarations
+from them. A pattern produces nothing — it names fields the author
+believes are there, and fails to match if they are not. Rule 1 is what
+makes that failure loud.
 
 ## Optional narrowing by binding
 
@@ -331,9 +372,9 @@ Two rules from elsewhere that the grammar does not show:
 
 ## Open
 
-- **Destructuring in `const`/`var`.** `const { key, value } = entry`
-  follows by symmetry and the corpus never does it. Leaning yes, since
-  adding it later is additive and removing it would not be.
+- ~~**Destructuring in `const`/`var`.**~~ **Resolved** — yes, with the
+  three rules in "Destructuring an owned aggregate". `aliasing.md`'s
+  `Ring<T>` endpoints supplied the corpus evidence that was missing.
 - **Nested record patterns.** `{ amount as { cents } }` and the like.
   Deliberately not in the grammar above; a field binds to a name, not
   to a sub-pattern. Whether that needs to change has no corpus

@@ -208,6 +208,115 @@ level, and it passes. Collapsing the two would mean an `Opaque` variant
 per discipline, and the C side would be carrying information C does not
 have.
 
+### `Ring<T>` — and `Move` turns out to enforce SPSC
+
+A single-producer/single-consumer ring buffer is the pattern a real-time
+thread actually needs, and in practice the hard part is not the atomics.
+Three distinct bugs wear the name "invalidation" and they are fixed in
+three different places:
+
+| | symptom | where the fix is |
+|---|---|---|
+| **payload overwritten** | the consumer holds a reference into a slot, the producer wraps, a read is half-old and half-new | **the API** |
+| **false sharing** | no wrong data — unpredictable latency spikes under load | **layout**: two cache lines |
+| **torn read** | a payload wider than a word, partially written | falls out of the other two |
+
+**The first is answered by a rule chosen for unrelated reasons.** A ring
+must never hand out its interior: `pop` moves the value out, and that is
+what makes the slot releasable. That is "collections hold values, not
+places" (`memory-model.md`), ratified because an API that forgets a
+write-back should be a visible no-op — and forced here by a concurrency
+argument that did not exist at the time.
+
+It also bounds what the view design buys, which is worth stating: **a
+borrow is not a synchronisation primitive.** Making a view borrow-shaped
+stops *this* code from retaining it and does nothing about a producer on
+another core overwriting the slot. So a ring must not expose one, and
+"views are borrows" is not a licence to hand one out here.
+
+#### The two ends are two values
+
+```elp
+const { producer, consumer } = Ring<Event>.of(capacity = 256)
+```
+
+Each endpoint is `Move`, so it lives in exactly one place. A thread cannot
+push unless it *holds* the producer, which means the type in hand says
+which side of the fence the code is on — not a comment, not a naming
+convention.
+
+And the find worth recording: **SPSC's precondition is exactly what `Move`
+already means.** "Single producer, single consumer" is something every
+ring buffer library documents and none can enforce; here a second producer
+is unconstructible. The tier system enforces the invariant for free.
+
+That pairs with `@abi(.C, realtime)`: the endpoint says where the code is
+*locally*, and the propagating check says where it is *transitively* —
+naming the chain when an allocation appears nine frames deep. Neither
+alone is the answer to "which thread is producing this work".
+
+The binding form needs `patterns.md`'s "Destructuring an owned aggregate",
+and the accessor alternative (`.producer()` / `.consumer()`) is worse:
+"call each exactly once" is unenforceable, which gives back the guarantee
+the split exists to provide.
+
+#### The surface
+
+```elp
+fn RingProducer<T>.push(&self, value T) -> Optional<T>   // nil on success, the value back if full
+fn RingConsumer<T>.pop(&self) -> Optional<T>             // nil if empty
+```
+
+`push` returning the value on failure is the honest signature for a
+bounded queue that may carry `Move` payloads: it cannot be dropped on the
+floor, and it certainly cannot be freed on a deadline thread.
+
+`&self` rather than `&var self`, consistent with `examples/Buffer`:
+mutation goes through the cell.
+
+**`T` needs no constraint.** A `Copy` payload looked necessary to keep
+`pop` allocation-free, and it is not: the ring only ever *moves* — in on
+push, out on pop — and a move never allocates for any tier. So
+`Ring<Buffer<float>>` works, which matters, because that is the
+garbage-return channel. A deadline thread swaps in a new allocation and
+pushes the old one back; a thread that may block pops it and lets it die
+there. That closes the one pattern a deadline thread otherwise cannot
+express, since it must not free.
+
+Capacity rounds to a power of two so wraparound is a mask and the counters
+may wrap freely.
+
+#### `Published<T>` is the other half of the same asymmetry
+
+A ring is for events that must not be missed. State where **only the
+latest value matters** — a playhead, a peak meter — wants the opposite
+trade, and it gets a different primitive because the two ends are not
+symmetric: the deadline side must be wait-free, while the side reading it
+may retry, having no deadline. That is a seqlock, and exploiting the
+asymmetry lifts the word-size restriction `Atomic<T>` carries.
+
+| | must not miss any | only the latest matters |
+|---|---|---|
+| | `Ring<T>` | `Published<T>` |
+| deadline side | `push`, may fail when full | `publish`, never fails |
+| other side | `pop` | `sample` |
+| payload | any `T`, moved in and out | any `Copy` `T` |
+
+Both are single-writer and both get that from `Move` on the writing
+endpoint. `Published<T>`'s **reactive** read is deliberately not settled
+here: it is the only piece that touches `reactivity.md`, and it deserves
+its own pass rather than riding in on a concurrency decision.
+
+#### Still open
+
+- **Waiting on the non-deadline side.** A UI thread wants to sleep until
+  something arrives, and a deadline thread must not signal a condvar —
+  that is a syscall. Polling and a lossy wakeup are the two honest
+  answers and neither is designed.
+- **Multi-producer** is deliberately out of scope. `Move` enforcing SPSC
+  is a feature, not a limitation worked around; MPSC is a different type
+  with a different cost.
+
 ## Three conformances, and only one rule
 
 `Copy`, `Duplicate`, `Move`. There is **no `Shared` interface** — see
