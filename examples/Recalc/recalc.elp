@@ -1,0 +1,156 @@
+// The engine, and the answer to the question the probe was written for.
+
+import { Reference, Value, Formula } from .types.reference
+import { Graph, Node } from .internal.graph
+import { Shared, Confined } from elp.concurrency
+
+export object Recalc {
+	var graph Graph,
+}
+
+Recalc implements Move
+
+export fn Recalc.new() -> Self {
+	return Self { graph = .empty() }
+}
+
+export fn Recalc.enter(&var self, at Reference, formula Formula) {
+	self.graph.put(at, formula)
+}
+
+// Evaluation walks *forward* edges and memoises into `cached`. The reverse
+// edges were already used, at edit time, to decide what to clear.
+export fn Recalc.valueAt(&var self, at Reference) -> Either<Value, RecalcError> {
+	return self.evaluate(at, [])
+}
+
+fn Recalc.evaluate(&var self, at Reference, visiting [Reference]) -> Either<Value, RecalcError> {
+	// FINDING 2, from the other side: this is the cycle check, and it is
+	// cheap *because* the edges are addresses. `visiting` is an array of
+	// `Copy` values on the stack, and comparing two `Reference`s is comparing
+	// two ints. Had the edges been handles, identity comparison would have
+	// been needed — and `operators.md` has `==` with no `===`, so there is no
+	// spelling for "the same object" in the language at all.
+	//
+	// Which is worth recording as a consequence rather than a coincidence:
+	// **a language with no reference equality is pushed towards graphs whose
+	// nodes have names.** The two decisions support each other and neither
+	// cited the other.
+	if visiting.contains(at) {
+		return Err(RecalcError.CIRCULAR { at })
+	}
+
+	const node = self.graph.nodes.get(at) ?? return Ok(.EMPTY)
+
+	match node.cached {
+		.SOME(hit) -> return Ok(hit)
+		.NONE -> {}
+	}
+
+	const computed = match node.formula {
+		.LITERAL { of } -> of
+
+		.SUM { over } -> {
+			var total = 0
+
+			for precedent in over {
+				const term = self.evaluate(precedent, visiting.copy().append(at))?
+
+				total = total + match term {
+					.NUMBER { amount } -> amount
+					.EMPTY -> 0
+				}
+			}
+
+			Value.NUMBER { amount = total }
+		}
+	}
+
+	self.graph.nodes.set(at, node.copyWith(cached = computed))
+
+	return Ok(computed)
+}
+
+export enum RecalcError implements Error {
+	CIRCULAR { at Reference },
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GAP 4 — the real answer about reference cycles, and it is narrower than
+// "refcounting leaks cycles" and wider than "it cannot happen".
+//
+// elp reclaims memory by reference counting and has no tracing collector:
+// `Shared<T>`, `Confined<T>`, `Synchronized<T>` and `Atomic<T>` are refcounted
+// handles, and `memory-model.md` has no destructors, no `defer` and nothing at
+// scope exit. There is no `Weak` and no `unowned`, and no decision recorded
+// about omitting one. So the question is whether a cycle is reachable.
+//
+// **Every cycle must pass through a cell.** A plain elp value is owned, and
+// ownership is a tree — `Graph` owns its `Node`s and no `Node` owns anything,
+// so each node's count is one, always. Shared ownership only exists in the
+// four cell types, so they are the only candidate edges in a loop.
+//
+// Taking them one at a time:
+//
+//   - `Atomic<T>` holds a word-sized `Copy` payload, which cannot be a handle.
+//     No edge is possible.
+//   - `Shared<T>` has `.new(v)` and `.get()` and **no `.set`**. A cycle has to
+//     be *closed after construction*, because neither node exists when the
+//     other is built — so an immutable cell can never be the closing edge.
+//   - `Confined<T>`/`Synchronized<T>` are mutable, so they can close one. But
+//     `Confined<T>`'s only write is `.set(whole)`, which needs `T` to be
+//     `Copy`, and a type holding a `Confined` is `Move` field-wise — which is
+//     GAP 1's wall, and it is what makes the natural cyclic graph
+//     unconstructible.
+//
+// Three of the four are closed off, and two of those by rules that had nothing
+// to do with cycles. That is why this probe's realistic graph came out
+// acyclic without trying.
+//
+// **But the needle can be threaded**, and here is the whole leak:
+//
+//   export object Knot {
+//       const peer Optional<Shared<Confined<Knot>>>,
+//   }
+//
+//   Knot implements Copy    // `Shared<T>` is `Copy` for ANY `T`
+//
+//   const a = Confined<Knot>.new(Knot { peer = nil })
+//   const b = Confined<Knot>.new(Knot { peer = .SOME(.new(a.alias())) })
+//
+//   a.set(Knot { peer = .SOME(.new(b.alias())) })   // closes the loop
+//
+// `a` and `b` now keep each other alive forever. The shape works because
+// `Shared<T>` being `Copy` for any `T` — argued in `aliasing.md` from "an
+// immutable alias is observationally identical to a copy", which is true and
+// is about *observation*, not about *reachability* — lets a `Copy` payload
+// carry a mutable handle. So `Confined<T>`'s `Copy` requirement is satisfied
+// by a type that transitively owns a mutable cell.
+//
+// The honest summary, and the reason this is a gap and not a crisis:
+//
+//   - a cycle is **constructible** and leaks silently, with no diagnostic;
+//   - it is **not reachable by accident** in the shapes the corpus produces,
+//     because the ordinary graph is an arena and the ordinary cell payload is
+//     a plain record;
+//   - the one route runs through `Shared<Confined<T>>`, which is an odd thing
+//     to write and an easy thing to spot;
+//   - and the usual escape hatch, `Weak<T>`, is **undesigned**, so a program
+//     that genuinely needs a back-edge between cells has no spelling for one.
+//
+// What this probe recommends is therefore *not* adding `Weak<T>` now. It is
+// recording the constructibility argument above, because the argument is the
+// valuable part: three of the four cells are closed off by rules already
+// ratified, and if a future decision loosens any of them — a mutable
+// `Shared`, a `.set` that does not need `Copy`, an `Atomic` over a handle —
+// it reopens this without anyone noticing. That is exactly the kind of thing
+// a doc exists to catch.
+//
+// GAP 5 — and a leak has no observable symptom in this language. There is no
+// destructor, so "was this released?" is not a question a program can ask and
+// not a thing a test can assert. `Move` gives at-most-once release and never
+// at-least-once, which `memory-model.md` states for FFI handles; the same
+// property applies to a cycle of elp cells, with the difference that nobody
+// has written it down. A leak-detection story is undesigned.
+
+// vim: ft=kotlin

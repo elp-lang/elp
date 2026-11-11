@@ -534,9 +534,84 @@ to find what the language needs, and sometimes the answer is nothing.
   something arrives, and a deadline thread must not signal a condvar —
   that is a syscall. Polling and a lossy wakeup are the two honest
   answers and neither is designed.
+- **`Weak<T>`.** Undesigned, and deliberately left so — see "Reference
+  cycles" below for why the shapes that would need it are mostly
+  unconstructible, and for what would reopen the question.
 - **Multi-producer** is deliberately out of scope. `Move` enforcing SPSC
   is a feature, not a limitation worked around; MPSC is a different type
   with a different cost.
+
+## Reference cycles, and why three of the four cells cannot form one
+
+elp reclaims memory by **reference counting**. There is no tracing
+collector anywhere in the design, and `memory-model.md` has no destructors,
+no `defer` and nothing at scope exit. So a cycle of handles is never
+collected, and there is no `Weak<T>` or `unowned` spelling — which was never
+a decision, just an absence.
+
+`examples/Recalc` was written to find where the corpus leaks one. The answer
+is narrower than "refcounting leaks cycles" and wider than "it cannot
+happen".
+
+**Every cycle must pass through a cell.** A plain elp value is owned and
+ownership is a tree, so shared ownership exists only in the four cell types
+and they are the only candidate edges in a loop. Taken one at a time:
+
+| | can it be an edge in a cycle? |
+|---|---|
+| `Atomic<T>` | **no** — the payload is a word-sized `Copy` value and cannot be a handle |
+| `Shared<T>` | **no** — `.new(v)` and `.get()`, no `.set`. A cycle must be *closed after construction*, since neither node exists while the other is built, so an immutable cell can never be the closing edge |
+| `Confined<T>` | only awkwardly — its write is `.set(whole)`, needing `T` to be `Copy`, and a type holding a `Confined` is `Move` field-wise |
+| `Synchronized<T>` | same, through `.update` |
+
+Three are closed off, and two of them by rules argued for on entirely
+unrelated grounds. That is why the probe's realistic graph came out acyclic
+without trying: the natural handle-per-node graph is **unconstructible**,
+because a cell cannot hold a mutable `Move` aggregate, and what is left is
+an arena keyed by address whose ownership is a tree.
+
+**The needle can still be threaded**, and the whole leak is this:
+
+```elp
+export object Knot {
+	const peer Optional<Shared<Confined<Knot>>>,
+}
+
+Knot implements Copy    // `Shared<T>` is `Copy` for ANY `T`
+
+const a = Confined<Knot>.new(Knot { peer = nil })
+const b = Confined<Knot>.new(Knot { peer = .SOME(.new(a.alias())) })
+
+a.set(Knot { peer = .SOME(.new(b.alias())) })   // closes the loop
+```
+
+It works because `Shared<T>` is `Copy` for any `T`, which was argued above
+from "an immutable alias is observationally identical to a copy" — true, and
+about *observation* rather than *reachability*. So a `Copy` payload may
+transitively own a mutable cell, and `Confined<T>`'s `Copy` requirement is
+satisfied by exactly the thing it was meant to exclude.
+
+So: a cycle is constructible and leaks silently with no diagnostic; it is
+not reachable by accident in the shapes the corpus produces; the one route
+is an odd thing to write and an easy thing to spot; and a program that
+genuinely needs a back-edge between cells has no spelling for one.
+
+**The recommendation is not to add `Weak<T>` now.** It is to keep the
+argument above, because the argument is the load-bearing part: three of the
+four are closed off by decisions already made, and a future loosening — a
+mutable `Shared`, a `.set` that does not require `Copy`, an `Atomic` over a
+handle — would reopen this with nobody noticing.
+
+### A leak has no observable symptom
+
+Worth stating because it bounds every answer above. There are no
+destructors, so "was this released?" is not a question a program can ask or
+a test can assert. `Move` giving at-most-once release and never
+at-least-once is recorded for FFI handles; the same property holds for a
+cycle of elp cells and had not been written down. Leak detection is
+undesigned, and that is a tooling question rather than a language one — but
+it is the reason the cycle above is worth catching by reading rather than at
+runtime.
 
 ## Three conformances, and only one rule
 

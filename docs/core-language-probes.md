@@ -1,6 +1,6 @@
 # Core language probes
 
-Twelve programs written to put pressure on the parts of elp the original
+Thirteen programs written to put pressure on the parts of elp the original
 corpus never exercised. They are **design probes, not specimens** — they
 use constructs the language does not have, written in the most plausible
 spelling, so the gaps can be read rather than listed.
@@ -1219,6 +1219,95 @@ policies — the extrapolation cap and the stale-generation discard — ended up
 in one `pure fn`, which is the clearest available statement of why finding 11
 needs no feature: legitimate reader policy is a total function of the value,
 and the illegitimate move was never a policy at all but a call to `stop()`.
+
+## 12. Reference cycles — `examples/Recalc`
+
+Written to answer one question: **elp reclaims memory by reference counting
+and has no `Weak`, so where does the corpus leak a cycle?** A spreadsheet
+recalculation graph is the sharpest honest place to ask, because the
+back-edge is not a design preference — incremental recalc needs forward
+edges to evaluate a cell and reverse edges to know who to dirty when it
+changes, and every real spreadsheet has both.
+
+The answer is narrower than "refcounting leaks cycles" and wider than "it
+cannot happen". `aliasing.md` carries the constructibility argument; what
+follows is what the probe found on the way to it.
+
+1. **The natural cyclic graph is unconstructible, and not by a rule about
+   cycles.** A graph of `Confined<Node>` handles, with each node holding its
+   precedents and dependents, is the textbook `weak var` site. It cannot be
+   written: `Node` holds `[Confined<Node>]` so `Node` is `Move` field-wise,
+   and §11 finding 17 established that a cell holding a `Move` aggregate
+   cannot have its fields updated at all. `node.dependents.append(other)`
+   has no spelling.
+
+   Two rules argued for on unrelated grounds — "collections hold values, not
+   places" and `Confined<T>`'s `Copy` requirement — close off the shape
+   between them. This is the second probe to hit that wall from a direction
+   its author did not expect, which is the strongest evidence available that
+   it is a real rule rather than an artefact.
+
+2. **What is left is an arena keyed by address, and its ownership is a
+   tree.** The `Graph` owns every `Node` and no `Node` owns anything, so a
+   node's reference count is one, always. The probe needed no cell at all:
+   a spreadsheet model turns out not to need aliasing.
+
+3. **The cycle does not disappear, it changes category.** `A1 = B1` with
+   `B1 = A1` is still a cycle — now in the *formula* graph rather than the
+   *object* graph, which makes it a domain error a spreadsheet must detect
+   and report rather than a silent leak of two allocations. Keys cost a hash
+   lookup per edge and turn an invisible memory bug into a visible
+   user-facing one.
+
+4. **No reference equality is what pushes graphs towards named nodes.**
+   The cycle check compares two `Reference`s, which is comparing two ints.
+   Had the edges been handles it would have needed identity comparison, and
+   `operators.md` has `==` with no `===` — so there is no spelling for "the
+   same object" in the language at all. Two decisions supporting each other,
+   neither of which cited the other.
+
+5. **A cycle *is* constructible, through one narrow shape.**
+   `Shared<Confined<T>>`: `Shared<T>` is `Copy` for any `T`, so a `Copy`
+   payload may transitively own a mutable cell, which satisfies
+   `Confined<T>`'s `Copy` requirement with exactly the thing it was meant to
+   exclude. Three lines, leaks forever, no diagnostic. The argument for
+   `Shared<T>` being `Copy` — that an immutable alias is observationally
+   identical to a copy — is true and is about observation rather than
+   reachability.
+
+6. **GAP — `Weak<T>` is undesigned**, so a program that genuinely needs a
+   back-edge between cells has no spelling for one. The recommendation is
+   *not* to add it now: the shapes that would want it are mostly
+   unconstructible, and the valuable artefact is the record of which
+   decisions close them off, since a future loosening would reopen this
+   silently.
+
+7. **GAP — a leak has no observable symptom.** No destructors means "was
+   this released?" is not a question a program can ask or a test can assert.
+   `Move` giving at-most-once and never at-least-once release is recorded for
+   FFI handles; the same holds for a cycle of elp cells and had not been
+   written down. Leak detection is undesigned.
+
+8. **GAP — `Map.get` on a `Move` value has no stated meaning.** A value read
+   out of a collection is a copy with an explicit write-back (§8, resolved),
+   but every such read in the corpus until now was of a `Copy` value.
+   `Node` is `Move`, so "a copy" has to mean a `Duplicate`, a move-out, or an
+   error, and nothing says which.
+
+9. **GAP — recursion over a user-authored graph has no bound.** Dirty
+   propagation terminates because `cached` is already `nil`, which is correct
+   and implicit. elp has no stated depth limit, no tail-call guarantee, and
+   no way to say "bounded by the graph being acyclic" when the graph is
+   user-authored and may not be. The same shape as `examples/QuadTree`'s
+   recursion gap.
+
+### An inconsistency this probe tripped over
+
+`nil` and `null` are both in the corpus — 117 uses across 23 files against
+41 across 5. The `null` files are the FFI-heavy ones (`SqliteBinding`,
+`VulkanTriangle`, `Playhead`), which may be a deliberate distinction between
+elp's empty `Optional` and C's null pointer, or may be drift. Nothing records
+an intent either way. `nil` is used here.
 
 ## Suggested order
 

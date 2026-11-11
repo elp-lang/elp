@@ -1,0 +1,210 @@
+// The dependency graph, written twice: once the way the question assumed, and
+// once the way the language permits.
+//
+// The question this probe was written for: **elp reclaims memory by reference
+// counting and has no `Weak`, so where does the corpus leak a cycle?** A
+// spreadsheet recalculation graph is the sharpest honest place to ask, because
+// the back-edge is not a design preference. To recalculate incrementally you
+// need both directions: forward edges to evaluate a cell, reverse edges to
+// know who to dirty when it changes. Every real spreadsheet has both.
+
+import { Reference, Value, Formula } from ..types.reference
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GAP 1 — the version the question assumed, and it does not compile.
+//
+// The obvious first draft makes the graph a graph *of handles*:
+//
+//   export object Node {
+//       const at          Reference,
+//       var   formula     Formula,
+//       var   precedents  [Confined<Node>],   // cells I read
+//       var   dependents  [Confined<Node>],   // cells that read me
+//   }
+//
+// `A1 = B1 + 1` then means A1's `precedents` holds a handle to B1 and B1's
+// `dependents` holds a handle to A1. That is a refcount cycle, both nodes are
+// unreachable once the sheet is dropped, and with no tracing collector and no
+// `Weak` it leaks for the life of the process. In Swift this is the textbook
+// `weak var` site; in Rust it is `Weak<RefCell<Node>>`.
+//
+// Except it cannot be written, and the reason is a rule found yesterday from a
+// completely different direction. `Node` holds `[Confined<Node>]`, so `Node`
+// is `Move`, field-wise. And `aliasing.md` now records that **a cell holding a
+// `Move` aggregate cannot have its fields updated at all**: `Confined<T>`'s
+// only write is `.set(whole)`, which needs `T` to be `Copy`, and a `Move`
+// field cannot be taken out of the `&T` that `.get()` returns.
+//
+// So `node.dependents.append(other)` has no spelling. The cyclic graph is not
+// rejected by a rule aimed at cycles — it is unconstructible as a side effect
+// of two rules that were argued for on other grounds entirely. That is the
+// finding, and it arrived as corroboration from `examples/Playhead` rather
+// than from anything here.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// The version that works: edges are **keys**, not handles.
+export object Node {
+	const at Reference,
+
+	var formula Formula,
+	var cached  Optional<Value>,
+
+	// Forward edges — cells this one reads. Derived from `formula` and kept
+	// here so evaluation does not re-walk it.
+	var precedents [Reference],
+
+	// Reverse edges — cells that read this one. The back-edge the question was
+	// about, and it is a list of `Copy` addresses rather than of handles.
+	var dependents [Reference],
+}
+
+Node implements Move
+
+export object Graph {
+	var nodes Map<Reference, Node>,
+}
+
+Graph implements Move
+
+export fn Graph.empty() -> Self {
+	return Self { nodes = .new() }
+}
+
+// FINDING 1 — the arena pattern is not a workaround here, it is what the
+// language's existing rules leave standing, and it is acyclic.
+//
+// Two unrelated decisions push every graph in elp into this shape:
+//
+//   - **"collections hold values, not places"** (`memory-model.md`) means a
+//     `Map` cannot hand out an interior reference, so a node cannot be reached
+//     *through* the graph and retained.
+//   - **a cell cannot hold a mutable `Move` aggregate** (`aliasing.md`) means
+//     the handle-per-node graph above cannot be built.
+//
+// What is left is an arena keyed by address, which is exactly what a Rust
+// programmer reaches for to avoid `Rc<RefCell<Node>>` — and the ownership here
+// is a *tree*: the `Graph` owns every `Node`, and no `Node` owns anything. The
+// reference count of a `Node` is one, always.
+//
+// So the leak the question anticipated is not reachable from the data model.
+// That is a stronger answer than "add `Weak`", and it was not designed.
+
+// FINDING 2 — and the cycle does not disappear, it changes category.
+//
+// `A1 = B1` with `B1 = A1` is still a cycle. It is now a cycle in the
+// *formula* graph rather than in the *object* graph, which means it is a
+// **domain error a spreadsheet must detect and report** — `#CIRCULAR!` — and
+// not a silent leak of two allocations.
+//
+// That is the trade stated plainly: keys cost a hash lookup per edge traversal
+// and turn an invisible memory bug into a visible user-facing one. For this
+// domain that is obviously right, and it generalises further than it looks,
+// because most back-edges in real programs are in graphs that *also* need
+// cycle detection for their own reasons.
+
+export fn Graph.put(&var self, at Reference, formula Formula) {
+	// GAP 2 — read-modify-write-back, once per edge, and it is the accepted
+	// verbosity rather than a new problem. `core-language-probes.md` settled
+	// that a value read out of a collection is a copy and the write-back is
+	// explicit, on the grounds that a cheaper spelling can be added later and
+	// hidden aliasing cannot be walked back.
+	//
+	// What is new is that `Node` is `Move`, so "a copy" has to mean a
+	// `Duplicate` here, and nothing has said whether `Map.get` on a `Move`
+	// value is `Duplicate`, a move-out, or an error. Three plausible answers
+	// and the corpus has only ever read `Copy` values out of collections.
+	const previous = self.nodes.get(at)
+
+	// Unsubscribe from the old precedents, subscribe to the new ones. This is
+	// the half of the work the reverse edges exist for.
+	match previous {
+		.SOME(node) -> self.detach(at, node.precedents)
+		.NONE -> {}
+	}
+
+	const precedents = referencesOf(formula)
+
+	self.nodes.set(at, Node {
+		at,
+		formula,
+		cached  = nil,
+		precedents,
+		dependents = previous?.dependents ?? [],
+	})
+
+	self.attach(at, precedents)
+	self.invalidate(at)
+}
+
+// `&var self` rather than a cell, because the graph is a plain owned value and
+// `collections.md` already settles that a mutating method borrows mutably.
+// Note what is absent: no cell, no refcount, nothing shared. A spreadsheet
+// model does not need aliasing at all, which is the quiet half of FINDING 1.
+fn Graph.attach(&var self, dependent Reference, to [Reference]) {
+	for precedent in to {
+		const node = self.nodes.get(precedent)
+
+		match node {
+			.SOME(n) -> self.nodes.set(precedent, n.copyWith(
+				dependents = n.dependents.copy().append(dependent),
+			))
+
+			// A formula may reference an empty cell, which is not an error —
+			// it is a cell that does not exist yet. So the edge is recorded
+			// against a node created on demand.
+			.NONE -> self.nodes.set(precedent, Node {
+				at         = precedent,
+				formula    = .LITERAL { of = .EMPTY },
+				cached     = .EMPTY,
+				precedents = [],
+				dependents = [dependent],
+			})
+		}
+	}
+}
+
+fn Graph.detach(&var self, dependent Reference, from [Reference]) {
+	for precedent in from {
+		match self.nodes.get(precedent) {
+			.SOME(n) -> self.nodes.set(precedent, n.copyWith(
+				dependents = n.dependents.copy().removing(dependent),
+			))
+			.NONE -> {}
+		}
+	}
+}
+
+// Dirty this cell and everything downstream of it. The reverse edges are the
+// entire point, and this is the walk that would have been a pointer chase
+// through `Rc`s in the version GAP 1 could not express.
+fn Graph.invalidate(&var self, at Reference) {
+	match self.nodes.get(at) {
+		.NONE -> {}
+		.SOME(node) -> {
+			self.nodes.set(at, node.copyWith(cached = nil))
+
+			// GAP 3 — this recursion is unbounded on a cyclic sheet, and the
+			// termination argument is `cached` already being `nil`. That is
+			// correct and it is *implicit*, which is the same shape as
+			// `examples/QuadTree`'s recursion gap: elp has no stated depth
+			// limit, no tail-call guarantee, and no way to say "this recursion
+			// is bounded by the graph being acyclic" when the graph is
+			// user-authored and may not be.
+			for dependent in node.dependents {
+				match self.nodes.get(dependent) {
+					.SOME(d) -> if d.cached != nil { self.invalidate(dependent) }
+					.NONE -> {}
+				}
+			}
+		}
+	}
+}
+
+pure fn referencesOf(formula Formula) -> [Reference] {
+	return match formula {
+		.LITERAL -> []
+		.SUM { over } -> over
+	}
+}
+
+// vim: ft=kotlin

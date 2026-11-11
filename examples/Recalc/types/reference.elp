@@ -1,0 +1,31 @@
+// A cell address and the two things a formula is made of.
+//
+// Everything here is deliberately small and `Copy`, and that turns out to be
+// the whole reason this probe answers the way it does.
+
+export object Reference {
+	const column int,
+	const row    int,
+}
+
+Reference implements Copy
+
+export enum Value {
+	EMPTY,
+	NUMBER { amount int },
+}
+
+Value implements Copy
+
+// Two formula kinds are enough. `SUM` is the one that creates an edge.
+export enum Formula {
+	LITERAL { of Value },
+	SUM { over [Reference] },
+}
+
+// `Formula` is `Move`, field-wise, because `[Reference]` is not `Copy` —
+// `aliasing.md` is explicit that an array is never `Copy` even when its
+// element is. Nothing here declares that and it is load-bearing two files
+// along, so it is worth saying out loud.
+
+// vim: ft=kotlin
