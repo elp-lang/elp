@@ -1,0 +1,361 @@
+// `tree.elp` rewritten under one hypothesis, to find out whether the corner is
+// real.
+//
+// ─────────────────────────────────────────────────────────────────────────────
+// THIS FILE IS A HYPOTHESIS, NOT CORPUS. Nothing imports it and `Package.elp`'s
+// entry does not reach it.
+//
+// `memory-model.md`'s "One hole, reported nine times" claims that `&var self`
+// on a method receiver is the only mutable access in the language, that nine
+// gaps across four probes are that one absence, and that the fix is a transform
+// closure rather than Rust-style projection chains. The prediction attached to
+// it was that **recursion supplies the depth, so one closure per source level
+// covers any runtime depth, and no projection syntax is needed.**
+//
+// `tree.elp` is where that has to be falsified, because it is the deepest real
+// mutation in the corpus. So: the same quad-tree, written with the four
+// mechanisms the hypothesis allows and nothing else.
+//
+//   1. `&var self`                       — exists today
+//   2. `&var T` as a non-receiver param  — queued, `memory-model.md` leans yes
+//   3. `cell.update(fn (&var T) -> R)`   — proposed
+//   4. `collection.update(i, fn (&var T) -> R)` — proposed, named in
+//      `memory-model.md`'s "Collections hold values, not places" as the cheaper
+//      spelling and judged purely additive
+//
+// Explicitly forbidden, to make the test mean something: `&var self.root`,
+// `&var children[i]`, `*node = ...`, and any other place handed out by
+// projection.
+// ─────────────────────────────────────────────────────────────────────────────
+
+import { Point, Rect } from .types.geometry
+
+const CAPACITY = 4
+
+export object Entry<T> {
+	const at    Point,
+	const value T,
+}
+
+// FINDING 1 — GAP 1 is independent of all of this, and `tree.elp` picked the
+// wrong type to demonstrate it on.
+//
+// GAP 1 says a recursive value type has no size. True in general — but not of
+// *this* enum. Both variants hold an array, and an array must be a heap buffer
+// to be growable, so the indirection GAP 1 asks for is already there and the
+// size is a tag plus a buffer handle. `QuadNode<T>` lays out fine.
+//
+// The type that actually needs GAP 1's answer is one with a *direct* recursive
+// field — `object ListNode { var next Optional<ListNode> }` — and the corpus
+// has no probe holding one. So GAP 1 stands as a question and `tree.elp` is
+// not its evidence, which is worth correcting because GAP 1 is cited as the
+// reason this probe exists.
+export enum QuadNode<T> {
+	LEAF { entries [Entry<T>] },
+	BRANCH { children [QuadNode<T>] },
+}
+
+export object QuadTree<T> {
+	const bounds Rect,
+	var root     QuadNode<T>,
+}
+
+export fn QuadTree<T>.new(bounds Rect) -> Self {
+	return Self { bounds, root = .LEAF { entries = [] } }
+}
+
+// FINDING 2 — the corpus already relies on receiver-position projection, in
+// every file, undeclared. This is the finding that makes the rest work.
+//
+// GAP 2 asks whether `&var self.root` exists. Under the hypothesis it does not.
+// But `self.root.insert(...)` must, and it is the same capability:
+//
+//     self.nodes.set(at, node)          // examples/Recalc, Graph.put
+//     self.lines.get().copy().insert()  // examples/Buffer, via aliasing.md
+//
+// `self.nodes.set(...)` is a mutating method on a field, so it needs `&var
+// self.nodes` — a projection, in receiver position, spelled as a method call.
+// The corpus does this constantly and nothing records that it is a projection.
+//
+// So the language already has one-level projection; what Finding 4 forbids is
+// the *parameter* spelling of the thing receiver syntax already does. That
+// reframes GAP 2 from "does elp need projection" to "elp has projection in one
+// position and the question is whether that position is enough".
+//
+// It is, for a field. The next function is where it stops being enough.
+export fn QuadTree<T>.insert(&var self, at Point, value T) -> bool {
+	if !self.bounds.contains(&at) {
+		return false
+	}
+
+	return self.root.insert(&self.bounds, at, value)
+}
+
+// FINDING 3 — the hypothesis holds, and the thing it needs is exactly the
+// transform closure, exactly at a collection element.
+//
+// `insertInto` is now a method on `QuadNode<T>`, which costs nothing —
+// `functions.md` already puts a method in its receiver's package and this file
+// owns `QuadNode`. The LEAF arm needs no new mechanism. The BRANCH arm is the
+// whole test, because descending means mutating `children[i]`, and
+// `collections.md`'s "collections hold values, not places" says `children[i]`
+// is a **copy**. So:
+//
+//     children[i].insert(&quads[i], at, value)     // silently mutates a copy
+//
+// …is not an error under any rule currently written down. It is a no-op that
+// reads correctly, which is the one outcome `memory-model.md` said the
+// values-not-places rule was chosen to avoid: *"an API that forgets the
+// write-back is a visible no-op rather than an invisible aliasing bug."* A
+// mutating method on an element is an **invisible** no-op, and the rule does
+// not cover it.
+//
+// `collection.update(i, fn)` is what covers it, and the closure is where the
+// recursion happens. Note what the depth costs: **one closure, in the source,
+// for a descent of any runtime depth**, because the recursion is in `insert`
+// and each frame opens one. That was the prediction and it holds.
+export fn QuadNode<T>.insert(&var self, bounds &Rect, at Point, value T) -> bool {
+	match self {
+		// GAP 3 unchanged, and promoted: `entries` must bind as
+		// `&var [Entry<T>]`. The hypothesis does not fix matching through a
+		// reference — it *depends* on it, so GAP 3 is a prerequisite rather
+		// than a peer. Nothing else here is reachable until it is answered.
+		.LEAF { entries } -> {
+			if entries.length() < CAPACITY {
+				entries.append(Entry<T> { at, value })
+				return true
+			}
+
+			self.split(bounds)
+			return self.insert(bounds, at, value)
+		}
+
+		.BRANCH { children } -> {
+			const quads = bounds.quadrants()
+			var i = 0
+
+			while i < 4 {
+				if quads[i].contains(&at) {
+					return children.update(i, fn (&var child) -> bool {
+						return child.insert(&quads[i], at, value)
+					})
+				}
+
+				i += 1
+			}
+
+			return false
+		}
+	}
+}
+
+// FINDING 4 — GAP 4 resolves by precedent once the receiver is the node.
+//
+// GAP 4 asked what the spelling is for replacing a whole value through `&var`,
+// and listed `*node = ...`, `node.replace(...)` and plain assignment. With the
+// function as a method it is assignment to `self`, and both prior arts permit
+// exactly that: Rust writes `*self = ...` with `&mut self`, Swift writes
+// `self = ...` in a `mutating` method on a struct. So the spelling is `self =`,
+// it needs no new concept, and the question only looked hard because the
+// function was free and the value arrived as a parameter.
+fn QuadNode<T>.split(&var self, bounds &Rect) {
+	match self {
+		.LEAF { entries } -> {
+			const quads = bounds.quadrants()
+
+			var children [QuadNode<T>] = [
+				.LEAF { entries = [] },
+				.LEAF { entries = [] },
+				.LEAF { entries = [] },
+				.LEAF { entries = [] },
+			]
+
+			for entry in entries {
+				var i = 0
+
+				while i < 4 {
+					if quads[i].contains(&entry.at) {
+						// `tree.elp` wrote this as a `match` on `children[i]`
+						// binding `bucket` and appending to it — the same
+						// invisible no-op as FINDING 3, in a file that flagged
+						// five other gaps and not this one. One `update`, and
+						// the inner `match` goes away with it.
+						children.update(i, fn (&var child) {
+							match child {
+								.LEAF { entries as bucket } -> bucket.append(entry)
+								_ -> nil
+							}
+						})
+
+						i = 4
+					}
+
+					i += 1
+				}
+			}
+
+			self = .BRANCH { children }
+		}
+
+		.BRANCH { children } -> nil
+	}
+}
+
+export fn QuadTree<T>.query(&self, area &Rect) -> [Entry<T>] {
+	var found [Entry<T>] = []
+
+	// GAP 5 resolves outright: `&var found` is mechanism 2, and the leaning in
+	// `memory-model.md` is already that the spelling has to exist. Nothing new
+	// is needed and the 16 call sites were never the hard part.
+	self.root.collect(&self.bounds, area, &var found)
+
+	return found
+}
+
+fn QuadNode<T>.collect(&self, bounds &Rect, area &Rect, out &var [Entry<T>]) {
+	if !bounds.intersects(area) {
+		return
+	}
+
+	match self {
+		.LEAF { entries } -> {
+			for entry in entries {
+				if area.contains(&entry.at) {
+					out.append(entry)
+				}
+			}
+		}
+
+		.BRANCH { children } -> {
+			const quads = bounds.quadrants()
+			var i = 0
+
+			while i < 4 {
+				// FINDING 5 — the READ side has its own hole, and copy-on-write
+				// is what fills it. This is the finding that was not expected.
+				//
+				// `children[i]` is a copy. On the write side that was an
+				// invisible no-op; on the read side it is worse — it is
+				// **correct and quadratic**. A `QuadNode<T>` contains
+				// `[QuadNode<T>]`, so copying one copies a subtree, once per
+				// level, for a walk that mutates nothing at all.
+				//
+				// There are two ways out and only one of them is cheap:
+				//
+				//   - an indexed *borrow*, `&children[i]`, which is what
+				//     `tree.elp` wrote and which is a place on the read side —
+				//     so values-not-places would need an exception, and an
+				//     immutable one is admittedly a much smaller ask;
+				//   - **copy-on-write**, under which `children[i]` is O(1), the
+				//     walk never writes, and so no copy is ever made.
+				//
+				// So CoW is not only an ergonomic answer to `Duplicate`'s deep
+				// copy. It is what makes a read-only descent over a recursive
+				// value type tractable at all, and that argument is entirely
+				// independent of the write surface. `aliasing.md` assessed CoW
+				// as a complement to `.update`; this is a second, unrelated
+				// reason to want it, and it is the stronger one.
+				self.childAt(i).collect(&quads[i], area, out)
+				i += 1
+			}
+		}
+	}
+}
+
+// GAP 8 — and the helper that would paper over FINDING 5 cannot be written
+// either, for a third unrelated reason.
+//
+// The obvious move is to put the indexed read behind a method, so that
+// `collect` calls `self.childAt(i)` and the place never appears at a call site.
+// It does not type:
+//
+//     fn QuadNode<T>.childAt(&self, i int) -> &Self {
+//         match self {
+//             .BRANCH { children } -> return &children[i]
+//             .LEAF -> ???                        // no child, and no spelling
+//         }
+//     }
+//
+// A LEAF has no child `i`. The two honest return types are both unavailable —
+// `Optional<&Self>` is barred because `memory-model.md` forbids a field holding
+// a borrow, and there is no `unreachable`/`trap` expression, which is why
+// `tree.elp:113` returns a bogus `false` with a comment explaining that the
+// line cannot be reached.
+//
+// So: `[]` trapping and `get` returning an `Optional` is `collections.md`'s
+// answer for a *value*, and neither form exists for a borrow. Three separate
+// decisions — values-not-places, no borrow in a field, no unreachable
+// expression — meet at one four-line function. Left unwritten rather than
+// faked, and `collect` above calls it anyway to keep FINDING 5 honest about
+// what it needs.
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FINDING 6 — the `&var` form collapses `.update` and `.with` into one method.
+//
+// `Synchronized<T>` carries two closures split by direction:
+//
+//     .update(fn (T) -> T)         // read-modify-write
+//     .with(fn (&T) -> R) -> R     // read, return something derived
+//
+// `children.update(i, fn (&var child) -> bool { … })` above is both at once: it
+// mutates in place *and* returns the closure's value. So the signature the
+// hypothesis wants is one method, `update(fn (&var T) -> R) -> R`, and the
+// split by direction was an artifact of the transform having to hand a whole
+// value back. Smaller surface, and it is the same signature for a cell, a
+// collection element and a map entry.
+//
+// FINDING 7 — and the transform cannot be `pure`, which reopens the cycle fork
+// from a direction `examples/Recalc` could not see.
+//
+// `aliasing.md` proposes `update(pure fn (T) -> T)`, and the reasoning is
+// sound for a lock: the body must not reach into another cell or block, and
+// `pure`'s existing "no external calls" rule supplies that from a mechanism
+// that already exists rather than by restricting a closure body by position.
+//
+// It cannot hold here. Every `update` in this file calls a method —
+// `child.insert(...)`, `bucket.append(...)` — because the recursion *is* the
+// body. A `pure` transform cannot recurse, and a recursive descent is the
+// entire reason the mechanism is wanted.
+//
+// So either the three `update`s differ in purity, which needs justifying as a
+// surface inconsistency, or `pure` comes off the transform generally. And if it
+// comes off, `.alias()` inside a `Confined<T>` transform is permitted, which is
+// the branch of `aliasing.md`'s fork where **every edge of a handle graph
+// leaks and `Weak<T>` becomes mandatory**.
+//
+// `examples/Recalc` left that fork open because nothing there could decide it.
+// A tree that recurses can, and it leans hard: the lock is what justified
+// `pure`, and only one of the three sites has a lock.
+//
+// GAP 7 — a transform closure that consumes a `Move` capture, exactly once.
+//
+// `insert`'s closure captures `value T` and hands it to `child.insert`. If `T`
+// is `Move` the capture is consumed, which is Rust's `FnOnce`. `memory-model.md`
+// Finding 3 governs capturing by value through `Copy`/`Move` but says nothing
+// about how many times a closure may run, and `update` running its transform
+// exactly once is the property that makes a `Move` capture sound here. Nothing
+// states it.
+//
+// ─────────────────────────────────────────────────────────────────────────────
+// VERDICT — the prediction holds, and the corner is not where it looked.
+//
+// Of `tree.elp`'s six gaps: GAP 2 reframes (projection exists, in receiver
+// position), GAP 4 resolves by precedent (`self = …`), GAP 5 resolves outright
+// (mechanism 2), GAP 1 is independent and was mis-evidenced, GAP 3 is promoted
+// to a prerequisite, and GAP 6 is untouched. No projection syntax was needed at
+// any point, and the depth cost is one closure per source level.
+//
+// The hypothesis is about the **write** side and it survives the deepest
+// mutation in the corpus. What it does not cover is the read side, and GAP 8 is
+// the sharper version of FINDING 5: the write hole has a fix that is purely
+// additive, and the read hole runs into three ratified decisions at once.
+//
+// What the probe found that was not predicted: a mutating method on a
+// collection element is an invisible no-op today (FINDING 3), the read side
+// needs CoW for a reason unrelated to the write surface (FINDING 5), the two
+// `Synchronized` closures collapse into one (FINDING 6), and the transform
+// cannot be `pure`, which leans the `Weak<T>` fork towards mandatory
+// (FINDING 7).
+// ─────────────────────────────────────────────────────────────────────────────
+
+// vim: ft=kotlin

@@ -293,6 +293,58 @@ and a re-borrow of a `&var` parameter mean. Cell-thread confinement does
 not help: it rules out *interleaving*, and this is straight-line
 aliasing inside one turn.
 
+### What re-running it under the transform-closure hypothesis found
+
+`examples/QuadTree/tree-places.elp` rewrites the whole tree using only `&var
+self`, `&var T` as a parameter, and an `update(fn (&var T) -> R) -> R` on cells
+and collection elements — with `&var self.root`, `&var children[i]` and
+`*node = …` forbidden, so that the result means something. The prediction in
+`memory-model.md`, "One hole, reported nine times", was that recursion supplies
+the depth and no projection syntax is needed. **It holds**, and the gaps move:
+
+- **GAP 2 reframes.** The corpus already relies on receiver-position
+  projection, in every file, undeclared — `self.nodes.set(at, node)` is a
+  mutating method on a field, so it needs `&var self.nodes`. The language has
+  projection in one position; Finding 4 forbids the *parameter* spelling of
+  what receiver syntax already does.
+- **GAP 4 resolves by precedent.** With the function as a method on the node,
+  the spelling is `self = .BRANCH { … }`. Rust permits `*self = …` with
+  `&mut self`, Swift permits `self = …` in a `mutating` method. It only looked
+  hard because the function was free and the value arrived as a parameter.
+- **GAP 5 resolves outright** — `&var found` is the queued parameter spelling
+  and nothing else is needed.
+- **GAP 3 is promoted to a prerequisite** rather than a peer. The hypothesis
+  does not fix matching through a reference, it *depends* on it.
+- **GAP 1 is independent, and this probe is not its evidence.** Both
+  `QuadNode<T>` variants hold an array, and an array must be a heap buffer to
+  grow, so the indirection is already there and the enum lays out fine. The
+  type that needs GAP 1's answer has a *direct* recursive field
+  (`var next Optional<ListNode>`), and no probe holds one.
+
+And four things that were not predicted:
+
+- **A mutating method on a collection element is an invisible no-op today.**
+  `children[i].insert(…)` mutates a copy, and no written rule forbids it.
+  `memory-model.md` chose values-not-places so that *"an API that forgets the
+  write-back is a visible no-op rather than an invisible aliasing bug"* — a
+  mutating method on an element is the invisible kind, and the rule does not
+  reach it. `tree.elp` itself does this in `split` and flagged five other gaps
+  without noticing.
+- **The read side has its own hole, and copy-on-write is what fills it.**
+  `children[i]` being a copy is an invisible no-op when writing and **correct
+  and quadratic** when reading: copying a `QuadNode<T>` copies a subtree, once
+  per level, for a walk that mutates nothing. Under CoW it is O(1) and the walk
+  never writes, so no copy is ever made. That is a reason to want CoW entirely
+  independent of the write surface, and a stronger one.
+- **GAP 8 — and the helper that would hide it cannot be written.** Putting the
+  indexed read behind `childAt(i) -> &Self` fails three ways at once: a LEAF has
+  no child, `Optional<&Self>` is barred because a field may not hold a borrow,
+  and there is no `unreachable` expression — which is why `tree.elp:113`
+  returns a bogus `false` with a comment. `[]` trapping and `get` returning an
+  `Optional` is the answer for a *value*; neither form exists for a borrow.
+- **The transform cannot be `pure`**, which leans a fork `examples/Recalc` left
+  open. See §12 finding 18.
+
 ### Matching through a reference
 
 Every corpus match so far scrutinised an owned value. `insertInto`
@@ -1376,6 +1428,29 @@ not stated.
     the argument that a cell's write surface was never decided — it is an
     unfinished edit from the `examples/Pipeline` migration, which corrected
     `Synchronized<T>` and left `Confined<T>` alone.
+
+18. **And §4's re-run leans the fork.** `aliasing.md` proposes
+    `update(pure fn (T) -> T)`, justified by the lock: the body must not reach
+    into another cell, and `pure`'s existing no-external-calls rule supplies
+    that without restricting a closure body by position. It cannot hold for a
+    recursive descent — every `update` in `tree-places.elp` calls a method,
+    because the recursion *is* the body. So either the three `update`s differ
+    in purity, needing justification as a surface inconsistency, or `pure`
+    comes off generally — and if it comes off, `.alias()` inside a transform is
+    permitted, every edge of a handle graph leaks, and `Weak<T>` is mandatory.
+    Only one of the three sites has a lock, which is what justified `pure`.
+
+19. **GAP — a transform that consumes a `Move` capture, exactly once.**
+    `memory-model.md` Finding 3 governs capturing by value through
+    `Copy`/`Move` but says nothing about how many times a closure may run, and
+    `update` invoking its transform exactly once is what makes a `Move` capture
+    sound. Rust's `FnOnce`; nothing states it here.
+
+20. **The two `Synchronized` closures collapse into one.** `update(fn (T) -> T)`
+    and `with(fn (&T) -> R) -> R` were split by direction because a transform
+    had to hand a whole value back. `update(fn (&var T) -> R) -> R` is both at
+    once, and it is the same signature for a cell, a collection element and a
+    map entry.
 
 ### An inconsistency this probe tripped over
 

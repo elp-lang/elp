@@ -963,6 +963,24 @@ than for 16 call sites, and its stated leaning — that the spelling has to
 exist and the call sites are what Finding 4 forbids — the thing to ratify
 first.
 
+**Tested, and it holds.** `examples/QuadTree/tree-places.elp` rewrites the
+deepest mutation in the corpus with projection forbidden, and needs none: the
+recursion supplies the depth, so one closure appears in the source per level of
+*nesting*, not per level of descent. Of that probe's six gaps, one reframes
+(the corpus already uses receiver-position projection in every file —
+`self.nodes.set(at, node)` needs `&var self.nodes`), two resolve, one is
+promoted to a prerequisite, one turns out to be independent and
+mis-evidenced, and one is untouched.
+
+**One caveat, and it is not in this section's favour.** The hypothesis is about
+the write side. The read side has a separate hole: `children[i]` being a copy
+is an invisible no-op when writing and *correct and quadratic* when reading,
+since copying a node copies a subtree once per level. The write hole's fix is
+purely additive; the read hole runs into three ratified decisions at once
+(values-not-places, no borrow in a field, no `unreachable` expression), and the
+cheap way out is copy-on-write rather than an indexed borrow. See that probe's
+FINDING 5 and GAP 8.
+
 ## `Buffer<T>` — contiguous storage, and where an address may exist
 
 The rule above leaves one thing unsayable, and it is correct for every
