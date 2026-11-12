@@ -695,6 +695,116 @@ worse — that one is a question about a value that exists.
 `handles.elp` GAP 7 has the demonstration, which is an ordinary graph
 `invalidate` holding a borrow across a recursion that comes back round.
 
+### Prior art — Rust, Go and Swift all solve this, two of the three ways are closed
+
+Recorded because the comparison is cheap to get wrong from memory and the
+clashes are not obvious.
+
+| | mutate shared state in place | reference cycles |
+|---|---|---|
+| Rust | `RefCell::borrow_mut() -> RefMut<'_, T>`, a **guard** deref'ing to `&mut T`; runtime borrow flag, panic on conflict. Also `replace_with<F: FnOnce(&mut T) -> T>` | `Rc`/`Weak`, `upgrade() -> Option<Rc<T>>`. No collection — you leak. For *graphs*, the idiom is an **arena of indices** (petgraph, slotmap), because the handle graph is miserable |
+| Go | pointers into GC'd memory; `node.F = append(...)` directly. Sharing is a `sync.Mutex` in the struct | collected by the tracing GC. Go 1.24 added `weak.Pointer[T]` and `runtime.AddCleanup` — for caches, not cycles. Note `SetFinalizer` **never runs for an object in a cycle**, which is part of why `AddCleanup` exists |
+| Swift | classes mutate directly through a reference under ARC; structs get `mutating` methods plus **copy-on-write** collections. Also `inout` parameters and `_modify` accessors. Exclusivity enforced statically where possible, dynamically where not, trapping | `weak` (optional, side table, zeroed at dealloc) and `unowned` (non-optional, traps), `unowned(unsafe)` for UB-with-a-comment. No collection |
+
+**All three separate mutating a place from replacing a value, and elp has
+only the second.** There are exactly three mechanisms in the prior art for
+the first, and elp's position on each is already on record:
+
+| mechanism | who | elp |
+|---|---|---|
+| a guard | Rust `RefMut`, Swift's dynamic exclusivity | **rejected** — invisible yield points, above |
+| an `&mut`/`inout` parameter | Rust, Swift | **queued**, and `memory-model.md` leans yes |
+| a transform closure | Rust `replace_with`, `Synchronized<T>.update` | **already in the language** |
+
+So the answer needed here is not a new idea; it is the third mechanism
+reaching `Confined<T>`, with Rust's signature rather than the one proposed
+above — `fn (&var T) -> T` keeps the payload in the cell, which is why
+`replace_with` has no hole to re-enter.
+
+**Where the prior art would clash:**
+
+- **Guards are rejected for a good reason that does not extend to closures.**
+  A guard's lifetime spans statements, and a yield inside it is invisible. A
+  transform's critical section is syntactically total. That distinction is
+  this document's own argument for the closure form, and it survives.
+- **Swift's `weak` would collide with the realtime rule, which nobody has
+  noted.** `weak` needs a side table and must zero every weak reference at
+  deallocation. `@abi(.C, realtime)` already forbids a refcount decrement
+  reaching zero, because deallocation takes a lock. `Weak<T>` makes release
+  *strictly more expensive* — a lock plus a walk of N weak refs — in a
+  language whose sharpest probe is an audio callback.
+- **`unowned`'s niche is already covered.** `examples/Playhead` FINDING 5 is
+  shipped `unowned(unsafe)` used to dodge refcount traffic on the audio
+  thread, and `Opaque<Cell<T>>` plus no-retain plus `Scoped` ordering is the
+  designed replacement. If `Weak<T>` ever lands it needs no `unowned` sibling.
+- **`==` with no `===` becomes a cost rather than a convergence.** All three
+  have reference identity (`Rc::ptr_eq`, `===`, pointer `==`) and all three
+  need it for graph work — visited sets, dedup, cycle detection. A `Weak<T>`
+  that upgrades but cannot be compared for identity is a strange object.
+- **elp is the only one of the four where a leak is invisible to the
+  program.** Rust has `Drop`, Swift `deinit`, Go `AddCleanup`; all three can
+  assert "this was released" and so all three have a leak *testing* story.
+  That is what makes their tolerance of leaked cycles survivable, and it is
+  why "A leak has no observable symptom", below, is not a minor note.
+- **The arena is a vindication, not a limitation.** What elp's rules force is
+  what a Rust programmer reaches for voluntarily.
+
+### Copy-on-write, and whether invisibility can be paid for with a diagnostic
+
+Swift's CoW is the obvious answer to the `Duplicate` row of the table above,
+and the objection to it is that `.copy()` is explicit here *so that the cost
+is visible at the call site* — CoW makes the explicit call O(1) and moves the
+cost to an invisible write. The question is whether that invisibility can be
+bought back with a diagnostic instead. Mostly yes, with three refinements and
+one hard limit.
+
+**1. CoW should be a property of three stdlib types, not of the `Duplicate`
+tier.** If `.copy()` on a `Duplicate` user type became lazy, the conformance
+would be making a claim about *when* that it cannot keep. Swift does not do
+that either — CoW lives in the stdlib collections, not in a protocol. Scoped
+to `[T]`, `Map` and `string`, the conformance system does not move at all and
+explicit-`.copy()`-shows-the-cost stays true everywhere a user wrote the type.
+
+**2. The diagnostic should be gated on the type's computed cost, not on
+runtime sharedness.** Whether a refcount is 1 is a runtime property, so a
+lint claiming "this will copy" cannot be honest. A lint gated on layout can
+be: *"a copy-on-write of `Document` may copy 2.4 MB."* The machinery already
+exists — `Atomic<T>`'s requirement is enforced with a use-site diagnostic
+naming the computed size ("`Transport` is 12 bytes"), and it is the same
+layout pass. This is that diagnostic one tier softer, an error becoming a
+named lint, which `diagnostics.md`'s noisy-by-default-and-filtered model is
+built for. The honest claim is *if this copies it will hurt*, which is the
+useful one.
+
+Worth noting which of the expensive shapes actually is expensive. Large and
+contiguous is the bad case. **Recursive is the good case** — a CoW tree
+copies one node per write, which is path-copying, i.e. a persistent data
+structure, and is the reason anyone wants CoW in the first place.
+
+**3. One place a lint is not enough, and it is already handled.** A CoW write
+is a **conditional allocation**, invisible at the write site and dependent on
+a runtime refcount. `@abi(.C, realtime)` forbids allocation outright, and
+`diagnostics.md` keeps the soundness floor non-configurable — so this cannot
+be a lint there, it has to be an error. It does not need a new rule:
+`memory-model.md` deliberately keeps `Buffer<T>` out of the collections, the
+realtime path uses `Buffer<int16>` rather than `[int16]`, and so a CoW type
+never reaches a realtime body. A decision made about storage identity turns
+out to be what keeps latent allocation off the audio thread.
+
+**And CoW does not replace `.update` — it complements it.** In the cell
+idiom, `c.set(c.get().copy().insert(…))`, the original is still *in the cell*
+during the `.copy()`, so the refcount is at least two and it copies anyway.
+CoW makes collections cheap to pass and assign; it does nothing for mutating
+a cell's payload. `.update` is the load-bearing fix, and CoW is what makes it
+cheap everywhere else. Granted both, `examples/Buffer` stops duplicating
+every line per keystroke; granted only CoW, it does not.
+
+**One convergence worth flagging.** A CoW lint that wants to be more precise
+than layout has to ask "can this value be aliased from anywhere else" — which
+is a reachability analysis. So is the `pure`/`.alias()` fork above. So is
+`Shared<T>` being `Copy` for any `T`. Three separate questions now want one
+notion of reachability, and the language has none.
+
 ### A leak has no observable symptom
 
 Worth stating because it bounds every answer above. There are no

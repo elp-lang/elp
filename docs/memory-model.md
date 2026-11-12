@@ -893,6 +893,76 @@ spelling (`map.get(k)` yielding a mutable place, or an `update(k, fn)`
 helper) can be built in elp later without changing the semantics. A
 language rule that hands out hidden aliases cannot be walked back.
 
+## One hole, reported nine times — there is no place you can hand out
+
+Written after `examples/Recalc` found a cell cannot mutate a `Move`
+aggregate, which turned out to be the ninth report of a single absence. It
+belongs here rather than in `aliasing.md` because the absence is in this
+file's subject, and because Finding 4 is where it starts.
+
+**`&var self` on a method receiver is the only mutable access in the
+language.** Finding 4 settled that `&x` needs no mutable spelling because
+the choice is determined by callee usage, and that is right — *for a
+parameter*. What it was taken to mean is that elp needs no notion of a
+mutable place anywhere, and the consequences landed in places Finding 4
+never looked at. Mutable places do exist internally, as the inferred `&mut
+T`; what does not exist is any way for **a library type to expose one**.
+`&var self` is the sole exposure, and it is receiver-only and whole-value.
+
+Every one of these is that absence, and they were filed as nine unrelated
+gaps across four probes:
+
+| report | where |
+|---|---|
+| `&var self.root` — a projection into a field | `core-language-probes.md`, "Mutable paths into an interior node" |
+| `&var` to a local, and re-borrowing a `&var` parameter | same |
+| matching through a reference | same |
+| whole-value assignment through a reference | `examples/QuadTree` GAP 4 |
+| collections hold values, not places | above, in this file |
+| `&var T` as a non-receiver parameter, 16 call sites | Open, in this file |
+| a cell's only write is whole-value | `aliasing.md`, "the loosening is already indicated" |
+| `Map.get` on a `Move` value has no meaning | `core-language-probes.md` §12 |
+| a `Move` resource inside a cell cannot be released | `examples/Playhead` GAP 6 |
+
+Three things follow, and they are the reason this is worth a section.
+
+**1. It is not a corner, it is an unfinished edit.** A cell's write surface
+was never decided. `aliasing.md` records that `Synchronized<T>` got
+`.update(fn (T) -> T)` as a *correction*, made while migrating
+`examples/Pipeline`. `Confined<T>` predates that correction and never
+received it. One cell was revised and the other was not, and the asymmetry
+has been reasoned backwards into a principle since.
+
+**2. The fix is already parked in this file.** "Collections hold values, not
+places" accepts its verbosity on the grounds that *"the cheaper spelling
+(`map.get(k)` yielding a mutable place, or an `update(k, fn)` helper) can be
+built in elp later without changing the semantics."* That is the same fix the
+cell needs, named and judged purely additive, one type away from where it is
+wanted. What was never done is notice that the two are one thing.
+
+**3. Confinement is being used as a general answer to aliasing questions and
+is not one.** `aliasing.md` justifies the cell's `.get()`/`.set()` pair
+because the cell thread makes the sequence atomic. `core-language-probes.md`
+had already answered that argument for a different probe: *"Cell-thread
+confinement does not help: it rules out interleaving, and this is
+straight-line aliasing inside one turn."* Confinement orders turns. It says
+nothing about two live mutable paths within one.
+
+**What this does not excuse.** The reason guards were rejected —
+`aliasing.md`'s invisible yield points — is a good reason, and it applies to
+any mutable place whose lifetime spans statements. So the exposure wanted
+here is not Rust's `RefMut` or Swift's `inout`-by-default; it is the
+lexically bounded form the corpus already reached for twice, a transform
+closure, whose critical section is syntactically total. Rust's
+`RefCell::replace_with<F: FnOnce(&mut T) -> T>` is that shape and is the one
+to copy, because the payload never leaves the cell and so there is no hole to
+re-enter.
+
+Which makes the `&var T` Open item above load-bearing for nine gaps rather
+than for 16 call sites, and its stated leaning — that the spelling has to
+exist and the call sites are what Finding 4 forbids — the thing to ratify
+first.
+
 ## `Buffer<T>` — contiguous storage, and where an address may exist
 
 The rule above leaves one thing unsayable, and it is correct for every

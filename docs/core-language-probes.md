@@ -1366,6 +1366,17 @@ not stated.
     arena — which is why findings 10–15 are about what the language *permits*,
     a different question from what a program should do.
 
+17. **And it is the ninth report of one absence.** `&var self` on a method
+    receiver is the only mutable access in the language, so no library type
+    can hand out a mutable place. "Mutable paths into an interior node" in
+    §4 is the same hole from a spatial tree; `Map.get` on a `Move` value,
+    `examples/QuadTree`'s GAP 4, "collections hold values, not places", the
+    `&var T` parameter, and `examples/Playhead`'s GAP 6 are the rest.
+    Tabulated in `memory-model.md`, "One hole, reported nine times", with
+    the argument that a cell's write surface was never decided — it is an
+    unfinished edit from the `examples/Pipeline` migration, which corrected
+    `Synchronized<T>` and left `Confined<T>` alone.
+
 ### An inconsistency this probe tripped over
 
 `nil` and `null` are both in the corpus — 117 uses across 23 files against
