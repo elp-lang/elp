@@ -1301,6 +1301,71 @@ follows is what the probe found on the way to it.
    user-authored and may not be. The same shape as `examples/QuadTree`'s
    recursion gap.
 
+### What re-running it against one proposed addition found
+
+`examples/Recalc/internal/handles.elp` writes the graph finding 3 said was
+unconstructible, assuming `Confined<T>.update(fn (T) -> T)`. Findings 1–9
+above are all correct and finding 3's conclusion is **conditional**, which was
+not stated.
+
+10. **The write surface, not the cycle rule, is the defect.** `Synchronized<T>`
+    has `.update(fn (T) -> T)`; `Confined<T>` has `.get()`/`.set()` and
+    nothing else, and no `Confined` `.update` appears anywhere in the corpus.
+    `.update` does a second thing unrelated to locking — it moves the payload
+    out and back, never duplicating it — so a read-modify-write today costs one
+    record copy for a `Copy` payload, **a deep copy of the whole payload** for
+    a `Duplicate` one, and is impossible for a `Move` one. The middle row is
+    `examples/Buffer`'s `self.lines.get().copy().insert(...)`: a shared mutable
+    text buffer duplicating every line per keystroke. One defect — shared
+    mutable state must be transitively `Copy`, or pay a deep copy per write,
+    or be unexpressible — reported four times (§11 finding 17, Playhead's
+    GAP 6, this probe's GAP 1, `examples/Buffer`).
+
+11. **`aliasing.md`'s justification for the asymmetry covers a different
+    claim.** It argues the `.get()`/`.set()` pair is *permissible* on a
+    confined cell because the cell thread makes the sequence atomic. That is
+    not an argument that `.update` is *unnecessary*, and the doc ran the two
+    together.
+
+12. **Under `.update`, every edge is a cycle.** Not a circular formula — the
+    graph is deliberately bidirectional, so one acyclic `A1 = B1` leaves A1
+    holding a handle to B1 and B1 holding one to A1. The leak stops being the
+    `Shared<Confined<T>>` needle and becomes every parent link, observer
+    registration and doubly-linked list. So **the cell write surface and
+    `Weak<T>` are one decision**, recorded in two places as if independent.
+
+13. **The fork is whether `.alias()` is a side-effectful call.** `aliasing.md`
+    proposes `update(pure fn (T) -> T)`. Closing an edge needs `b.alias()` in
+    the transform body; `functions.md`'s example establishes that such a
+    transform may *capture*, so captures are not the question. If `pure` is
+    observational, `.alias()` is allowed and every edge leaks; if it is about
+    reachability, `.alias()` is rejected, the finding-3 result survives, and
+    the thing `.update` was wanted for still works — a buffer insert captures
+    no handle. The effect system is undesigned and this is the first thing
+    asking it a real question.
+
+14. **And it is the same conflation twice.** `Shared<T>` is `Copy` for any `T`
+    because an immutable alias is *observationally* identical to a copy —
+    a claim about observation settling a question about reachability, and the
+    reason the `Knot` needle exists. Deciding observation-versus-reachability
+    once, for both sites, is worth more than either answer.
+
+15. **GAP — `.update` empties the cell, which is a worse failure mode than the
+    one it replaces.** For the transform's duration the cell holds nothing, so
+    a transform reaching its own cell observes a hole rather than a stale
+    value. `Synchronized<T>` gets away with the same structure because
+    re-entering a held lock deadlocks loudly; `Confined<T>` has no lock, and
+    atomicity is what makes the hole observable from inside. Not contrived —
+    an ordinary graph `invalidate` holds a borrow across a recursion that
+    comes back round, with nothing syntactic marking it.
+
+16. **The handle graph loses on its own terms anyway.** A formula names
+    addresses, so it needs the address-to-node map *and* two handle arrays per
+    node, where the arena needs only the map. It buys a pointer chase instead
+    of a hash lookup. Even with `.update` granted this probe would choose the
+    arena — which is why findings 10–15 are about what the language *permits*,
+    a different question from what a program should do.
+
 ### An inconsistency this probe tripped over
 
 `nil` and `null` are both in the corpus — 117 uses across 23 files against

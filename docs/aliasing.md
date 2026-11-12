@@ -602,6 +602,99 @@ four are closed off by decisions already made, and a future loosening — a
 mutable `Shared`, a `.set` that does not require `Copy`, an `Atomic` over a
 handle — would reopen this with nobody noticing.
 
+### And the loosening is already indicated, from a different direction
+
+That last sentence turned out to be a prediction with a date on it.
+`examples/Recalc/internal/handles.elp` re-ran the probe against one proposed
+addition and the answer inverts, so the result above must be read as
+*conditional on a cell's only write being whole-value* rather than as settled.
+
+The addition is `Confined<T>.update(fn (T) -> T)`, by symmetry with
+`Synchronized<T>`, and the case for it has nothing to do with cycles.
+Pricing a read-modify-write by the payload's tier:
+
+| payload | how it is spelled today | cost per write |
+|---|---|---|
+| `Copy` | `c.set(c.get().copyWith(…))` | one record copy |
+| `Duplicate` | `c.set(c.get().copy().insert(…))` | **deep copy of the whole payload** |
+| `Move` | — no spelling exists — | impossible |
+
+The middle row is `examples/Buffer`'s `self.lines.get().copy().insert(...)`,
+quoted approvingly in the Open item below: a shared mutable text buffer
+duplicating every line on every keystroke. The bottom row is the `Move`
+aggregate finding above. Stated as one defect rather than three reports:
+**mutation of shared state goes through a cell, and a cell's only write is
+whole-value, so shared mutable state is either transitively `Copy`, or costs
+a deep copy per write, or is unexpressible.** `.update` closes all three at
+O(1), because it moves the payload out and back instead of duplicating it.
+
+The justification for the current asymmetry does not cover this. It is that
+*"a `.get()`/`.set()` pair over a lock is still logically racy… `Confined<T>`
+can expose that pair precisely because the cell thread makes the sequence
+atomic"* — which argues the pair is **permissible** on the confined cell, not
+that `.update` is **unnecessary** there. Two claims, run together.
+
+**What that does to the cycle answer.** With `.update`, the handle-per-node
+graph is constructible, and the leak stops being a needle:
+
+```elp
+sheet.link(A1, B1)        // A1 = B1, an entirely acyclic formula
+
+A1.precedents == [B1]     // A1 holds a handle to B1
+B1.dependents == [A1]     // B1 holds a handle to A1
+```
+
+A bidirectional graph makes **every edge a cycle**. Not a circular formula —
+*any* formula naming a second cell, and equally every parent link, observer
+registration and doubly-linked list. So `Weak<T>` goes from unnecessary to
+mandatory. **The decision not to design `Weak<T>` and the decision not to
+give `Confined<T>` an `.update` are one decision**, and they were recorded in
+two places as if independent.
+
+**And the fork is one word wide.** `aliasing.md` proposes
+`update(pure fn (T) -> T)`, not `update(fn (T) -> T)`, so the transform's
+limits come from a mechanism that already exists. Closing an edge from inside
+a transform needs `b.alias()` in the closure body — and whether that is
+permitted turns on **whether `.alias()` is a side-effectful call**, which
+`grammar-script-notes.md` leaves to an undesigned effect system:
+
+| if `pure` is observational | if `pure` is about reachability |
+|---|---|
+| `.alias()` allowed in a transform | `.alias()` rejected in a transform |
+| every edge leaks | the result above survives intact |
+| `Weak<T>` mandatory | `Weak<T>` stays unnecessary |
+| `Confined<[T]>` mutates in O(1) | **so does it** — a buffer insert captures no handle |
+
+The last row is why this is tractable: what `.update` is wanted for needs no
+`.alias()` in the transform, and what reopens the cycle question is
+specifically *installing a handle into a cell from inside that cell's own
+transform*. A reachability-flavoured `pure` forbids that and nothing else
+anyone wants.
+
+Note what the fork rests on. `Shared<T>` is `Copy` for any `T` because *"an
+immutable alias is observationally identical to a copy"* — a claim about
+**observation** settling a question about **reachability**, and the reason the
+`Knot` needle exists at all. The pure-`.alias()` question is the same
+conflation at a second site. Deciding it once, deliberately, for both is
+worth more than either answer.
+
+### `.update` empties the cell, which is a new failure mode
+
+Separate from the above and true under either fork. `.update` moves the
+payload out, transforms, moves the result in, so for the transform's duration
+**the cell holds nothing**, and a transform that reaches its own cell observes
+a hole rather than a stale value.
+
+`Synchronized<T>` has the same structure and gets away with it, because
+re-entering a held lock deadlocks — loudly. `Confined<T>` has no lock, and
+the cell thread's atomicity is exactly what does not help: the sequence being
+uninterrupted is *why* the hole is observable from inside it. This is adjacent
+to the Open item on what `.get()` returns and how long it lives, and strictly
+worse — that one is a question about a value that exists.
+
+`handles.elp` GAP 7 has the demonstration, which is an ordinary graph
+`invalidate` holding a borrow across a recursion that comes back round.
+
 ### A leak has no observable symptom
 
 Worth stating because it bounds every answer above. There are no
@@ -1127,6 +1220,16 @@ while `.copy()` would have had one that looked identical in both cases.
   amendment says any call may yield, so the "a call ends the turn"
   reasoning that governs narrowing has to govern this too. It currently
   does not.
+- **A cell's write surface, and `Weak<T>`, are one decision.** Whether
+  `Confined<T>` gains `update(fn (T) -> T)` or `update(pure fn (T) -> T)`
+  or neither decides whether the handle-per-node graph is constructible,
+  which decides whether `Weak<T>` is mandatory or unnecessary. Within that,
+  whether `.alias()` counts as a side-effectful call is the whole question,
+  and it is the same observation-versus-reachability conflation that makes
+  `Shared<T>` `Copy` for any `T`. Reasoned out in
+  "And the loosening is already indicated", above; probed in
+  `examples/Recalc/internal/handles.elp`. Nothing here should be settled
+  piecemeal.
 - **`string`'s tier is not stated anywhere.** It is not in the table
   above and `strings.md` does not say. It decides whether an ordinary
   record of strings is `Copy` or `Duplicate`, which is most of the corpus,

@@ -1,0 +1,287 @@
+// The graph GAP 1 could not write, written against one proposed addition — so
+// that the cost of not having it and the cost of having it are both on a page.
+//
+// ─────────────────────────────────────────────────────────────────────────────
+// THIS FILE IS A HYPOTHESIS, NOT CORPUS. It assumes a cell method the language
+// does not have:
+//
+//     Confined<T>.update(fn (T) -> T)        // moves out, transforms, moves in
+//
+// Nothing imports this module and `Package.elp`'s `entry` does not reach it,
+// so it is inert. It exists because `recalc.elp` GAP 4 answers the
+// reference-cycle question by leaning on that method's *absence*, and an
+// answer that rests on an absence has to be re-checked against the absence
+// being filled.
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// FINDING 3 — why `.update` is wanted, and it is nothing to do with cycles.
+//
+// `Synchronized<T>` already has `.update(fn (T) -> T)`. `Confined<T>` has
+// `.get()`/`.set()` and nothing else. `aliasing.md` justifies the asymmetry one
+// way only: *"a `.get()`/`.set()` pair over a lock is memory-safe and still
+// logically racy… `Confined<T>` can expose that pair precisely because the cell
+// thread makes the sequence atomic."* True, and it argues the pair is
+// **permissible** on the confined cell. It does not argue `.update` is
+// **unnecessary** there, and the doc runs the two claims together.
+//
+// They come apart, because `.update` does a second thing that has no
+// connection to locking: it **moves the payload out and back**, so it never
+// needs to duplicate it. Pricing the write surface by the payload's tier:
+//
+//   | payload     | spelled today                     | cost per write |
+//   |-------------|-----------------------------------|----------------|
+//   | `Copy`      | `c.set(c.get().copyWith(…))`      | one record copy |
+//   | `Duplicate` | `c.set(c.get().copy().insert(…))` | **deep copy of all of `T`** |
+//   | `Move`      | — no spelling exists —            | impossible |
+//
+// The middle row is the one that hurts, and it is not hypothetical:
+// `aliasing.md` quotes `examples/Buffer` writing
+// `self.lines.get().copy().insert(...)`. That is a shared mutable text buffer
+// **duplicating every line on every keystroke**, because an array is never
+// `Copy` and the only write a cell has is whole-value.
+//
+// The bottom row is `aliasing.md`'s "a cell holding a `Move` aggregate cannot
+// have its fields updated at all", which arrived as a Playhead finding and
+// turned up again here as GAP 1.
+//
+// So the real shape of the hole: **mutation of shared state goes through a
+// cell** (the `&var self` resolution), and **a cell's only write is
+// whole-value**, therefore shared mutable state in elp is either transitively
+// `Copy`, or costs a deep copy per write, or is unexpressible. Three unrelated
+// reports, one defect. `.update(fn (T) -> T)` closes all three at O(1).
+//
+// Which is a strong enough case that it should be assumed to be coming, and
+// *that* is why the cycle answer needs re-checking.
+
+import { Reference, Value, Formula } from ..types.reference
+import { Confined } from elp.concurrency
+
+// The edges are handles again, exactly as GAP 1 drafted them.
+export object Node {
+	const at Reference,
+
+	var formula Formula,
+	var cached  Optional<Value>,
+
+	var precedents [Confined<Node>],   // cells I read
+	var dependents [Confined<Node>],   // cells that read me
+}
+
+Node implements Move
+
+// FINDING 4 — the handle graph does not replace the index, it is added to it.
+//
+// A formula names *addresses* (`SUM { over [Reference] }`), so resolving one
+// still needs a map from address to node. The arena version in `graph.elp`
+// needs only that map. This version needs the map **and** two handle arrays per
+// node, and what it buys is a pointer chase instead of a hash lookup.
+//
+// Worth stating before any of the rest: even with `.update` granted, this probe
+// would still choose the arena. The handle graph is strictly more machinery for
+// strictly less safety. So nothing below is an argument for writing graphs this
+// way — it is an argument about what the language *permits*, which is a
+// different question and the one GAP 4 answered.
+export object Sheet {
+	var nodes Map<Reference, Confined<Node>>,
+}
+
+Sheet implements Move
+
+export fn Sheet.empty() -> Self {
+	return Self { nodes = .new() }
+}
+
+export fn Sheet.ensure(&var self, at Reference) -> Confined<Node> {
+	// GAP 6 — `Map.get` on a `Move` value, third sighting, and here the answer
+	// is forced rather than merely open.
+	//
+	// `graph.elp` GAP 2 raised this for `Node` and listed three candidates:
+	// `Duplicate`, a move-out, or an error. For `Confined<Node>` none of those
+	// is right — the only useful answer is **an alias**, because the whole
+	// point is that the map and the edge arrays name the same cell.
+	//
+	// So a `Map` whose value is a cell wants `.get` to behave like `.alias()`,
+	// and a `Map` whose value is a plain `Move` aggregate wants something else.
+	// That is `Map.get`'s return tier varying with the value's conformance, on
+	// every edge traversal in the program. Noted as the sharpest version of the
+	// question rather than answered.
+	match self.nodes.get(at) {
+		.SOME(existing) -> return existing
+		.NONE -> {}
+	}
+
+	const fresh = Confined<Node>.new(Node {
+		at,
+		formula    = .LITERAL { of = .EMPTY },
+		cached     = .EMPTY,
+		precedents = [],
+		dependents = [],
+	})
+
+	self.nodes.set(at, fresh.alias())
+
+	return fresh
+}
+
+// One edge, recorded in both directions. This is the function GAP 1 said had no
+// spelling, and under the hypothesis it has one.
+export fn Sheet.link(&var self, dependent Reference, precedent Reference) {
+	const a = self.ensure(dependent)
+	const b = self.ensure(precedent)
+
+	// FINDING 5 — `.update` makes this constructible, and the reason is that
+	// `copyWith` **consumes**.
+	//
+	// `Node` is `Move`, so a `copyWith` that borrowed would be stuck for the
+	// same reason `.get()` is: a `Move` field cannot leave a `&T`. A `copyWith`
+	// that takes `self` by value is just a move — the untouched fields move
+	// across, the named ones are replaced — and `graph.elp` already assumes
+	// this shape on a `Move` `Node`, so it is not a new assumption.
+	//
+	// `.update` supplies the one missing link in that chain: a way to get the
+	// payload out of the cell by value. Everything else was already there,
+	// which is why one method re-opens all of GAP 1.
+	a.update(fn (n) { return n.copyWith(precedents = n.precedents.append(b.alias())) })
+	b.update(fn (n) { return n.copyWith(dependents = n.dependents.append(a.alias())) })
+}
+
+// FINDING 6 — and now the leak is not a needle, it is **every edge**.
+//
+// This is the part that changes the recommendation, and it is worth being
+// precise because `recalc.elp` GAP 4 is not precise enough about it.
+//
+// GAP 4 says a cycle in the *formula* graph — `A1 = B1` with `B1 = A1` — is a
+// domain error to report rather than a leak. That is true of the arena. It is
+// not true here, and the reason is that this graph is **deliberately
+// bidirectional**. After one ordinary, entirely acyclic formula:
+//
+//     sheet.link(A1, B1)        // A1 = B1, and nothing else
+//
+//     A1.precedents == [B1]     // A1 holds a handle to B1
+//     B1.dependents == [A1]     // B1 holds a handle to A1
+//
+// …A1's cell and B1's cell each hold a handle to the other. Drop the `Sheet`
+// and both counts stay at one. **Two cells, leaked, from a formula with no
+// cycle in it at all.**
+//
+// So the needle framing was wrong. Under `.update` the leak is not reached by
+// an odd `Shared<Confined<T>>` construction that is easy to spot — it is
+// reached by every spreadsheet that references a second cell, and by every
+// parent link, observer registration and doubly-linked list in the language.
+// The object graph's cycles have nothing to do with the formula graph's.
+//
+// Which inverts the recommendation: with `.update`, `Weak<T>` stops being an
+// escape hatch for an exotic case and becomes **mandatory**, because the
+// ordinary shape leaks. The decision not to design `Weak<T>` and the decision
+// not to give `Confined<T>` a `.update` are therefore one decision, and they
+// are currently recorded in two places as if independent.
+
+// GAP 7 — `.update` empties the cell, and on a graph re-entry is the common
+// case rather than the edge case.
+//
+// `.update` moves the payload out, runs the transform, moves the result in. For
+// the duration of the transform **the cell holds nothing**. A transform that
+// reaches the cell it is inside therefore observes a hole — which is a new
+// failure mode, and worse than the one `.get()`/`.set()` has:
+//
+//   - `.get()` held across a `.set()` is a stale borrow. `aliasing.md`'s Open
+//     item "what `.get()` returns, and how long it lives" is exactly this, and
+//     it is at least a question about a *value that exists*.
+//   - a `.get()` inside the same cell's `.update()` has no value to return at
+//     all. There is nothing to be stale about.
+//   - `Synchronized<T>.update` has the same structure and gets away with it,
+//     because re-entering a held lock **deadlocks** — which is a disaster that
+//     announces itself. `Confined<T>` has no lock. The cell thread's atomicity
+//     is what `aliasing.md` offers in place of one, and atomicity is exactly
+//     what does *not* help here: the sequence being uninterrupted is why the
+//     hole is observable from inside it.
+//
+// And this is not a contrived re-entry. It is `invalidate`:
+//
+//     fn invalidate(node &Confined<Node>) {
+//         node.update(fn (n) { return n.copyWith(cached = nil) })
+//
+//         for dependent in node.get().dependents {
+//             if dependent.get().cached != nil { invalidate(&dependent) }
+//         }
+//     }
+//
+// Two separate problems in five lines, and neither is visible in the source:
+//
+//   1. the `for` holds a borrow of `node`'s payload while the body recurses,
+//      and a cyclic sheet comes back round and `.update`s `node` — mutation
+//      during iteration, through two cells, with nothing syntactic marking it;
+//   2. the termination guard has to *read* a cell that may be the one currently
+//      emptied by an `.update` further up the stack.
+//
+// `graph.elp`'s arena has neither, because `invalidate` there holds `&var self`
+// on one owned `Graph` and the borrow checker can see the whole walk. That is
+// the second time in this probe that the handle version's cost is invisible at
+// the call site and the arena's is not.
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FINDING 7 — and the cycle answer turns out to hang on whether `.alias()` is
+// a side effect. This is the keystone, and it is a one-word decision nobody
+// would guess was load-bearing.
+//
+// `aliasing.md` does not propose `.update(fn (T) -> T)` for `Synchronized<T>`.
+// It proposes `.update(pure fn (T) -> T)`, and the reason is good: the closure
+// body must not reach into another cell or block, and rather than inventing a
+// restriction on a closure body *by position* — which the language has no
+// other instance of — the parameter *type* supplies it from a mechanism that
+// already exists. `functions.md` writes one, inside an `@abi(.C)` body:
+//
+//     fn onAudio(state Opaque<Synchronized<Playhead>>, frames int, …) -> int {
+//         state.update(pure fn (p Playhead) -> Playhead { return p.advanced(frames) })
+//
+// That is a `Synchronized` as well — there is no `Confined` `.update` anywhere
+// in the corpus, which is FINDING 3's asymmetry being total rather than
+// partial. What it does establish is that such a transform **captures**
+// (`frames` is not a parameter), so captures are not the question. The question
+// is the call:
+//
+//     a.update(pure fn (n) { return n.copyWith(precedents = n.precedents.append(b.alias())) })
+//                                                                            ^^^^^^^^^^^
+//
+// **Is `.alias()` a side-effectful call?** `grammar-script-notes.md` says only
+// that `pure` functions containing side-effectful calls are rejected by the
+// effect system, and the effect system is undesigned. Both answers are
+// defensible:
+//
+//   - *No.* `.alias()` writes no program-visible state, returns a handle to the
+//     same value, and cannot be observed by any later read. Observationally it
+//     is as pure as arithmetic.
+//   - *Yes.* It increments a reference count, which changes **what stays
+//     alive**. That is not nothing; it is the entire subject of this probe.
+//
+// And that distinction is one the corpus has already made once, in the other
+// direction. `recalc.elp` GAP 4's `Knot` leak works because `Shared<T>` is
+// `Copy` for any `T`, which `aliasing.md` argues from *"an immutable alias is
+// observationally identical to a copy"* — a claim about **observation** used to
+// settle a question about **reachability**. The pure-`.alias()` question is the
+// same conflation, at a different site, with the same consequence.
+//
+// So the fork, stated as a fork because the probe cannot settle it:
+//
+//   | if `pure` is observational  | if `pure` is about reachability |
+//   |-----------------------------|---------------------------------|
+//   | `.alias()` allowed in one   | `.alias()` rejected in one |
+//   | this file compiles          | `Sheet.link` has no spelling, again |
+//   | every edge leaks (FND 6)    | GAP 4's answer survives intact |
+//   | `Weak<T>` is **mandatory**  | `Weak<T>` stays unnecessary |
+//   | `Confined<[T]>` is O(1)     | **so is it** — see below |
+//
+// The last row is why this looks tractable rather than like a trap. The thing
+// `.update` was wanted for — the `Duplicate` row of FINDING 3's table, a shared
+// mutable collection mutating without a deep copy — needs no `.alias()` in the
+// transform. The thing that reopens the cycle question is specifically
+// *installing a handle into a cell from inside that cell's own transform*, and
+// a reachability-flavoured `pure` forbids exactly that and nothing else anyone
+// wants.
+//
+// Which would make it the third rule in this probe to close cycles off as a
+// side effect of being argued for on other grounds — and the first one where
+// the argument is available *before* the decision rather than after.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// vim: ft=kotlin
