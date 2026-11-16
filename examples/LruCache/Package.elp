@@ -1,0 +1,10 @@
+import { Package, Version } from elp.package
+
+@Package(
+    name = "lru-cache",
+    version = .new(0, 1, 0, 0),
+    entry = "cache.elp",
+    kind = .Library,
+)
+
+// vim: ft=kotlin

@@ -1,0 +1,164 @@
+// A text document with undo — the write surface priced on a payload where the
+// difference is one keystroke.
+//
+// `aliasing.md` says a read-modify-write on a cell costs one record copy for a
+// `Copy` payload, a deep copy of the whole payload for a `Duplicate` one, and
+// is impossible for a `Move` one, and cites `examples/Buffer` writing
+// `self.lines.get().copy().insert(...)` as the middle row in the wild. This
+// probe is that row with a cost attached, plus the undo stack that makes it
+// worse, plus the copy-on-write assessment tested rather than asserted.
+
+import { Confined } from elp.concurrency
+
+export object Line {
+	var text string,
+}
+
+// FINDING 1 — the copy-on-write lint cannot be computed, because `string`'s
+// tier is unstated. This blocks the proposal before it starts.
+//
+// `aliasing.md` proposes paying for CoW's invisibility with a lint gated on the
+// type's computed layout rather than on runtime sharedness — *"a copy-on-write
+// of `Document` may copy 2.4 MB"* — on the precedent of `Atomic<T>`'s use-site
+// size diagnostic. That needs a size, and `Line` holds a `string`, and
+// `aliasing.md`'s own Open list records that **`string`'s tier is not stated
+// anywhere**, which decides whether an ordinary record of strings is `Copy` or
+// `Duplicate`.
+//
+// So the open item filed as "a bigger hole than its size suggests" is load-
+// bearing twice over: it decides most of the corpus's conformances, and it
+// decides whether the CoW diagnostic can exist at all. Nothing can be ratified
+// about CoW until `string` has a tier.
+export object Document {
+	// A `Confined` rather than a plain field because a component reads it —
+	// that is `examples/Buffer`'s reason and it is the only reason. An editor
+	// whose document nothing observes needs `&var self` and none of this.
+	const lines Confined<[Line]>,
+
+	var history [[Line]],
+}
+
+Document implements Move
+
+export fn Document.empty() -> Self {
+	return Self { lines = Confined<[Line]>.new([]), history = [] }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FINDING 2 — today's spelling, with the cost written out.
+//
+// This is the only way to insert a line, and it is three operations:
+//
+//     self.lines.set(self.lines.get().copy().inserting(at, line))
+//                                    ^^^^^^
+//
+//   1. `.get()` borrows the array — free;
+//   2. `.copy()` duplicates **every line in the document**, because `[T]` is
+//      `Duplicate` and the cell still holds the original, so the refcount is
+//      at least two and no copy-on-write could elide it;
+//   3. `.set()` installs the new array and drops the old one.
+//
+// For a 10,000-line file that is 10,000 string duplications per keystroke. The
+// cell is why: it holds the second reference for the whole duration of the
+// expression, which is exactly the point `aliasing.md` makes when it says CoW
+// complements `.update` rather than replacing it. Here is that claim with a
+// number on it.
+// ─────────────────────────────────────────────────────────────────────────────
+export fn Document.insertToday(&var self, at int, line Line) {
+	self.lines.set(self.lines.get().copy().inserting(at, line))
+}
+
+// FINDING 3 — and the transform makes it O(1), with the return value doing
+// real work rather than being a convenience.
+//
+// `tree-places.elp` FINDING 6 found that `update(fn (&var T) -> R) -> R`
+// collapses `Synchronized<T>`'s two direction-split closures into one. This is
+// the first site where the `-> R` is load-bearing: an undo record needs the
+// text that was *replaced*, and returning it out of the transform is the only
+// way to get it without a second traversal under the lock-shaped discipline
+// the transform imposes.
+export fn Document.replace(&var self, at int, line Line) -> Line {
+	return self.lines.update(fn (&var lines) -> Line {
+		const previous = lines[at]
+		lines[at] = line
+		return previous
+	})
+}
+
+// FINDING 4 — `.update` gives write batching for free, and `reactivity.md`
+// has no notion of it.
+//
+// Model B subscribes at the point of a read and patches on a write, so a cell
+// write is a notification point — which `reactivity.md` never actually says.
+// With `.set`, N edits are N notifications and N patch passes. With a
+// transform, N edits inside one closure are one notification at transform
+// exit, because that is the only moment the cell's contents are consistent
+// again.
+//
+// That is a real improvement that nobody designed, and it is also the answer
+// to a question the transform raises: a reactive read *inside* a transform
+// would see a half-finished document, which is the same hole
+// `aliasing.md` records for re-entrancy, arriving through the reactive system
+// rather than through user code.
+export fn Document.reflow(&var self, width int) {
+	self.lines.update(fn (&var lines) {
+		var i = 0
+
+		while i < lines.length() {
+			lines[i] = Line { text = wrap(lines[i].text, width) }
+			i += 1
+		}
+	})
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FINDING 5 — and undo is where copy-on-write turns out **not** to be enough,
+// which is the finding this probe was written to look for and did not expect
+// to find this way.
+//
+// `aliasing.md` assesses CoW as the answer to the `Duplicate` row. Take a
+// snapshot for the undo stack:
+//
+//     self.history.append(self.lines.get().copy())
+//
+// Under CoW that is O(1) and shares the buffer. Then the next edit arrives and
+// the buffer **is** shared — with the history entry — so CoW must copy it.
+// Snapshot per keystroke, copy per keystroke. CoW moved the cost one statement
+// to the right and did not remove it.
+//
+// The structure that fixes it is a persistent one: a tree whose snapshot shares
+// every node and whose edit copies only the path from root to leaf. That is
+// what every real editor uses and why they are called ropes. And a rope is a
+// **recursive value type**, so it lands on `examples/QuadTree`'s GAP 1 — which
+// `examples/Interpreter` FINDING 1 just found had no valid evidence until an
+// AST supplied it.
+//
+// Three conclusions, and the middle one revises `aliasing.md`:
+//
+//   1. CoW is still worth having — it makes `[T]` cheap to pass, assign and
+//      snapshot, and `tree-places.elp` FINDING 5 shows it is what makes a
+//      read-only descent over a recursive value type non-quadratic.
+//   2. **CoW is not the answer to the `Duplicate` row for a value that is
+//      snapshotted.** For a value that is only passed around it is; the moment
+//      an old version is retained on purpose, path-copying is the requirement
+//      and CoW on a flat array cannot supply it.
+//   3. So an undo stack needs GAP 1 answered, and GAP 1 is now blocking two
+//      unrelated programs. It is the oldest open item in the corpus and the
+//      one with the most downstream weight.
+// ─────────────────────────────────────────────────────────────────────────────
+export fn Document.snapshot(&var self) {
+	self.history.append(self.lines.get().copy())
+}
+
+export fn Document.undo(&var self) {
+	const previous = self.history.removeLast() ?? return
+	self.lines.set(previous)
+}
+
+pure fn wrap(text string, width int) -> string {
+	// Deliberately unimplemented — the probe is about storage, not layout, and
+	// `strings.md` has no line-breaking surface to write it against.
+	return text
+}
+
+// vim: ft=kotlin

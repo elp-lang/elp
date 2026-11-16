@@ -752,6 +752,26 @@ And this is not an exotic corpus entry. It is `BlogStyle`'s JSON, a template
 engine, a query planner, a build-rule evaluator — anything holding a
 user-authored expression.
 
+**But the target is narrower than the prior art suggests**, which
+`examples/LruCache` establishes by failing to need it. The canonical `weak var`
+site — a doubly-linked list beside a map — needs no `Weak<T>` here, because
+`Map` being insertion-ordered already *is* the recency order the list
+maintains, so the whole structure evaporates and ownership is a tree again. So:
+
+| shape | cycle? | why |
+|---|---|---|
+| a dependency graph (`examples/Recalc`) | no | edges are addresses; the arena's lifetime is the program's |
+| an LRU cache (`examples/LruCache`) | no | the back-edge is recency order, and an insertion-ordered `Map` is one |
+| `let rec` (`examples/Interpreter`) | **yes** | the cycle is in the semantics; the arena escape becomes a hand-written GC |
+
+A **data structure's** back-edge is an index in disguise and dissolves under a
+better primitive. A **language's** cyclic value does not. `Weak<T>` is taught
+with the first and needed for the second — so it does not have to be ergonomic
+enough for everyday graph code, because everyday graph code should not reach
+it. Which matters for the cost question: a rarely-used `Weak<T>` can afford to
+be expensive, or be **forbidden outright in an `@abi(.C, realtime)` body**
+rather than made cheap enough for one.
+
 **What is now open is `Weak<T>`'s cost, which is a different problem.** The
 sharp edge is in the prior-art notes below: `weak` needs a side table and must
 zero every weak reference at deallocation, while `@abi(.C, realtime)` forbids a
@@ -862,6 +882,24 @@ CoW makes collections cheap to pass and assign; it does nothing for mutating
 a cell's payload. `.update` is the load-bearing fix, and CoW is what makes it
 cheap everywhere else. Granted both, `examples/Buffer` stops duplicating
 every line per keystroke; granted only CoW, it does not.
+
+**Two amendments from `examples/Editor`, which priced this.** First, the lint
+above **cannot be computed yet**: it needs a size, `Line` holds a `string`, and
+`string`'s tier is an Open item below. That item decides most of the corpus's
+conformances *and* whether this diagnostic can exist, so nothing here is
+ratifiable until it is answered.
+
+Second, and it narrows the proposal: **CoW is not the answer to the
+`Duplicate` row for a value that is deliberately snapshotted.** An undo
+snapshot is O(1) and shares the buffer — and the next edit then finds the
+buffer shared with the history entry and copies it. Snapshot per keystroke,
+copy per keystroke; the cost moved one statement right. What fixes that is a
+persistent structure whose edit copies only a root-to-leaf path, which is a
+rope, which is a recursive value type — so an undo stack needs
+`examples/QuadTree`'s GAP 1, and that gap is now blocking two unrelated
+programs. CoW remains worth having for passing, assigning and reading, where
+`tree-places.elp` FINDING 5 shows it is what keeps a read-only descent
+non-quadratic.
 
 **One convergence worth flagging.** A CoW lint that wants to be more precise
 than layout has to ask "can this value be aliased from anywhere else" — which

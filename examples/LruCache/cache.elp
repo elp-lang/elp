@@ -1,0 +1,167 @@
+// An LRU cache — the canonical `weak var` site, probed to find out whether
+// `examples/Interpreter`'s verdict generalises.
+//
+// It does not, and the reason is interesting: this is the textbook reference-
+// cycle data structure, and in elp it needs no handles, no cells and no
+// `Weak<T>`. The thing that dissolves it is a collection decision made for
+// unrelated reasons.
+
+import { Entry } from elp.collections
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GAP 1 — the version every textbook writes, and it is unconstructible here.
+// Fifth sighting of one wall.
+//
+// An LRU cache is `HashMap<K, *Node>` plus a doubly-linked list, because the
+// list gives O(1) move-to-front on a hit and O(1) eviction from the tail:
+//
+//   export object Node<K, V> {
+//       const key   K,
+//       var   value V,
+//       var   prev  Optional<Confined<Node<K, V>>>,
+//       var   next  Optional<Confined<Node<K, V>>>,
+//   }
+//
+// In Swift this is the canonical `weak var prev`. In Rust it is
+// `Weak<RefCell<Node>>` and it is the example everyone cites to explain why
+// `Weak` exists.
+//
+// It cannot be written. `Node` holds `Confined<Node>`, so `Node` is `Move`
+// field-wise, and a cell holding a `Move` aggregate cannot have its fields
+// updated — so `node.next = other` has no spelling. Same wall as
+// `examples/Recalc` GAP 1, `examples/Playhead` GAP 6, `tree-places.elp` and
+// `examples/Interpreter` FINDING 7.
+//
+// Unlike all four of those, **nothing is lost by it being blocked**, because
+// the structure is not needed.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// FINDING 1 — elp's `Map` is insertion-ordered, which makes it a strictly
+// stronger primitive than a hash map, and the entire linked list evaporates.
+//
+// `collections.md` makes `Map` insertion-ordered. That decision was made for
+// iteration predictability, and it happens to supply exactly the recency order
+// an LRU cache maintains a second data structure for: remove a key and
+// re-insert it, and it moves to the end of the order.
+//
+// So the cache is one `Map`, ownership is a tree, every refcount is one, and
+// there is no cycle to leak. The canonical `Weak` site needs no `Weak`.
+//
+// Worth being precise about what this does and does not show. It is **not** a
+// counterexample to `examples/Interpreter` — that cycle is in the semantics of
+// `let rec` and no data structure choice reaches it. What it shows is that the
+// two famous cycle shapes have different causes: a *data structure's*
+// back-edge is usually an index in disguise and dissolves under a better
+// primitive, while a *language's* cyclic value does not. `Weak<T>` is wanted
+// for the second, and the first is where it is usually taught.
+export object LruCache<K, V> {
+	const capacity int,
+	var entries Map<K, V>,
+}
+
+LruCache implements Move
+
+export fn LruCache<K, V>.withCapacity(capacity int) -> Self {
+	return Self { capacity, entries = .new() }
+}
+
+// A hit has to re-insert to refresh recency, which is the whole trick.
+export fn LruCache<K, V>.get(&var self, key K) -> Optional<V> {
+	// GAP 2 — `Map.get` on a `Move` value, sixth sighting, and here it is
+	// benign in a way worth recording: a cache's `V` is whatever the caller
+	// stored, so this is the one site where the three candidates
+	// (`Duplicate`, move-out, error) are all *defensible* and the choice is a
+	// real design decision rather than a forced one.
+	//
+	// A move-out is arguably right here — `remove` then `set` is literally
+	// what this function does — which is the first evidence in the corpus for
+	// the move-out candidate. `examples/Interpreter` FINDING 5 is evidence
+	// against it for the same operation on an environment. So `Map.get` wants
+	// two spellings, and that is a cleaner finding than the open question has
+	// had so far.
+	const found = self.entries.remove(key) ?? return nil
+
+	self.entries.set(key, found)
+
+	return .SOME(found)
+}
+
+export fn LruCache<K, V>.put(&var self, key K, value V) {
+	// Re-inserting an existing key must refresh its position, so remove first
+	// unconditionally rather than letting `set` overwrite in place. Whether
+	// `Map.set` on an existing key preserves the original insertion position
+	// or moves it to the end is **not stated anywhere**, and this cache is
+	// correct under one reading and silently wrong under the other.
+	//
+	// FINDING 2 — that is a genuine hole in `collections.md`, found by the
+	// first program whose correctness depends on it. "Insertion-ordered" names
+	// the order for *new* keys and says nothing about re-insertion, and both
+	// answers are defensible: preserving position matches "the order keys were
+	// first seen", moving to the end matches "the order keys were last
+	// written". An LRU cache needs the second; a stable config map wants the
+	// first.
+	self.entries.remove(key)
+	self.entries.set(key, value)
+
+	if self.entries.count() > self.capacity {
+		self.evict()
+	}
+}
+
+// FINDING 3 — eviction needs "the oldest entry", and the absence of `break`
+// makes an O(1) operation O(n).
+//
+// The least-recently-used entry is the first in iteration order, and that is
+// one step of the iterator. elp has no way to take it:
+//
+//   - §7b records that **there is no `break`**, so a `for` that stops after
+//     the first element cannot be written;
+//   - `collections.md`'s iteration protocol is the only access to order, and
+//     nothing exposes a `.first()` or a positional read;
+//   - so the spelling below materialises every key to use one.
+//
+// This is the first place in the corpus where the missing `break` has a
+// measurable cost rather than being a stylistic gap: it turns the one
+// operation an LRU cache exists to make cheap into a linear scan, which
+// defeats the data structure. Either `break` or a `Map.first()` fixes it, and
+// `break` is the one that generalises.
+fn LruCache<K, V>.evict(&var self) {
+	const oldest = self.entries.keys()
+
+	if oldest.length() == 0 {
+		return
+	}
+
+	self.entries.remove(oldest[0])
+}
+
+export fn LruCache<K, V>.count(&self) -> int {
+	return self.entries.count()
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// VERDICT — `Weak<T>` is still mandatory, but not for this.
+//
+// Three probes have now asked the cycle question and the answers are
+// consistent once the shapes are separated:
+//
+//   | shape | cycle? | why |
+//   |---|---|---|
+//   | a dependency graph (`examples/Recalc`) | no | edges are addresses; ownership is a tree and the arena's lifetime is the program's |
+//   | an LRU cache (here) | no | the back-edge is recency order, and an insertion-ordered `Map` already is one |
+//   | `let rec` (`examples/Interpreter`) | **yes** | the cycle is in the semantics; no encoding reaches it, and the arena escape becomes a hand-written GC |
+//
+// The pattern: a **data structure's** back-edge is an index in disguise and
+// dissolves under a better primitive. A **language's** cyclic value does not.
+// `Weak<T>` is taught with the first and needed for the second.
+//
+// Which also means the `Weak<T>` design has a narrower target than the prior
+// art suggests. It does not have to be ergonomic enough for everyday graph
+// code, because everyday graph code should not use it. That matters for the
+// open cost question — `aliasing.md`'s clash between `weak`'s zeroing at
+// deallocation and `@abi(.C, realtime)` forbidding a decrement to zero — since
+// a rarely-used `Weak<T>` can afford to be expensive, and could even be
+// forbidden outright in a realtime body rather than made cheap.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// vim: ft=kotlin

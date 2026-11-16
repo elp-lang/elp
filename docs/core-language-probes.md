@@ -1,6 +1,6 @@
 # Core language probes
 
-Fourteen programs written to put pressure on the parts of elp the original
+Sixteen programs written to put pressure on the parts of elp the original
 corpus never exercised. They are **design probes, not specimens** — they
 use constructs the language does not have, written in the most plausible
 spelling, so the gaps can be read rather than listed.
@@ -1541,6 +1541,92 @@ Both premises fail here, and an interpreter is not exotic: it is `BlogStyle`'s
 JSON, a template engine, a query planner, a build-rule evaluator. What is now
 open is `Weak<T>`'s **cost**, against `@abi(.C, realtime)` forbidding a
 decrement to zero.
+
+## 14. The two cycle shapes — `examples/LruCache`
+
+The canonical `weak var` site, probed to find out whether §13's verdict
+generalises. It does not, and separating the shapes is the result.
+
+1. **The textbook structure is unconstructible, fifth sighting of one wall.**
+   `Node { var prev, next Optional<Confined<Node>> }` makes `Node` `Move`, and
+   a cell holding a `Move` aggregate cannot have its fields updated. Unlike
+   §12 GAP 1, `examples/Playhead` GAP 6, §4's re-run and §13 finding 7,
+   **nothing is lost** — the structure is not needed.
+
+2. **`Map` being insertion-ordered makes the linked list evaporate.**
+   `collections.md` ordered `Map` for iteration predictability, and that
+   happens to be the recency order an LRU cache keeps a second structure for:
+   remove and re-insert, and a key moves to the end. One `Map`, ownership a
+   tree, every refcount one, no cycle.
+
+3. **`Map.set` on an existing key has no stated effect on order**, and this
+   cache is correct under one reading and silently wrong under the other.
+   "Insertion-ordered" names the order for *new* keys. Both answers are
+   defensible — first-seen for a stable config map, last-written for an LRU —
+   and `collections.md` picks neither. Found by the first program whose
+   correctness depends on it.
+
+4. **`Map.get` on a `Move` value wants two spellings.** Sixth sighting, and the
+   first where a **move-out** is the right answer: `remove` then `set` is
+   literally what a cache hit does. §13 finding 5 is evidence against move-out
+   for the same operation on an environment. That is a cleaner shape than the
+   open question has had.
+
+5. **The missing `break` turns an O(1) operation into O(n).** Eviction needs
+   the first entry in iteration order, which is one step of the iterator. §7b
+   records there is no `break`, nothing exposes `Map.first()`, so the spelling
+   materialises every key to use one — defeating the data structure. First place
+   in the corpus where the missing `break` has a measurable cost rather than
+   being stylistic.
+
+**The two shapes.** A *data structure's* back-edge is an index in disguise and
+dissolves under a better primitive; a *language's* cyclic value does not.
+`Weak<T>` is taught with the first and needed for the second — which narrows
+its design target usefully, because everyday graph code should not use it. A
+rarely-reached `Weak<T>` can afford to be expensive, or be forbidden outright
+in a realtime body rather than made cheap.
+
+## 15. The write surface priced — `examples/Editor`
+
+A text document with undo, on a payload where the difference is one keystroke.
+
+1. **The CoW lint cannot be computed, because `string`'s tier is unstated.**
+   `aliasing.md` proposes paying for CoW's invisibility with a diagnostic gated
+   on computed layout, on the precedent of `Atomic<T>`'s size error. `Line`
+   holds a `string`, and `string`'s tier is an Open item. So that item is
+   load-bearing twice — it decides most of the corpus's conformances *and*
+   whether the CoW diagnostic can exist. **Nothing about CoW can be ratified
+   until `string` has a tier.**
+
+2. **Today's spelling, priced.** `self.lines.set(self.lines.get().copy().inserting(at, line))`
+   duplicates every line in the document per keystroke — 10,000 string
+   duplications for a 10,000-line file — and no CoW could elide it, because the
+   cell holds the second reference for the whole expression. That is
+   `aliasing.md`'s "CoW complements `.update` rather than replacing it" with a
+   number on it.
+
+3. **The transform's `-> R` is load-bearing here**, not a convenience. An undo
+   record needs the text that was replaced, and returning it out of the
+   transform is the only way to get it without a second traversal.
+
+4. **`.update` gives write batching for free, and `reactivity.md` has no
+   notion of it.** A cell write is a notification point, which `reactivity.md`
+   never states. With `.set`, N edits are N patch passes; inside one transform
+   they are one, at transform exit — the only moment the contents are
+   consistent. It also means a reactive read inside a transform would see a
+   half-finished value, which is the re-entrancy hole arriving through the
+   reactive system rather than through user code.
+
+5. **Undo is where CoW is not enough, which revises the assessment.** A
+   snapshot is O(1) under CoW and shares the buffer — and then the next edit
+   finds the buffer shared *with the history entry*, so it copies. Snapshot per
+   keystroke, copy per keystroke; CoW moved the cost one statement right. The
+   fix is a persistent structure whose edit copies only a root-to-leaf path,
+   i.e. a rope, i.e. a **recursive value type**. So: CoW is still worth having
+   for passing, assigning and reading (§4's re-run shows it is what keeps a
+   read-only descent non-quadratic), but it is **not** the answer to the
+   `Duplicate` row for a value that is deliberately snapshotted. An undo stack
+   needs GAP 1 answered, and GAP 1 is now blocking two unrelated programs.
 
 ## Suggested order
 
