@@ -1,0 +1,51 @@
+// The syntax tree, and GAP 1's real evidence.
+
+export enum Operator {
+	ADD,
+	SUBTRACT,
+	MULTIPLY,
+	EQUALS,
+}
+
+Operator implements Copy
+
+// FINDING 1 — this is the recursive value type `examples/QuadTree` was supposed
+// to be evidence for, and was not.
+//
+// QuadTree's GAP 1 says a recursive value type has no size, and
+// `tree-places.elp` FINDING 1 found that QuadTree's own enum does not actually
+// demonstrate it: both variants hold an array, an array must be a heap buffer
+// to grow, so the indirection is already there and the type lays out fine.
+//
+// `Expr` has no such escape. `BINARY` holds two `Expr` **directly**, so the
+// size equation is `size(Expr) = tag + 2 * size(Expr)`, which has no finite
+// solution. `LET` and `IF` are the same shape. There is no array anywhere to
+// supply the indirection, and an AST is the single most common recursive type
+// any language compiles.
+//
+// `memory-model.md` has `Copy`, `Move`, `Protected` and `Binding<T>`, and not
+// one of them says "boxed". Rust writes `Box<Expr>`, Swift sidesteps it by
+// making the recursive case a `class`, C++ uses a pointer, and OCaml and
+// Haskell box everything so the question never arises.
+//
+// Written without a marker — the version a person reaches for first, and the
+// one the compiler has to reject with a diagnostic that teaches the fix.
+export enum Expr {
+	LITERAL { of int },
+	NAME { of string },
+
+	BINARY { op Operator, left Expr, right Expr },
+
+	// `LET` binds and does not permit the bound name inside its own value.
+	// `LETREC` does. Keeping them separate is what makes FINDING 4 provable
+	// rather than a matter of how the evaluator happens to be written.
+	LET { name string, value Expr, body Expr },
+	LETREC { name string, value Expr, body Expr },
+
+	LAMBDA { parameter string, body Expr },
+	CALL { callee Expr, argument Expr },
+
+	IF { condition Expr, then Expr, otherwise Expr },
+}
+
+// vim: ft=kotlin

@@ -1,6 +1,6 @@
 # Core language probes
 
-Thirteen programs written to put pressure on the parts of elp the original
+Fourteen programs written to put pressure on the parts of elp the original
 corpus never exercised. They are **design probes, not specimens** — they
 use constructs the language does not have, written in the most plausible
 spelling, so the gaps can be read rather than listed.
@@ -1459,6 +1459,88 @@ not stated.
 `VulkanTriangle`, `Playhead`), which may be a deliberate distinction between
 elp's empty `Optional` and C's null pointer, or may be drift. Nothing records
 an intent either way. `nil` is used here.
+
+## 13. Is `Weak<T>` avoidable? — `examples/Interpreter`
+
+A tree-walking interpreter for a seven-form expression language, written to
+decide the question §12 recommended closing. **It reverses that
+recommendation.** Nine findings:
+
+1. **GAP 1's real evidence, at last.** `Expr.BINARY` holds two `Expr`
+   *directly*, so `size(Expr) = tag + 2 * size(Expr)` has no finite solution
+   and there is no array anywhere to supply the indirection. §7b's recursive
+   value type was raised against `examples/QuadTree`, whose enum lays out fine
+   (`tree-places.elp` FINDING 1). An AST is the most common recursive type any
+   language compiles.
+
+2. **Mutually recursive types force one module.** `Value.CLOSURE` holds a
+   `Confined<Env>` and `Env` holds a `Map<string, Value>`, so the no-cycles
+   rule puts them in one file. `examples/Playhead` FINDING 21 hit this and drew
+   *"a boundary payload belongs with the reader"*, which does not apply —
+   neither type is downstream of the other. The weaker general rule: a cycle in
+   the type graph is a constraint on file layout, with no mechanism to split
+   one.
+
+3. **A closure value cannot own its body.** `evaluate` takes `&Expr` — it must,
+   since a tree-walker never consumes its input — so the `LAMBDA` arm binds a
+   borrow, and a field may not hold one. `Shared<Expr>` is the only form that
+   works, which means **the AST must be built into cells up front**: a
+   representation decision forced on the parser by one arm of the evaluator,
+   invisible from the parser's side.
+
+4. **A non-recursive `let` needs no mutation at all**, which is what makes the
+   rest decisive rather than an artifact. `LET` evaluates its value in the
+   enclosing scope and its body in a child scope *born with the binding in it*,
+   so no cell is ever written. The hypothesis's mechanism is needed for exactly
+   one language feature.
+
+5. **Variable lookup has no spelling, and this is §12 finding 8 blocking
+   something.** `Value` is `Move` (it holds `Confined<Env>`), so `Map.get` on
+   it fails all three candidates: there is no `.copy()`; a move-out would
+   remove `x` from the environment; and an error means a language with
+   first-class functions cannot read a variable. The honest return type is
+   `Optional<&Value>`, barred because a field may not hold a borrow — which is
+   `tree-places.elp`'s GAP 8 arriving as a blocker on an interpreter's most
+   basic operation.
+
+6. **`.get()` being free is load-bearing for an ordinary inner loop.** `lookup`
+   recurses through `outer.get()` once per scope depth on every variable
+   reference. `aliasing.md`'s open question "what `.get()` returns and how long
+   it lives" is therefore not an edge case about lifetimes — it is on the
+   critical path of the most common recursive program shape there is.
+
+7. **`LETREC` forces the mutation and the cycle together — they are one
+   finding.** Create the scope, evaluate the value in it, write the result
+   back. Step three has no spelling today (`Env` is `Move` in a cell), so **a
+   tree-walking interpreter cannot be written in elp** — fourth sighting of
+   that wall and the first where the blocked program is unremarkable. And step
+   three leaves one cell holding a handle to itself through its own contents.
+   No reordering avoids it; placeholder-then-patch is step three renamed.
+
+8. **`pure` on the transform cannot prevent it**, which collapses
+   `aliasing.md`'s fork rather than resolving it. `LETREC` writes an
+   already-aliased value: the transform captures a handle and stores it, and
+   calls nothing. The rule is *"`pure` functions containing side-effectful
+   calls"*, and `functions.md`'s own transform closes over a value, so
+   capture-and-store is admitted. Narrowing `pure` by capture type would be a
+   restriction by position in a new costume — what `pure` was reached for to
+   avoid.
+
+9. **The arena does not save this one, and fails differently from how it
+   succeeded in §12.** An index arena constructs and turns the cycle into data,
+   but a spreadsheet's graph lives as long as the sheet while an interpreter's
+   scopes have dynamic lifetimes — so every scope ever entered stays forever,
+   and recovering them means walking reachability over indices, i.e. a tracing
+   GC hand-written inside the interpreter. CPython refcounts *and* ships a
+   cycle collector for exactly this shape; Lua, Ruby and the JVM trace.
+
+**Verdict: `Weak<T>` is mandatory.** §12's reasoning was sound and its evidence
+too narrow — a spreadsheet graph's ownership is a tree once handles are
+dropped, and its arena is free because the arena's lifetime is the program's.
+Both premises fail here, and an interpreter is not exotic: it is `BlogStyle`'s
+JSON, a template engine, a query planner, a build-rule evaluator. What is now
+open is `Weak<T>`'s **cost**, against `@abi(.C, realtime)` forbidding a
+decrement to zero.
 
 ## Suggested order
 

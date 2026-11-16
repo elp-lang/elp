@@ -596,11 +596,13 @@ not reachable by accident in the shapes the corpus produces; the one route
 is an odd thing to write and an easy thing to spot; and a program that
 genuinely needs a back-edge between cells has no spelling for one.
 
-**The recommendation is not to add `Weak<T>` now.** It is to keep the
-argument above, because the argument is the load-bearing part: three of the
-four are closed off by decisions already made, and a future loosening — a
-mutable `Shared`, a `.set` that does not require `Copy`, an `Atomic` over a
-handle — would reopen this with nobody noticing.
+**~~The recommendation is not to add `Weak<T>` now.~~ Reversed by
+`examples/Interpreter` — see "And an interpreter settles it", below.** The
+argument above is still the right argument and its evidence was too narrow: a
+spreadsheet graph is a program whose ownership *is* a tree once handles are
+dropped, and its arena is free because the arena's lifetime is the program's.
+Neither property holds generally. Kept in place rather than rewritten, because
+what the reversal turns on is which premise failed.
 
 ### And the loosening is already indicated, from a different direction
 
@@ -651,12 +653,12 @@ mandatory. **The decision not to design `Weak<T>` and the decision not to
 give `Confined<T>` an `.update` are one decision**, and they were recorded in
 two places as if independent.
 
-**And the fork is one word wide.** `aliasing.md` proposes
-`update(pure fn (T) -> T)`, not `update(fn (T) -> T)`, so the transform's
-limits come from a mechanism that already exists. Closing an edge from inside
-a transform needs `b.alias()` in the closure body — and whether that is
-permitted turns on **whether `.alias()` is a side-effectful call**, which
-`grammar-script-notes.md` leaves to an undesigned effect system:
+**And the fork looked one word wide. It is not a fork.** The proposal is
+`update(pure fn (T) -> T)`, so the transform's limits come from a mechanism
+that already exists, and closing an edge from inside a transform appears to
+need `b.alias()` in the closure body — making the whole question **whether
+`.alias()` is a side-effectful call**, which `grammar-script-notes.md` leaves
+to an undesigned effect system:
 
 | if `pure` is observational | if `pure` is about reachability |
 |---|---|
@@ -665,18 +667,33 @@ permitted turns on **whether `.alias()` is a side-effectful call**, which
 | `Weak<T>` mandatory | `Weak<T>` stays unnecessary |
 | `Confined<[T]>` mutates in O(1) | **so does it** — a buffer insert captures no handle |
 
-The last row is why this is tractable: what `.update` is wanted for needs no
-`.alias()` in the transform, and what reopens the cycle question is
-specifically *installing a handle into a cell from inside that cell's own
-transform*. A reachability-flavoured `pure` forbids that and nothing else
-anyone wants.
+**The right-hand column does not exist, and `examples/Interpreter` FINDING 8
+is why.** Closing an edge does not need `.alias()` *inside* the transform. A
+`LETREC` writes an already-aliased value into a scope:
 
-Note what the fork rests on. `Shared<T>` is `Copy` for any `T` because *"an
-immutable alias is observationally identical to a copy"* — a claim about
-**observation** settling a question about **reachability**, and the reason the
-`Knot` needle exists at all. The pure-`.alias()` question is the same
-conflation at a second site. Deciding it once, deliberately, for both is
-worth more than either answer.
+```elp
+scope.update(fn (&var e) { e.bindings.set(name, bound) })
+```
+
+`bound` is a closure whose captured-environment field was aliased several
+frames earlier, in a different arm of the evaluator. The transform **captures**
+a handle and stores it; it calls nothing. Captures are settled —
+`functions.md`'s own transform closes over `frames`, and the rule is *"`pure`
+functions containing side-effectful **calls**"* — so a bare capture-and-store
+is admitted and a `pure` transform closes the cycle.
+
+Narrowing `pure` to forbid capturing a cell handle by type would not help:
+*reading* the captured cell is a call and is caught anyway, while merely
+storing a handle is all the cycle needs, and a restriction by capture type is
+"a restriction by position" in a new costume — the thing `pure` was reached for
+to avoid. So the left column is the only column, and `pure` was never the
+deciding variable.
+
+The observation-versus-reachability conflation is still real and still worth
+deciding once: `Shared<T>` is `Copy` for any `T` because *"an immutable alias
+is observationally identical to a copy"*, a claim about **observation**
+settling a question about **reachability**, and it is the reason the `Knot`
+needle exists. What it does not do is decide this.
 
 ### `.update` empties the cell, which is a new failure mode
 
@@ -694,6 +711,53 @@ worse — that one is a question about a value that exists.
 
 `handles.elp` GAP 7 has the demonstration, which is an ordinary graph
 `invalidate` holding a borrow across a recursion that comes back round.
+
+### And an interpreter settles it — `Weak<T>` is mandatory
+
+`examples/Interpreter` is the deciding probe, because an interpreter's cycle is
+not an encoding choice. `LETREC` has to make a bound name visible inside its
+own value, so there is exactly one arrangement and every language with
+recursive functions uses it: create the scope, evaluate the value in it so the
+closure captures it, then write the closure into the scope. The third step
+leaves **one cell holding a handle to itself through its own contents** —
+tighter than the two-cell `Knot` needle, and reached by writing `let rec`.
+
+No reordering avoids it. The closure must see the binding, which is what
+recursion means; the binding must hold the closure, which is what `let rec`
+means. Placeholder-then-patch, which real implementations use, is that third
+step renamed.
+
+Four things are now jointly true, and together they overturn the
+recommendation:
+
+1. the cycle is **in the semantics**, so no spelling avoids it;
+2. it is a **self**-cycle through one cell, so "three of the four cells cannot
+   be an edge" does not bound it — only one cell is involved;
+3. `pure` on the transform does not prevent it (above), so the fork has one
+   column;
+4. the arena escape fails here, and fails *differently* from how it succeeded
+   in `examples/Recalc`. A spreadsheet's `Graph` lives as long as the sheet, so
+   an arena that never shrinks is correct and free. An interpreter's scopes
+   have genuinely dynamic lifetimes, so every scope ever entered stays in the
+   arena forever, and recovering them means walking reachability over the
+   indices — **a tracing garbage collector, hand-written, inside the
+   interpreter.** That is a worse outcome than designing `Weak<T>`.
+
+The prior art agrees and it is not a matter of implementation taste: CPython
+refcounts *and* ships a cycle collector, which exists for precisely this shape;
+Lua, Ruby and the JVM trace. No production interpreter refcounts without
+either a cycle collector or weak references.
+
+And this is not an exotic corpus entry. It is `BlogStyle`'s JSON, a template
+engine, a query planner, a build-rule evaluator — anything holding a
+user-authored expression.
+
+**What is now open is `Weak<T>`'s cost, which is a different problem.** The
+sharp edge is in the prior-art notes below: `weak` needs a side table and must
+zero every weak reference at deallocation, while `@abi(.C, realtime)` forbids a
+refcount decrement reaching zero because deallocation takes a lock. `Weak<T>`
+makes release strictly more expensive in the one place this language cares
+most, and that is the design question to answer.
 
 ### Prior art — Rust, Go and Swift all solve this, two of the three ways are closed
 

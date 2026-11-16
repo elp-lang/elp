@@ -1,0 +1,126 @@
+// Values and environments, and they have to share a file.
+//
+// FINDING 2 — mutually recursive types force co-location, and this is the
+// second probe to find that.
+//
+// `Value.CLOSURE` holds a `Confined<Env>`; `Env` holds a `Map<string, Value>`.
+// Two types, each in the other's definition, so they cannot be two modules:
+// `name-resolution.md`'s no-cycles rule forbids it. `examples/Playhead`
+// FINDING 21 hit the same wall and drew the principle *"a boundary payload
+// belongs with the reader, not the writer"*, which does not apply here —
+// neither of these is a payload and neither is downstream of the other.
+//
+// So the general rule is weaker and worth stating plainly: **a cycle in the
+// type graph forces one module**, and the no-cycles rule is a constraint on
+// file layout rather than on design. For an interpreter that is fine. For a
+// larger mutually recursive model it means one very large file with no
+// mechanism to split it, and nothing records that consequence.
+
+import { Expr } from .types.expr
+
+export enum Value {
+	NUMBER { of int },
+
+	// FINDING 3 — a closure value cannot own its body, and the fix is a cell
+	// the probe did not expect to need.
+	//
+	// `evaluate` receives `&Expr` — it must, since the AST is evaluated many
+	// times and a tree-walking interpreter never consumes its input. So in the
+	// `LAMBDA` arm, `body` binds a **borrow**, and `Value.CLOSURE` needs to
+	// outlive the call. A borrow cannot be stored (`memory-model.md`: a field
+	// may not hold a borrow) and an `Expr` cannot be moved out of a `&Expr`.
+	//
+	// `Shared<Expr>` is the only form that works: immutable, refcounted, `Copy`
+	// for any `T`. Which means **the AST must be built into cells up front**,
+	// not parsed into a plain value and then borrowed — a representation
+	// decision forced on the parser by one arm of the evaluator, and not
+	// visible from the parser's side at all.
+	//
+	// Worth noting what this does *not* need: `Shared<T>` has no `.set`, so the
+	// AST is immutable and this introduces no cycle on its own. The cycle in
+	// FINDING 4 comes from the environment, not from here.
+	CLOSURE {
+		parameter string,
+		body      Shared<Expr>,
+		captured  Confined<Env>,
+	},
+}
+
+// `Value` is `Move`, field-wise, because `Confined<Env>` is. Nothing declares
+// it and it is the hinge of FINDING 5.
+
+export object Env {
+	var bindings Map<string, Value>,
+
+	// The scope chain. `Confined` rather than `Shared` because `LETREC` has to
+	// write a binding into a scope that already exists — see FINDING 4 — and
+	// `Shared<T>` has no `.set`.
+	const parent Optional<Confined<Env>>,
+}
+
+// And `Env` is `Move` too, for the same reason, which is the wall.
+
+export fn Env.root() -> Confined<Self> {
+	return Confined<Self>.new(Self { bindings = .new(), parent = nil })
+}
+
+export fn Env.child(
+	of &Confined<Env>,
+	name string,
+	value Value,
+) -> Confined<Self> {
+	var bindings Map<string, Value> = .new()
+	bindings.set(name, value)
+
+	return Confined<Self>.new(Self { bindings, parent = .SOME(of.alias()) })
+}
+
+// FINDING 5 — variable lookup has no spelling, and this is the gap that has
+// been open for three probes finally blocking something.
+//
+// `Map.get` on a `Move` value was raised by `examples/Recalc` GAP 2, listed
+// three candidates — `Duplicate`, a move-out, or an error — and noted that
+// every corpus read until then had been of a `Copy` value. Here all three
+// candidates fail, and the operation is *variable lookup*:
+//
+//   - `Duplicate` — `Value` is `Move`, so there is no `.copy()`. And
+//     `aliasing.md` explicitly rejected making `Confined<T>` `Duplicate`,
+//     because "`Duplicate` promises independence and a `Confined.copy()` would
+//     hand back something that aliases". That rejection is right and it is what
+//     closes this door.
+//   - a move-out — looking up `x` must not remove `x` from the environment.
+//   - an error — then a language with first-class functions cannot read a
+//     variable.
+//
+// The honest return type is `Optional<&Value>`, and that is barred: a field may
+// not hold a borrow, so `Optional<&T>` does not exist. This is
+// `tree-places.elp`'s GAP 8 exactly — `[]` traps and `get` returns an
+// `Optional` for a *value*, and neither form exists for a borrow — arriving
+// here as a blocker on the most basic operation an interpreter performs.
+//
+// Written below the way it wants to be written. It does not type.
+export fn Env.lookup(&self, name string) -> Optional<&Value> {
+	match self.bindings.get(name) {
+		.SOME(found) -> return .SOME(found)
+		.NONE -> {}
+	}
+
+	match self.parent {
+		.SOME(outer) -> return outer.get().lookup(name)
+		.NONE -> return nil
+	}
+}
+
+// FINDING 6 — and the read walk is where `Confined<T>`'s cheapness is load-
+// bearing in a way nothing has stated.
+//
+// `lookup` recurses through `outer.get()`, once per scope depth, on every
+// variable reference — which is the hottest operation in any interpreter.
+// `aliasing.md` says `.get()` on a `Confined<T>` is a borrow and costs nothing,
+// and `examples/Playhead` FINDING 5 depends on that for the audio thread. This
+// is the same property load-bearing for an ordinary program's inner loop, which
+// is worth recording because it means the open question "what `.get()` returns
+// and how long it lives" is not an edge case about lifetimes — it is on the
+// critical path of the most common recursive program shape there is.
+
+// vim: ft=kotlin

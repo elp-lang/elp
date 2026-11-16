@@ -1,0 +1,252 @@
+// A tree-walking interpreter, written to decide one question:
+// **is `Weak<T>` avoidable?**
+//
+// `examples/Recalc` answered "probably" and recommended against designing it,
+// on the grounds that three of the four cells cannot be an edge in a cycle and
+// the natural graph is an arena whose ownership is a tree. `aliasing.md` then
+// recorded that the answer is conditional on a cell's write surface, and
+// `tree-places.elp` FINDING 7 found the transform cannot be `pure`, which leans
+// the fork. This probe is the deciding one, because an interpreter's cycle is
+// not an encoding choice — it is in the semantics of a recursive function.
+
+import { Expr, Operator } from .types.expr
+import { Value, Env } from .runtime
+
+export enum EvalError implements Error {
+	UNBOUND { name string },
+	NOT_A_FUNCTION,
+	NOT_A_NUMBER,
+}
+
+export fn evaluate(expr &Expr, env &Confined<Env>) -> Either<Value, EvalError> {
+	return match expr {
+		.LITERAL { of } -> Ok(Value.NUMBER { of })
+
+		// Blocked on FINDING 5 in `runtime.elp` — `lookup` cannot be written,
+		// so neither can this. Left as the shape it wants.
+		.NAME { of } -> env.get().lookup(of) ?? throw EvalError.UNBOUND { name = of }
+
+		.BINARY { op, left, right } -> {
+			const l = evaluate(left, env)?
+			const r = evaluate(right, env)?
+			apply(op, l, r)
+		}
+
+		// FINDING 4 — a non-recursive `let` needs no mutation at all, and that
+		// is what makes the rest of this probe decisive rather than an artifact
+		// of how I wrote the evaluator.
+		//
+		// `LET` evaluates its value in the *enclosing* scope, then evaluates
+		// its body in a child scope that is **born with the binding in it**.
+		// The binding goes in the initialiser, so no cell is ever written, and
+		// `Env.child` above needs no `.update`. Scoping is correct: the bound
+		// name is not visible inside `value`, which is exactly what
+		// distinguishes `let` from `let rec`.
+		//
+		// So the hypothesis's whole mechanism is unnecessary for ordinary
+		// binding. It is needed for precisely one language feature.
+		.LET { name, value, body } -> {
+			const bound = evaluate(value, env)?
+			const inner = Env.child(env, name, bound)
+
+			evaluate(body, &inner)
+		}
+
+		// ─────────────────────────────────────────────────────────────────────
+		// FINDING 7 — and that one feature forces the mutation and the cycle
+		// *together*. They are not two findings, they are one.
+		//
+		// `LETREC` must make the bound name visible inside its own value, so
+		// `fn n -> ... fact(n - 1) ...` can call itself. There is exactly one
+		// way to arrange that, and every implementation of every language with
+		// recursive functions does it:
+		//
+		//   1. create the scope that will hold the binding;
+		//   2. evaluate the value in that scope — the closure captures it;
+		//   3. write the resulting closure into the scope created in step 1.
+		//
+		// Step 3 is the mutation. Without `update(fn (&var T) -> R)` it has no
+		// spelling: `Env` is `Move` (it holds `Confined<Env>`), and
+		// `aliasing.md` records that a cell holding a `Move` aggregate cannot
+		// have its fields updated at all. **So a tree-walking interpreter
+		// cannot be written in elp today** — not a graph, not a spatial index,
+		// the most ordinary recursive program there is. Fourth sighting of that
+		// wall, and the first where the blocked program is unremarkable.
+		//
+		// And step 3 is also the cycle. After it:
+		//
+		//   scope's cell  ->  Env.bindings["fact"]  ->  Value.CLOSURE.captured
+		//                 ->  the same cell
+		//
+		// **One cell, holding a handle to itself through its own contents.**
+		// Tighter than `examples/Recalc`'s two-cell `Shared<Confined<Knot>>`
+		// needle, and reached by writing a recursive function.
+		//
+		// There is no reordering that avoids it. The closure must see the
+		// binding (that is what recursion means) and the binding must hold the
+		// closure (that is what `let rec` means). Placeholder-then-patch, which
+		// is what real implementations do, is step 3 under another name. The
+		// cycle is in the semantics.
+		// ─────────────────────────────────────────────────────────────────────
+		.LETREC { name, value, body } -> {
+			const scope = Env.child(env, name, Value.NUMBER { of = 0 })
+
+			const bound = evaluate(value, &scope)?
+
+			// The mutation. `.alias()` already happened inside `evaluate`, when
+			// the LAMBDA arm captured `&scope` — see FINDING 8.
+			scope.update(fn (&var e) { e.bindings.set(name, bound) })
+
+			evaluate(body, &scope)
+		}
+
+		// FINDING 3's consequence at the site that forces it: `body` is
+		// borrowed out of `expr`, and `Value.CLOSURE` must outlive this call.
+		.LAMBDA { parameter, body } -> Ok(Value.CLOSURE {
+			parameter,
+			body     = Shared<Expr>.new(body),
+			captured = env.alias(),
+		})
+
+		.CALL { callee, argument } -> {
+			const target = evaluate(callee, env)?
+			const supplied = evaluate(argument, env)?
+
+			match target {
+				.CLOSURE { parameter, body, captured } -> {
+					// A child of the *closure's* scope, not the caller's, which
+					// is what makes this lexical scoping. Again born with its
+					// binding, so again no mutation.
+					const frame = Env.child(&captured, parameter, supplied)
+
+					evaluate(body.get(), &frame)
+				}
+
+				.NUMBER -> throw EvalError.NOT_A_FUNCTION
+			}
+		}
+
+		.IF { condition, then, otherwise } -> {
+			match evaluate(condition, env)? {
+				.NUMBER { of } -> if of != 0 {
+					evaluate(then, env)
+				} else {
+					evaluate(otherwise, env)
+				}
+
+				.CLOSURE -> throw EvalError.NOT_A_NUMBER
+			}
+		}
+	}
+}
+
+pure fn apply(op Operator, l Value, r Value) -> Either<Value, EvalError> {
+	const a = match l {
+		.NUMBER { of } -> of
+		.CLOSURE -> throw EvalError.NOT_A_NUMBER
+	}
+
+	const b = match r {
+		.NUMBER { of } -> of
+		.CLOSURE -> throw EvalError.NOT_A_NUMBER
+	}
+
+	return Ok(Value.NUMBER { of = match op {
+		.ADD -> a + b
+		.SUBTRACT -> a - b
+		.MULTIPLY -> a * b
+		.EQUALS -> if a == b { 1 } else { 0 }
+	} })
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FINDING 8 — `pure` on the transform cannot prevent the cycle, and this
+// corrects `aliasing.md`'s fork rather than resolving it.
+//
+// That fork says the cycle question turns on whether `.alias()` counts as a
+// side-effectful call, because closing an edge needs `b.alias()` *inside* the
+// transform. Look at `LETREC` above: it does not.
+//
+//   scope.update(fn (&var e) { e.bindings.set(name, bound) })
+//
+// `bound` is a `Value.CLOSURE` whose `captured` field is already an alias —
+// obtained in the `LAMBDA` arm, several frames down, long before this closure
+// exists. The transform **captures** a handle and stores it. It calls nothing.
+//
+// And captures are settled: `functions.md`'s own `update(pure fn (p Playhead)
+// -> Playhead { return p.advanced(frames) })` closes over `frames`, and
+// `grammar-script-notes.md` defines the restriction as *"`pure` functions
+// containing side-effectful **calls**"*. A bare capture-and-store is not a
+// call under that definition, so a `pure` transform admits this cycle.
+//
+// One could narrow `pure` to forbid capturing a cell handle by type. It would
+// not help: reading the captured cell is a call and would be caught anyway,
+// while merely storing a handle is the one thing the cycle needs, and
+// forbidding a capture by type is "a restriction by position" in a new costume
+// — the thing `aliasing.md` reached for `pure` specifically to avoid.
+//
+// So the fork collapses. `pure` was never the deciding variable, and the table
+// in `aliasing.md` should be read as having one surviving column.
+//
+// FINDING 9 — and the arena does not save this one, which is the difference
+// from `examples/Recalc`.
+//
+// Recalc's answer was an arena keyed by address, ownership a tree, every
+// refcount one. The same move is available here:
+//
+//   object Interpreter { var scopes [Env] }
+//   object Env { var bindings Map<string, Value>, const parent Optional<int> }
+//   Value.CLOSURE { ..., captured int }
+//
+// It constructs, the cycle becomes an index cycle, and an index cycle is just
+// data. But it is not a solution, it is a relocation, and the reason is
+// **lifetime**:
+//
+//   - a spreadsheet's `Graph` lives as long as the sheet, so an arena that
+//     never shrinks is correct and costs nothing;
+//   - an interpreter's scopes have genuinely dynamic lifetimes. Every scope
+//     ever entered stays in `scopes` forever, because nothing can know when
+//     the last index referring to it is gone.
+//
+// Recovering that means walking reachability over the indices — which is a
+// **tracing garbage collector, hand-written, inside the interpreter**. The
+// arena converted a refcount leak into a GC the program must implement itself.
+//
+// Which is exactly what the prior art says. CPython refcounts *and* ships a
+// cycle collector, and the cycle collector exists for precisely this shape;
+// Lua, Ruby and the JVM all trace. No production interpreter refcounts without
+// either a cycle collector or weak references, and that is not a coincidence
+// about implementation taste.
+//
+// ─────────────────────────────────────────────────────────────────────────────
+// VERDICT — `Weak<T>` is mandatory, and `examples/Recalc`'s recommendation
+// should be reversed.
+//
+// Recalc's reasoning was sound and its evidence was too narrow. A spreadsheet
+// graph is a program whose ownership *is* a tree once you stop using handles,
+// and the arena is free there because the arena's lifetime is the program's.
+// Both properties fail for an interpreter, and an interpreter is not an exotic
+// corpus entry — it is `BlogStyle`'s JSON, a template engine, a query planner,
+// a build-rule evaluator, anything with a user-authored expression in it.
+//
+// Stated as the four things that are now jointly true:
+//
+//   1. the cycle is **in the semantics** of a recursive function, not in an
+//      encoding, so no spelling avoids it;
+//   2. it is a **self**-cycle through one cell, so "three of the four cells
+//      cannot be an edge" does not bound it — only one cell is involved;
+//   3. `pure` on the transform does not prevent it (FINDING 8), so the fork
+//      `aliasing.md` recorded has one column;
+//   4. the arena escape converts it into a hand-rolled tracing GC (FINDING 9),
+//      which is a worse outcome than designing `Weak<T>`.
+//
+// What remains genuinely open is `Weak<T>`'s **cost**, and `aliasing.md`
+// already identified the sharp edge: Swift's `weak` needs a side table and must
+// zero every weak reference at deallocation, while `@abi(.C, realtime)` forbids
+// a refcount decrement reaching zero because deallocation takes a lock. Adding
+// `Weak<T>` makes release strictly more expensive in the one place elp cares
+// most. That is the design problem to solve, and it is a different problem from
+// the one Recalc thought it had closed.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// vim: ft=kotlin
