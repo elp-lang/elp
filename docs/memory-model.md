@@ -981,6 +981,110 @@ purely additive; the read hole runs into three ratified decisions at once
 cheap way out is copy-on-write rather than an indexed borrow. See that probe's
 FINDING 5 and GAP 8.
 
+## A recursive value type needs an indirection, not a box
+
+`examples/QuadTree` GAP 1 asked for this and `examples/Interpreter` FINDING 1
+supplied the evidence it had been missing: `Expr.BINARY` holds two `Expr`
+directly, so `size(Expr) = tag + 2 * size(Expr)` has no finite solution, and
+unlike QuadTree's own enum there is no array anywhere to supply an
+indirection. An AST is the most common recursive type any language compiles,
+and `examples/Editor` then found a second blocked program — an undo stack needs
+path-copying, which is a rope, which is this.
+
+**The proposal is a field marker, not a type.** Swift's precedent is one
+keyword: `indirect enum Expr { case binary(Expr, Expr) }`, where the marked
+case's payload is stored behind a heap allocation and the enum's own size
+becomes a pointer. The box is invisible: a pattern match binds an `Expr`, not
+a `Box<Expr>`, and there is no deref at any use site.
+
+```elp
+export enum Expr {
+	LITERAL { of int },
+	indirect BINARY { op Operator, left Expr, right Expr },
+}
+
+export object ListNode {
+	var value int,
+	indirect var next Optional<ListNode>,
+}
+```
+
+### Why a marker rather than a `Boxed<T>`
+
+`Boxed<T>` is the obvious alternative and Rust is the argument against it.
+`Box<T>` had to become a lang item to support moving a value out of it, and
+fifteen years later a user still cannot write an equivalent — there is no
+`DerefMove`. A privileged type that no library can match is exactly the bucket
+`stdlib-boundary.md` says to keep empty.
+
+A marker adds **no type**. It is a layout instruction, so there is nothing to
+privilege, nothing to name, and nothing a user is unable to compete with. It is
+both the smaller change and the barer one, which is that file's rule working.
+
+| | Rust `Box<T>` | Swift `indirect` | proposed |
+|---|---|---|---|
+| user names a type | yes | no | no |
+| visible at the use site | `*b`, `&*b` | invisible | invisible |
+| works on an object, not just an enum | yes | **no — enum only** | yes |
+| mutable through it | yes | n/a | **no** — see below |
+| privileged | **yes, a lang item** | no type to privilege | no type to privilege |
+
+### Two decisions Swift's answer does not make for us
+
+**1. It should apply to a field, not only to an enum case.** `indirect` is
+enum-only in Swift, so a recursive `struct` is still illegal there and people
+reach for a `class`. elp has `object` and `enum` as peers and a rule covering
+one but not the other would need a justification there is no material for. A
+per-field marker covers both and reads the same in each.
+
+**2. The box is immutable, and that fixes its tier.** This is the load-bearing
+choice. An indirect field is a refcounted allocation, so:
+
+- **immutable** — the box is `Shared`-shaped, and the containing type is
+  `Copy`, by the same argument `aliasing.md` already makes for `Shared<T>`
+  ("an immutable alias is observationally identical to a copy"). Copying an
+  `Expr` copies a pointer and retains.
+- **mutable** — the box would be `Confined`-shaped, which drags in the entire
+  write-surface problem: a cell holding a `Move` aggregate cannot have its
+  fields updated, five sightings and counting. **GAP 1 and the write surface
+  would become one gap.**
+
+So the box is immutable, and the cost is stated rather than hidden: a recursive
+value type is built, not edited. Rebuilding a path is how a persistent
+structure works anyway, which is exactly what `examples/Editor`'s undo needs,
+and `examples/Interpreter`'s AST is immutable by nature.
+
+**What that buys, beyond the obvious.** `examples/Interpreter` FINDING 3 found
+that a closure value cannot own its body — the AST arrives as `&Expr`, a field
+may not hold a borrow, so `Shared<Expr>` was forced and with it the conclusion
+that *"the AST must be built into cells up front"*, a representation decision
+imposed on the parser by one arm of the evaluator. With an immutable
+`indirect`, `Expr` is `Copy` and `CLOSURE { body Expr }` works directly. That
+finding dissolves.
+
+**And what it does not cover**, stated so the scan can check it: an in-place
+mutable recursive structure. The claim worth testing against the whole corpus
+is that there is no such type — QuadTree's is array-indirected and needs no
+marker, `examples/LruCache` showed the mutable list is unnecessary, and
+`examples/Recalc`'s graph is an arena. If the scan finds one, this decision is
+the thing it falsifies.
+
+### Smaller consequences
+
+- **The marker is required, never inferred.** Inferring "this type is
+  recursive, box it" would hide an allocation, and the surrounding style makes
+  cost visible — `.copy()` is explicit, `Buffer<T>` is not atmospheric. The
+  diagnostic on the unmarked version is what teaches it, which is what
+  `examples/Interpreter`'s FINDING 1 asks for.
+- **A copy retains, so an indirect value is unfit for a realtime body.**
+  `@abi(.C, realtime)` forbids a refcount decrement reaching zero, so an AST
+  cannot be walked on the audio thread. The same is already true of
+  `Shared<T>`, so this adds no rule — but it is worth knowing an interpreter
+  cannot be embedded in a realtime callback.
+- **Layout interaction.** An indirect field is pointer-sized, so a recursive
+  type could satisfy `Atomic<T>`'s eight-byte requirement. Harmless, and worth
+  noting so it is not mistaken for a bug when the layout pass reports it.
+
 ## `Buffer<T>` — contiguous storage, and where an address may exist
 
 The rule above leaves one thing unsayable, and it is correct for every
