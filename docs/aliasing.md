@@ -174,7 +174,11 @@ Map<K, V>.update(key K, fn (&var V) -> R) -> R
    `Synchronized` transform still must not `background`, receive from a
    channel, or lock a second `Synchronized` — and it is now plainly a
    restriction on a body *by position*, which is where it should have been
-   filed.
+   filed. `functions.md` now owns the mechanism — a declared bit, a closed
+   set, call-wise propagation — and names this as the **candidate third**
+   body property after `pure` and `realtime`. A third is the point at which
+   two special cases become an algebra, so it is deliberately not added
+   here.
 5. **The `&var T` may not escape.** It is a borrow and a field may not hold
    one, so storing it is already an error; this adds no rule and is stated
    because the closure makes it look like it might.

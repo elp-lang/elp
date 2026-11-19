@@ -352,7 +352,11 @@ An argument rather than a second directive, because it is a stronger form
 of a check `@abi(.C)` already performs rather than a different kind of
 thing.
 
-**It is `pure fn`'s shape, not a new effect system.** `pure` already
+**It is `pure fn`'s shape, not a new effect system.** *(The first half of
+this sentence survived; the second half did not — see "`pure` and
+`realtime` are not nested", below. A real-time body calls C and reads a
+cell, so it is maximally impure, and reading the two as nested would make
+`renderAudio` unwritable.)* `pure` already
 propagates through calls and already bans external calls — `background`,
 channel receives, I/O. The distance between pure and real-time-safe is one
 further property: **allocation**. So the rule is purity's propagation plus
@@ -374,6 +378,202 @@ It is tempting, since the block already establishes the C world. But
 silently inverts — a reader seeing a brace-bodied `fn` inside
 `@external(.C, library = "fluidsynth")` cannot tell which side owns it.
 Two directions want two markers.
+
+## `pure`, and the two body properties
+
+`pure` is depended on by eleven documents. `macros.md` rests the entire
+compile-time evaluator on it; `reactivity.md` makes it what earns
+memoization; `strings.md` and `collections.md` both argue from it;
+`name-resolution.md` says it introduces a type. Its complete specification
+until now was one line in `grammar-script-notes.md`:
+
+> **`pure` functions containing side-effectful calls.** Enforced by the
+> effect system, not the grammar.
+
+There is no effect system. Four documents refer to one; none designs one.
+
+### There is no effect system, and there does not need to be
+
+An effect system is an open algebra: effects are values, they compose, a
+signature carries a row of them, and polymorphism over effects is the
+interesting part. Nothing in this language has asked for any of that. What
+the eleven dependents actually want is **one bit, in the signature, that
+the compiler can check**.
+
+That has a precedent here, one level down. `aliasing.md` decides `Copy`
+field-wise — *"that is the whole mechanism. There is no propagation rule,
+no contagion rule, and nothing to derive."* The same shape works for a
+function body:
+
+**A body property is a declared bit, checked against a closed set of
+forbidden operations, propagated call-wise.** `Copy` is field-wise over a
+type; a body property is call-wise over a function. One pattern, two
+positions.
+
+The language has exactly **two** such properties: `pure` and `realtime`.
+Two is not an algebra, and if a third is ever wanted that is the moment to
+reconsider — not now.
+
+**And there is one candidate third already queued, so "not now" has a
+date on it.** `aliasing.md` requires that a `Synchronized<T>` transform
+must not `background`, receive from a channel, or lock a second
+`Synchronized` — *"a restriction on a closure body by position"*, which is
+precisely a body property. It was going to be spelled `pure`, and the
+section below is why that cannot work. If it is spelled as a third
+property, this stops being two special cases and becomes a small algebra,
+and the honest move at that point is to design one rather than add a third
+keyword. That decision is not made here; it is recorded so the next person
+to want a body property knows they are the one who tips it.
+
+### The rule
+
+1. **`pure` is declared, checked, and never inferred.** `pure fn total(…)`.
+   The body is checked against the declaration, not scanned to produce one.
+   This is the same argument Finding 4's third amendment makes for `&var`:
+   whether a function is pure is observable at every call site in every
+   other module, so it belongs in the signature rather than being a
+   consequence of private code.
+2. **A `pure fn` may call only `pure fn`s.** That is the whole of
+   propagation. The check is local — it reads the callee's *signature*,
+   never its body — which is what keeps it compatible with separate
+   compilation and what makes the diagnostic point at the call rather than
+   nine frames away.
+3. **`PureFn` is a subtype of `ImpureFn`.** A `pure fn` may be passed
+   wherever an `fn` is expected; the reverse is an error. The corpus
+   already states the pair — *"the type of a function is ImpureFn and a
+   pure function is PureFn. These types are type compatible"* — and this is
+   the only direction in which that can be sound.
+4. **A closure literal's purity is checked against the expected type, not
+   declared.** `rows.sorted(fn (a, b) { … })` writes no marker. The
+   position supplies the expectation, exactly as it already supplies the
+   parameter types, and the literal's body is checked against it. That is
+   propagation, not inference of a contract: there is no signature being
+   invented, because the literal has no name to be called by elsewhere.
+5. **A `pure fn`'s parameters are immutable and it may not declare `&var`.**
+   Already decided in `memory-model.md` Finding 5, and now a rule rather
+   than a consequence of inference.
+6. **An `@external fn` is impure, and there is no way to declare
+   otherwise.** `strlen` is pure in every meaningful sense and this
+   forbids saying so. The alternative is an assertion nothing can check,
+   in the register `aliasing.md` reserves for `Sendable` on a foreign
+   type — affordable there because it is load-bearing, and here it is
+   not: no corpus program wants a `pure` C call. Revisit when one does.
+
+### The closed set — what makes a body impure
+
+| operation | why |
+|---|---|
+| calling an `@external` function | the outside world, by definition |
+| `background { }`, `effect { }` | spawning |
+| a channel send or receive | communication, and it blocks |
+| reading or writing a **mutable** cell — `Confined`, `Synchronized`, `Atomic`, `Ring`, `Published` | two calls can return two answers |
+| reading or writing a component `var` | the same thing: a component `var` lowers to a cell |
+| calling an impure function, or an impure function value | rule 2 |
+
+Everything else is pure, and the list of what that includes is longer than
+people expect: arithmetic, allocation, building and mutating a local `[T]`
+or `Map`, string interpolation, recursion, `while`, `.copy()`, `.alias()`,
+and **`Shared<T>.get()`**.
+
+That last pair is worth stopping on, because it is where the definition
+earns its keep. `Shared<T>.get()` is pure and `Confined<T>.get()` is not,
+and the dividing line is immutability — the same argument that makes
+`Shared<T>` `Copy` for any `T`, that makes `string` `Copy`, and that makes
+an `indirect` box leave its container `Copy`. Four decisions, one argument,
+and this one was reached from a different direction.
+
+### What `pure` does not promise
+
+Stated explicitly, because two separate rounds of design reached for `pure`
+to supply something it does not have.
+
+- **Not "no mutation".** A `pure fn` mutates its own locals freely —
+  `examples/Expenses` writes `var sum = Money.zero()` and assigns to it in
+  a loop. Finding 5 already says `Copy` is the escape hatch for deriving a
+  mutable local from an immutable argument.
+- **Not "no allocation".** Deliberately. See the next section.
+- **Not "no aliasing", and this is the one that cost two rounds.**
+  `.alias()` is a pure call: it is deterministic and has no observable
+  effect, so a `pure` transform can capture a cell handle and store it,
+  which is all a reference cycle needs. `aliasing.md` and
+  `core-language-probes.md` §12 both proposed `update(pure fn …)` partly to
+  prevent exactly that, and `examples/Interpreter` FINDING 8 falsified it.
+  **The definition above reproduces that result rather than being patched
+  to agree with it**, which is the best evidence available that it is the
+  right definition.
+- **Not termination.** A `pure fn` may loop forever. That is `macros.md`'s
+  open "fixed-point loop termination" seen from the other side, and it
+  means the compile-time evaluator needs a step budget rather than a proof.
+
+### `pure` and `realtime` are not nested — a correction
+
+The `@abi(.C, realtime)` section above says:
+
+> It is `pure fn`'s shape, not a new effect system. `pure` already
+> propagates through calls and already bans external calls … The distance
+> between pure and real-time-safe is one further property: **allocation**.
+
+The first sentence is right and the second is wrong. A real-time body is
+not a pure body plus a rule — `examples/Playhead`'s `renderAudio` calls
+`fluid_synth_write_s16`, which is an `@external` function, and reads a
+`Confined<PlaybackState>` through an `Opaque`. It is maximally **impure**,
+and it must be: calling C is the entire job.
+
+The two properties are different closed sets over the same mechanism, and
+neither contains the other:
+
+| | `pure` | `realtime` |
+|---|---|---|
+| an `@external` call | **forbidden** | **allowed** — it is the point |
+| allocation | allowed | **forbidden** |
+| reading a mutable cell | **forbidden** | allowed, through `Opaque` |
+| a lock, a blocking call, an unbounded CAS retry | forbidden (no channels, no locks reachable) | **forbidden** |
+| a refcount decrement that can reach zero | allowed | **forbidden** |
+
+What the original sentence was reaching for is the shape: a declared bit,
+a closed leaf set, call-wise propagation. That is shared. The contents are
+not, and reading them as nested would have made `renderAudio` unwritable.
+
+**So `realtime` is a function modifier too.** `@abi(.C, realtime)` is sugar
+for "this `@abi(.C)` function is also `realtime`", and a helper reachable
+from one is spelled `realtime fn`. Without that there is nothing to
+propagate to and the guarantee stops at the first call — which is exactly
+where the corpus is today: `renderAudio` is marked, and
+`PlaybackState.fireEventsFor`, which it calls on the audio thread, carries
+no marker at all and is therefore unchecked. One corpus migration, and it
+is the one that makes the check mean anything.
+
+### Tested against the corpus, and it needed one change
+
+Every `pure fn` in the corpus is legal under this definition unchanged —
+`Expenses`' four aggregations (local `var`s, a `Map`, no cells),
+`Interpreter`'s `apply`, `Playhead`'s three clock methods, `parseAmount`.
+The only migration the whole design required is the one marker on
+`PlaybackState.fireEventsFor`.
+
+Two of them are better evidence than that count suggests, because they
+were written before the rule existed and had to obey it anyway.
+`Playhead`'s `estimate` is `pure` and takes `reading` and `transport` as
+**values sampled by the caller** — FINDING 8's resolution pushed the cell
+reads out of the function to make two readings simultaneous, which is
+exactly the line this rule draws, reached for an unrelated reason. And
+`Expenses`' `byCategory` is `pure` over a `Map`, which is only
+deterministic because `collections.md` ordered `Map` for a different
+argument again.
+
+### Determinism is a joint property, not a consequence
+
+`strings.md` requires that a compile-time macro *"emit identical code every
+build across all three targets"*, and `collections.md` ordered `Map` to
+keep that true. Purity does not supply it on its own: it gives
+same-input-same-output, and hash order is not an input anybody wrote down.
+
+So determinism is **purity plus the decisions that make the inputs total** —
+an insertion-ordered `Map` is one, and the target being an explicit value
+rather than ambient is another (a macro reading `target` is deterministic
+*given* the target, which is what conditional compilation needs). Worth
+naming because it is easy to cite `pure` for a guarantee that two other
+decisions are actually carrying.
 
 ## Open
 

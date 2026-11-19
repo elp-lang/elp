@@ -400,8 +400,12 @@ without it being load-bearing for anything else yet.
    is the final parameter. What remains is a sub-question of 1 — the AST
    shapes `@macro` checks against need names before it can check
    anything.
-3. **Fixed-point loop termination.** See above — no safety valve designed
-   yet for runaway macro expansion.
+3. **Fixed-point loop termination.** No safety valve designed yet for
+   runaway macro expansion — and `functions.md` now says plainly why there
+   cannot be a proof instead: **`pure` does not imply termination.** A
+   `pure fn` may loop forever, so the evaluator needs a step budget, which
+   is a number to choose and a diagnostic to write rather than an open
+   design question.
 4. **Diagnostics when macro evaluation fails** — a panic inside the
    evaluator, or a macro that produces code that doesn't parse/typecheck.
    Not discussed at all yet.

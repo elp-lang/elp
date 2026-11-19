@@ -143,8 +143,14 @@ places, so it can give targeted errors instead of generic ones:
   disambiguated by the type checker.
 - **`self` / `&self` appearing outside a method body.** Rejected in the
   semantic pass.
-- **`pure` functions containing side-effectful calls.** Enforced by the
-  effect system, not the grammar.
+- **`pure` functions containing side-effectful calls.** A semantic check,
+  not a grammar one. This line used to say "enforced by the effect system",
+  which described a mechanism that did not exist; `functions.md`, "`pure`,
+  and the two body properties", now specifies it as a declared bit checked
+  against a closed set of operations and propagated call-wise. The grammar's
+  part is unchanged — it accepts `pure fn` and says nothing about bodies —
+  and it gains one modifier, `realtime fn`, for a helper reachable from an
+  `@abi(.C, realtime)` body.
 
 ## Markup context — `component`, `stylesheet`, and what `Name { ... }` means
 

@@ -19,13 +19,16 @@ work and have nothing written down.
 
 | | depended on by | state |
 |---|---|---|
-| **`pure`** | `macros.md` (a macro *is* a `pure fn`), `memory-model.md` Finding 5, `aliasing.md`, `functions.md`, `collections.md`, `strings.md` — 11 docs | One line, in `grammar-script-notes.md`: *"`pure` functions containing side-effectful calls — enforced by the effect system, not the grammar."* **There is no effect system.** Four docs refer to it; none designs it. |
+| ~~**`pure`**~~ | — | **Designed**, in `functions.md`, "`pure`, and the two body properties". A declared bit, checked against a closed set of operations, propagated call-wise — no effect system, by the same pattern that makes `Copy` field-wise. What it left behind is smaller and listed below. |
 | **`Protected<T>`** | `memory-model.md`'s worked example, `functions.md`'s signatures, `generics.md`'s evidence table, the original corpus | `aliasing.md` says only what it is *not* ("not a peer of these three, it is a compiler-enforced access restriction"). What it restricts, and how, is nowhere. |
 | **Loops** | every probe — `while` appears in `TextSearch`, `QuadTree`, `Worker` and more | No doc owns loop statements. `core-language-probes.md` §2 establishes that `while` is *needed*; `grammar-script-notes.md` gap #2 lists it as open; nothing specifies `while`, `loop`, `break` or `continue`. |
 
-`pure` is the one to take first. It is the only one whose absence can make a
-decided thing wrong rather than unwritten — `macros.md` rests the entire
-compile-time evaluator on it.
+`pure` was taken first, for the reason given here — it was the only one whose
+absence could make a *decided* thing wrong rather than unwritten. It did:
+`functions.md`'s claim that real-time safety is purity plus a ban on
+allocation turned out to be backwards, since a real-time body calls C and
+reads cells and is therefore maximally impure. `Protected<T>` and loops are
+still open.
 
 ## Owned, and live
 
@@ -99,6 +102,19 @@ compile-time evaluator on it.
 | Routing resolution | `name-resolution.md` |
 | Stdlib module layout — four roots for one set of components | `name-resolution.md` |
 | Whole-program versus separate compilation | `dispatch.md`, deliberately deferred to the backend |
+
+## What `pure` being designed left open
+
+- **A candidate third body property.** `aliasing.md`'s restriction on what
+  may appear inside a `Synchronized` transform is one. Two body properties
+  are two special cases; three is a small algebra, and the honest move at
+  that point is to design one. Owner: `functions.md`.
+- **`realtime` on a helper is new syntax**, and the grammar has to admit a
+  second function modifier. Owner: `grammar-script-notes.md`.
+- **A `pure` `@external fn` is not sayable**, deliberately. `strlen` is pure
+  and cannot be declared so. Revisit when a corpus program wants it.
+- **The evaluator's step budget** — a number and a diagnostic, now that
+  `pure` is known not to imply termination. Owner: `macros.md`.
 
 ## Migration backlog created by the write-surface round
 
