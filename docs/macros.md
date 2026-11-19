@@ -395,21 +395,100 @@ the builder route is not an alternative to source-text construction; it is
 source-text construction with extra steps.
 
 Every macro system that works in practice has a quoting form — Lisp's
-backquote, Rust's `quote!`, Swift's string-interpolated syntax nodes. Three
-shapes are available and none is designed:
+backquote, Rust's `quote!`, Swift's string-interpolated syntax nodes. Open
+question 1 below asks what reflection *exposes*; this is the other half and
+the larger one: what it **accepts**.
 
-1. **Quasi-quoting**, `quote { export fn … }` with a splice for computed
-   names. It reads as elp, which is the whole appeal, and it needs a splice
-   form plus a hygiene decision this language has not discussed.
-2. **Source text**, Swift's answer: return a string and parse it.
-   Expressible today, and it discards the first-class-data claim entirely.
-3. **Builder calls.** Needs nothing new, which is why `codec.elp` uses them,
-   and unusable past a toy.
+### The option space, scored on one criterion
 
-Open question 1 below asks what reflection *exposes*. This is the other half
-and the larger one: what it **accepts**. Nothing in this document can be
-implemented until it is answered, which makes it the first thing to settle
-whenever the macro engine is next opened.
+The criterion is not expressiveness — all five options below can express the
+same generated code. It is whether a reader can **see the holes**, because
+the complaint that opened this section is a real one about Rust: `#name` is
+not a token any highlighter associates with interpolation, so a `quote!`
+block renders as either broken Rust or opaque text, and the interpolated
+names are the one thing in it a reader needs to find.
+
+| | holes visible? | why |
+|---|---|---|
+| **Sigil splice** — Rust `#x`, Lisp `,x` | **no** | the sigil is not part of the host grammar, so no highlighter knows it |
+| **Reuse elp's `{expr}`** | yes, free | every elp highlighter already handles string interpolation — but `{ }` is also the block delimiter, so inside *code* it is ambiguous |
+| **Source text**, Swift's answer | **no** | the whole block is a string literal |
+| **Builder calls** | n/a | there is nothing to highlight, and it is unusable past a toy — `examples/Json`'s first draft |
+| **Holes are parameters** | yes, free | a hole *is* an identifier, so it highlights as one, and semantic highlighting colours it as a parameter |
+
+### The proposal: a quote is parsed as elp, and its holes are its parameters
+
+```elp
+pure fn setField(key string, name Identifier) -> Statement {
+	return quote(key, name) {
+		fields.set(key, self.name.toJSON())
+	}
+}
+```
+
+Four decisions, and the first is what makes the rest possible.
+
+1. **A `quote` block is parsed as elp, not captured as a token stream.**
+   Rust needs a sigil precisely because `quote!` takes tokens, so a hole may
+   appear anywhere — including positions where no identifier could go. If the
+   block must parse, a hole can only sit where a name or an expression is
+   legal, and then it can *be* an ordinary identifier.
+2. **A hole is declared in the quote's argument list**, and inside the block
+   **an identifier is a hole if and only if it is a declared hole.** That is
+   the whole substitution rule and the whole hygiene rule for bound names, in
+   one sentence. `fields`, `Map` and `var` above are literal; `key` and
+   `name` are holes.
+3. **A hole's type decides how it splices.** A `string` hole becomes a string
+   literal, an `Identifier` hole becomes a name, a `[Statement]` hole splices
+   its elements in order. That last one **replaces Rust's repetition syntax
+   entirely** — `#(#fields),*` exists because a procedural macro is a
+   token-stream transformer with no loop of its own, and an elp macro is a
+   `pure fn` whose loop is an ordinary `for` three lines up.
+4. **Computation happens outside the quote.** Anything that needs a call is
+   computed into a hole first. This is what keeps the block readable as elp,
+   and it is the same split `reactivity.md` makes between a component body
+   and an `effect`.
+
+The cost, stated: a reader can see the holes but cannot tell them from
+locals **at a glance**, which is the dual of Rust's problem. The mitigation
+is that they are declared one line up in a signature, exactly like any
+function's parameters — and unlike `quote!`, a quote referencing an
+undeclared name is an error at the macro's definition site rather than
+garbage that fails at expansion.
+
+### What is still undecided, and it is hygiene for *free* identifiers
+
+Rule 2 settles bound names. It does not settle the other half, and
+`examples/Json/codec.elp` FINDING 26 is where it bites: `JSON` inside that
+quote is imported by the **macro's** file, and the generated code lands in
+the **user's** module, which may not import it. Worse, `Map` is atmospheric
+so it always resolves, which makes the failure intermittent rather than
+reliable.
+
+Every hygienic system answers this the same way — a free identifier resolves
+in the macro's **definition** scope, which Scheme does with syntax objects
+and Rust with `$crate`. For elp it means a quote carries its defining module,
+which is a representation decision on `Declaration` rather than a syntax one.
+That is the piece to design next.
+
+### And why none of this can be avoided
+
+The obvious escape is to not generate code at all: write `Codec<JSON>` once
+as a **default method** over any reflectable type, which is Swift's `Codable`
+as a user experiences it and needs no macro, no quote and no hygiene.
+
+`interfaces.md` forbids it, in a rule decided for good reasons: *"a default
+method's body may only call other methods of the same interface — it can
+never reach into the implementing object's private fields, full stop."*
+Encoding **is** reaching into fields. So the macro is not a convenience over
+a generic implementation; it is the only expressible form, and the quoting
+ergonomics are the mechanism rather than polish on it.
+
+The decode direction confirms it from the other side: `fromJSON` must
+construct a `Self` field by field, and `patterns.md` checks an object literal
+exhaustively for an owned aggregate, so there is no partial initialisation to
+build into. That is the same wall Swift hits, and the reason `init(from:)` is
+synthesised rather than defaulted.
 
 ## Open questions
 

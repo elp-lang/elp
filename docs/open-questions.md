@@ -19,7 +19,8 @@ mechanism nothing had exercised.
 
 | | |
 |---|---|
-| **An AST has no literal syntax** | `macros.md` claims the AST is first-class data. True of what a macro *reads*, false of what it *writes* — the first macro body in the corpus collapses into string construction halfway through. Quasi-quoting, source text, or builders; none designed. **The largest open item in the language.** |
+| **An AST has no literal syntax** | `macros.md` claims the AST is first-class data. True of what a macro *reads*, false of what it *writes*. A `quote` form is now **designed** there — parsed as elp, holes declared as parameters so they highlight as identifiers, a hole's type deciding how it splices, and no repetition syntax at all — and tested on `examples/Json/codec.elp`. Not ratified. |
+| **Hygiene for free identifiers in a quote** | `macros.md` — the half the proposal does *not* settle. A free name must resolve in the macro's definition scope, which means a quote carries its defining module: a representation decision on `Declaration`. **The piece to design next.** |
 | A macro has no diagnostic channel | `macros.md` — a `pure fn` cannot say "I do not know how to do that, here" |
 | What names a serialised field | `macros.md` — the dropped Go-style tags were the macro's *input*, not a duplicate of it |
 | Conformance as compile-time data | `macros.md` — decode needs "does this type conform to `Codec<JSON>`?" |

@@ -1884,13 +1884,46 @@ source-text construction with extra steps.
 
 Every macro system that works in practice has a quoting form: Lisp's
 backquote, Rust's `quote!` crate (so load-bearing it is effectively part of
-the language), Swift's string-interpolated syntax nodes. Three shapes are
-available here and none is designed — quasi-quoting (`quote { … }` plus a
-splice form and a hygiene decision nobody has discussed), source text
-(trivially expressible today, and it discards the first-class-data claim), or
-builder calls (needs nothing new, unusable at scale). `macros.md`'s open
+the language), Swift's string-interpolated syntax nodes. `macros.md`'s open
 question 1 asks what reflection *exposes*; this is the other half and the
 larger one.
+
+**The file was then rewritten against a proposed `quote` form**, which is
+what probes are for, and `macros.md` now carries the design. Four decisions,
+scored on one criterion — can a reader **see the holes**, which is the real
+complaint about `#name`. A quote is **parsed as elp** rather than captured as
+tokens, which is what lets a hole be an ordinary identifier; holes are
+**declared in the quote's argument list**, and inside the block an identifier
+is a hole if and only if it is declared, which is the substitution rule and
+the hygiene rule for bound names in one sentence; a hole's **type** decides
+how it splices, so a `[Statement]` hole splices in order and **Rust's
+`#(#x),*` repetition syntax never arises**; and computation happens outside
+the quote.
+
+Three things that rewrite found. A hole needs a type because the same field
+splices two ways — `"title"` in one position and `title` in another — which
+Rust handles by convention (`#name` beside `#name_str`) and this handles by
+`string` versus `Identifier`, which also means `Field.identifier()` has to
+exist beside `Field.name()`. The repetition problem **disappears** because an
+elp macro is a `pure fn` whose loop is an ordinary `for`, where a procedural
+macro is a token-stream transformer with no loop of its own. And hygiene for
+*free* identifiers is still open and is where it bites: `JSON` inside the
+quote is imported by the macro's file and the generated code lands in the
+user's module, while `Map` is atmospheric and always resolves — so the
+failure is intermittent rather than reliable.
+
+**And the escape does not exist**, which is what bounds how much any of this
+matters. The obvious way to avoid quoting is to not generate code: write
+`Codec<JSON>` once as a **default method** over any reflectable type, which
+is Swift's `Codable` as a user sees it. `interfaces.md` forbids it — *"a
+default method's body may only call other methods of the same interface — it
+can never reach into the implementing object's private fields, full stop"* —
+and encoding **is** reaching into fields. The decode direction confirms it
+from the other side: `fromJSON` must construct a `Self` field by field and
+`patterns.md` checks an object literal exhaustively, so there is no partial
+initialisation to build into. Same wall Swift hits, same reason `init(from:)`
+is synthesised rather than defaulted. So the macro is not a convenience over
+a generic implementation; it is the only expressible form.
 
 Three more came with it:
 
