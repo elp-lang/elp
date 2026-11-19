@@ -81,7 +81,7 @@ genuinely undecided thing — that `a..b` includes both ends.
 | A labelled `break`; a diverging `while true` | `control-flow.md` — both additive, neither wanted by a probe |
 | `indices()`, `reversed()` and `enumerated()` | `collections.md` — stdlib surface; `enumerated()` yields a record, not a pair |
 | ~~A compound reconciliation key allocates~~ | **solved** — `by` takes a comma-separated list, hashed component-wise; no tuple, no allocation |
-| Are `from` and `as` reserved or contextual? | `grammar-script-notes.md` |
+| ~~Are `from` and `as` reserved or contextual?~~ | **Decided**: fully reserved, because raw identifiers (`` `name` ``) make the escape one delimiter rather than a lookahead rule per keyword |
 | Float vs range lexing — `.5` is currently illegal by accident | `grammar-script-notes.md` |
 | Destructured params do not parse | `grammar-script-notes.md` |
 | Is `style` a reserved prop name? | `grammar-script-notes.md` |

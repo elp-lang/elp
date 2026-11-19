@@ -45,7 +45,7 @@ export component EntryForm(draft Binding<string>) {
 					return nil
 				}
 
-				onAdd(Expense { note, amount, category })
+				onAdd(Expense.new(note, amount, category))
 
 				note = ""
 				draft = ""

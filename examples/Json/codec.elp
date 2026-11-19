@@ -85,23 +85,29 @@ pure fn encodeFor(node Declaration) -> Declaration {
 	// ordinary `[Statement]`, and the quote splices the list in order because
 	// of its **type**. One less sublanguage, and the ugliest part of Rust's
 	// form never arises.
-	// FINDING 28 — a hole may not be named after a keyword, and `Self` is the
-	// one that tempts you.
+	// FINDING 28 — the one place this form needs a sigil, and it turns out
+	// the corpus wanted the sigil anyway.
 	//
-	// Writing `quote(Self = node.name(), …)` reads beautifully — the
-	// generated method is `export fn Self.toJSON(&self)` and splices to
-	// `Content.toJSON`. It is also wrong: `Self` already names the receiver's
-	// type inside any method body, so a hole with that name shadows a keyword
-	// in the one place a reader is least able to notice, and the quote's own
-	// `&self` means something the hole does not.
+	// `quote(Self = node.name(), …)` reads beautifully and is ambiguous:
+	// `Self` already names the receiver's type, and in some quoted positions
+	// the bare keyword is legal elp, so nothing says whether it is the hole
+	// or the keyword. Renaming the hole to `owner` works and throws away the
+	// expressive name for one a reader will not find later.
 	//
-	// The rule the proposal needs, found by writing it: **a hole's name must
-	// not collide with a keyword or with `Self`.** One line, and it only
-	// exists because holes are ordinary identifiers — a sigil form cannot
-	// have this problem, which is the first thing Rust's spelling is better
-	// at.
-	return quote(owner = node.name(), writes) {
-		export fn owner.toJSON(&self) -> JSON {
+	// `grammar-script-notes.md` adds **raw identifiers** — `` `name` ``,
+	// Kotlin's and Swift's spelling — for a reason that has nothing to do
+	// with macros: `type` is a keyword inside an `@external` block and the
+	// corpus names a field `type` twice, a parameter `type` twice, and a prop
+	// `type` four times, the last being `Button(type = .FORM_SUBMIT)`, a
+	// built-in element's own API.
+	//
+	// So the hole keeps its name and carries the delimiter. The position is
+	// better than Rust's rather than a retreat to it: Rust marks *every*
+	// splice so none highlights, and marking only the keyword collisions
+	// leaves the ordinary hole bare and free while the rare one gets a
+	// delimiter editors already render as an identifier.
+	return quote(`Self` = node.name(), writes) {
+		export fn `Self`.toJSON(&self) -> JSON {
 			var fields Map<string, JSON> = .new()
 			writes
 			return JSON.OBJECT { of = fields }

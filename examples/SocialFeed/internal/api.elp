@@ -19,14 +19,18 @@ export enum ApiErrorType {
 
 @CodeGen(ToJSON, Default)
 export object ApiError {
-	const type    ApiErrorType,
+	const `type`  ApiErrorType,
 	const message string,
 }
 
 ApiError implements Error + From<HttpError>
 
-fn ApiError.new(type ApiErrorType, message string) -> Self {
-	return Self { type, message }
+// `type` is a keyword inside an `@external` block, so the field and the
+// parameter both carry the raw-identifier delimiter
+// (`grammar-script-notes.md`). Two corpus files wanted this before the macro
+// engine did.
+fn ApiError.new(`type` ApiErrorType, message string) -> Self {
+	return Self { `type`, message }
 }
 
 fn ApiError.toString(&self) -> string {

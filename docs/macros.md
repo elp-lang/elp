@@ -449,13 +449,26 @@ Four decisions, and the first is what makes the rest possible.
    and it is the same split `reactivity.md` makes between a component body
    and an `effect`.
 
-**A hole's name may not collide with a keyword, or with `Self`.** Found by
-writing the macro: `quote(Self = node.name(), …)` reads beautifully and is
-wrong, because `Self` already names the receiver's type inside any method
-body, so the hole shadows a keyword in the place a reader is least able to
-notice it. One extra rule, and it exists *only* because holes are ordinary
-identifiers — a sigil form cannot have this problem, which is the first
-thing Rust's spelling is better at.
+**A hole colliding with a keyword is written in backticks**, which is the
+raw-identifier form `grammar-script-notes.md` adds for the corpus's own
+sake. Found by writing the macro: `quote(Self = node.name(), …)` reads
+beautifully and is ambiguous, because `Self` already names the receiver's
+type and in some quoted positions the bare keyword would be legal. So:
+
+```elp
+return quote(`Self` = node.name(), writes) {
+	export fn `Self`.toJSON(&self) -> JSON { … }
+}
+```
+
+This is the one place the proposal needs a sigil, and it is worth being
+precise about why that is a *better* position than Rust's rather than a
+retreat to it. Rust marks **every** splice, so no splice highlights.
+Marking only the keyword collisions means the ordinary hole stays a bare
+identifier and highlights for free, while the rare one carries a delimiter
+that Kotlin and Swift grammars already render as an identifier — and it is
+the hole a reader should look twice at anyway. The exception is marked; the
+rule is not.
 
 The cost, stated: a reader can see the holes but cannot tell them from
 locals **at a glance**, which is the dual of Rust's problem. The mitigation

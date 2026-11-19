@@ -65,12 +65,19 @@ export fn Category.label(&self) -> string {
 	}
 }
 
+// MIGRATED — field tags and a field default, same as
+// `examples/LinkShortener/types/link.elp` and missed by the sweep for the
+// same reason. See `examples/BlogStyle/internal/api.elp` GAP 1 and GAP 2.
 @CodeGen(Codec<JSON>)
 export object Expense {
-	const id       = UUID.v4() `json: "id"`,
-	const note     string      `json: "note"`,
-	const amount   Money       `json: "amount"`,
-	const category Category    `json: "category"`,
+	const id       UUID,
+	const note     string,
+	const amount   Money,
+	const category Category,
+}
+
+export fn Expense.new(note string, amount Money, category Category) -> Self {
+	return Self { id = UUID.v4(), note, amount, category }
 }
 
 // vim: ft=kotlin

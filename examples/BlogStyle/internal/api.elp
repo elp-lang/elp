@@ -55,7 +55,7 @@ export fn Content.new(title string, body string, excerpt string) -> Self {
 
 @CodeGen(ToJSON, Default)
 export object ApiError {
-	const type    ApiErrorType,
+	const `type`  ApiErrorType,
 	const message string,
 }
 
@@ -66,8 +66,12 @@ ApiError implements Error + From<HttpError>
 
 // No `self`, so this is a static method on `ApiError` rather than an
 // instance one. `Self` names the receiver's type.
-fn ApiError.new(type ApiErrorType, message string) -> Self {
-	return Self { type, message }
+// `type` is a keyword inside an `@external` block, so the field and the
+// parameter both carry the raw-identifier delimiter
+// (`grammar-script-notes.md`). Two corpus files wanted this before the macro
+// engine did.
+fn ApiError.new(`type` ApiErrorType, message string) -> Self {
+	return Self { `type`, message }
 }
 
 // `toString` is `Error`'s one requirement.

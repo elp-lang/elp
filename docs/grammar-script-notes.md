@@ -154,6 +154,42 @@ places, so it can give targeted errors instead of generic ones:
   and it gains one modifier, `realtime fn`, for a helper reachable from an
   `@abi(.C, realtime)` body.
 
+## Raw identifiers — `` `name` ``
+
+**A name in backticks is an ordinary identifier, whatever it would
+otherwise be.** `` `type` ``, `` `match` ``, `` `Self` ``. Legal anywhere an
+identifier is: a field, a parameter, a prop, a declaration, a quote's hole.
+
+Prior art is Kotlin and Swift, which both spell it exactly this way — the
+two languages this design is closest to, and the reason an editor already
+renders `` `x` `` as an identifier rather than as a string. That matters
+here more than usual, because the whole argument for `macros.md`'s quote
+form is what a highlighter can show a reader.
+
+**The corpus asked for it before the macro did**, which is what makes it a
+feature rather than a convenience. `type` is a keyword inside an
+`@external` block (`export type CString`) and the corpus names a field
+`type` twice, a parameter `type` twice, and a prop `type` four times —
+`Button(type = .FORM_SUBMIT)`, which is a **built-in element's own API**. A
+language whose forms library cannot name a prop `type` has a problem that
+no amount of reserving-fewer-words fixes, because the next collision is
+always a word somebody else needed.
+
+Three consequences worth stating.
+
+- **It settles the contextual-keyword question above** by making it
+  unnecessary. Reserve freely; the escape is one delimiter rather than a
+  lookahead rule per keyword.
+- **The character was freed by the sweep.** Backticks were the old corpus's
+  Go-style field tags, dropped as an undocumented second metadata channel
+  (`examples/BlogStyle/internal/api.elp` GAP 2). Nothing else claims them.
+- **It is the exception, not the rule**, and that is the whole point for
+  `macros.md`. A quote's holes are bare identifiers and highlight for free;
+  only a hole colliding with a keyword carries the delimiter, and that is
+  the one a reader should look twice at anyway. Rust marks **every** splice
+  with `#` and so none of them highlights; marking the rare case inverts
+  that.
+
 ## Markup context — `component`, `stylesheet`, and what `Name { ... }` means
 
 **Decided, not yet implemented.** This section resolves the
@@ -1097,11 +1133,13 @@ in one or more example files but have no specced behaviour:
 - **Conditional loops** (`while`, `loop`). See gap #2.
 - **Doc comments** (`///`). The lexer recognises them as a hidden
   channel; no extraction pipeline yet. Not blocking the parser.
-- **Are `from` and `as` fully reserved, or contextual?** Fully reserved
-  means neither can ever be an identifier — no `fn convert(from Foo)`.
-  Contextual means they're keywords only in import position and ordinary
-  identifiers everywhere else, which costs the parser a lookahead or a
-  keyword-union `ident` rule. Not decided.
+- ~~**Are `from` and `as` fully reserved, or contextual?**~~ **Decided:
+  fully reserved, because there is an escape.** See "Raw identifiers",
+  below. Contextual keywords cost the parser a lookahead or a keyword-union
+  `ident` rule at every site, for a problem that one delimiter solves once
+  — and the corpus's demand turned out to be `type` rather than `from` or
+  `as`, which a contextual rule for two words would not have covered
+  anyway.
 - ~~**`if` condition vs builder block.**~~ **Resolved** by "Markup
   context" above. An `if` condition is an expression, so it is always
   value context, where `Name { ... }` is an object literal — and object

@@ -1,11 +1,24 @@
 import { Error, Codec, UUID } from elp.types
 import { CodeGen } from elp.macros
 
+// MIGRATED — the corpus sweep dropped Go-style field tags from the three
+// original apps and missed this file and `examples/Expenses`. Both are
+// written up as `examples/BlogStyle/internal/api.elp` GAP 1 and GAP 2: a
+// field default standing in for a type (`hits = 0`), and a second untyped
+// metadata channel no document records.
+//
+// Finding them late is itself the finding. The sweep searched for the forms
+// the *apps* used and these two files are libraries, which is a reminder
+// that a sweep by program kind misses what a sweep by feature would not.
 @CodeGen(Codec<JSON>)
 export object Link {
-	const code      string `json: "code"`,
-	const target    string `json: "target"`,
-	var   hits      = 0    `json: "hits"`,
+	const code   string,
+	const target string,
+	var   hits   int,
+}
+
+export fn Link.new(code string, target string) -> Self {
+	return Self { code, target, hits = 0 }
 }
 
 export enum StoreError {

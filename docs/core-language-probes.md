@@ -1848,6 +1848,18 @@ language able to say so. What both files want is a line identity that
 survives editing, which is a rope's node identity, which is
 `examples/Editor` FINDING 5 arriving from the view layer.
 
+### Two files the sweep missed, found while freeing the backtick
+
+`examples/LinkShortener/types/link.elp` and
+`examples/Expenses/types/expense.elp` still carried Go-style field tags and
+a field default (`hits = 0`, `id = UUID.v4()`) — the §16 sweep dropped both
+from the three original apps and never reached these two.
+
+Finding them late is itself the finding: the sweep searched for the forms
+the **apps** used, and these are libraries. A sweep organised by program
+kind misses what a sweep organised by feature would not, which is worth
+knowing before the next one.
+
 ### What the scan did not find
 
 No violation of `pure`: every `pure fn` in the corpus is legal under the
@@ -1900,12 +1912,16 @@ how it splices, so a `[Statement]` hole splices in order and **Rust's
 `#(#x),*` repetition syntax never arises**; and computation happens outside
 the quote.
 
-Four things that rewrite found. A hole's name may not collide with a
-keyword or with `Self` — `quote(Self = node.name(), …)` reads beautifully
-and shadows the receiver type in the one place a reader cannot see it, which
-is a rule a sigil form would not need and the first thing Rust's spelling is
-better at. A hole needs a type because the same field
-splices two ways — `"title"` in one position and `title` in another — which
+Four things that rewrite found. **The form needs exactly one sigil, and the
+corpus wanted it anyway** — `quote(Self = node.name(), …)` is ambiguous
+because `Self` already names the receiver's type, so the hole carries the
+raw-identifier delimiter `grammar-script-notes.md` adds: `` `Self` ``. That
+delimiter exists for a reason with nothing to do with macros (`type` is a
+keyword inside `@external` and the corpus names a field, a parameter and a
+built-in element's prop `type`), and marking only the keyword collisions is
+a better position than Rust's rather than a retreat to it, because the
+ordinary hole stays bare and highlights for free. A hole needs a type
+because the same field splices two ways — `"title"` in one position and `title` in another — which
 Rust handles by convention (`#name` beside `#name_str`) and this handles by
 `string` versus `Identifier`, which also means `Field.identifier()` has to
 exist beside `Field.name()`. The repetition problem **disappears** because an
