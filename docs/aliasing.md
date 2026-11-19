@@ -1091,6 +1091,19 @@ posts.copy().prepend(post)                      // SocialFeed/screens/home.velp
 state.messages.copy().append(...)               // ChatRoom/main.velp
 ```
 
+**Corrected — neither line ever type-checked, and they were this document's
+evidence.** `collections.md` declares `fn Array.append(&var self, value T)`
+returning **unit**, so `.copy().append(x)` is not a value and cannot be
+assigned. The corpus scan found it (`core-language-probes.md` §16) and both
+sites are now transforms, which are cheaper anyway.
+
+The tier is unaffected — `.copy()` is still explicit duplication of
+something not implicitly `Copy`, and that is still what `Duplicate` means.
+What is gone is the claim that the corpus had been *using* it all along,
+which is weaker evidence than it read as: what the corpus had been doing was
+writing something that did not compile, in two files, quoted in two
+documents.
+
 `.copy()` is explicit duplication of something that is *not* implicitly
 `Copy` — otherwise nobody would have to call it. It is Rust's `Clone`.
 

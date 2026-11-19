@@ -483,28 +483,75 @@ is the one thing `export` exists to prevent.
    migration it implies is the one the corpus actually got: nine slots and
    three extents, and not one handle.
 
-8. **Two `&var` arguments to one `@external` call may alias.** Rule 5's
-   exclusivity is between **elp-side** paths. It cannot reach across the
-   boundary, because the C ABI has no aliasing model, and the corpus's most
-   real-world FFI call depends on that:
+8. **Exclusivity holds at an `@external` call too, and the aliasing case is
+   declared rather than excepted.** This rule said the opposite for a day
+   and the correction is worth keeping on the page, because the first
+   answer was the obvious one and the second is better.
 
-   ```elp
-   fluid_synth_write_s16(&state.get().synth, frames,
-                         &var output, 0, 2,    // left:  offset 0, stride 2
-                         &var output, 1, 2)    // right: offset 1, stride 2
+   The problem is real. `examples/Playhead` makes the corpus's most
+   real-world FFI call, and the C signature takes two output pointers that
+   it passes the **same buffer** to:
+
+   ```c
+   fluid_synth_write_s16(synth, frames,
+                         buffer, 0, 2,    // left:  offset 0, stride 2
+                         buffer, 1, 2)    // right: offset 1, stride 2
    ```
 
    One allocation, two logical channels, offset and stride as arguments —
-   the shape `examples/Playhead` FINDING 3 cites as the reason `Buffer<T>`
-   needs no layout parameter. Under a literal reading of rule 5 the single
-   most common interleaved-audio call in the world is unwritable.
+   the shape that probe's FINDING 3 cites as the reason `Buffer<T>` needs no
+   layout parameter. Written as two `&var` arguments it violates rule 5, and
+   the first answer here was to except it: *exclusivity is between elp-side
+   paths and cannot reach across the boundary, because the C ABI has no
+   aliasing model.*
 
-   The consequence for codegen is worth stating rather than discovering: a
-   `&var` argument at an `@external` call lowers to a raw pointer, not to
-   `&mut`, because two `&mut` to one allocation is undefined behaviour in
-   Rust whatever C does with them. That is the boundary where `aliasing.md`
-   already says `unsafe` lives, so it costs no new rule — only the honesty
-   that exclusivity stops at the boundary.
+   True about C, and the wrong place to spend the exception. **The aliasing
+   is a property of the call, not of the boundary**, and a binding can say
+   so:
+
+   ```elp
+   @external(.C, library = "fluidsynth") {
+   	export fn writeInterleaved(
+   		symbol      = "fluid_synth_write_s16",
+   		synth       &FluidSynth,
+   		frames      int,
+   		out         &var Buffer<int16>,
+   		leftOffset  int,
+   		leftStride  int,
+   		rightOffset int,
+   		rightStride int,
+   	) -> int
+
+   	export fn writePlanar(
+   		symbol = "fluid_synth_write_s16",
+   		synth  &FluidSynth,
+   		frames int,
+   		left   &var Buffer<int16>,
+   		...
+   	) -> int
+   }
+   ```
+
+   Two elp declarations over one C symbol, which is **the same mechanism**
+   `examples/VulkanTriangle`'s count-then-fill already needs and which is
+   already parked as a `symbol =` argument in the Open list below. The
+   interleaved form takes **one** `&var` and the lowering emits the pointer
+   twice with the two offsets; the planar form takes two, which genuinely
+   are distinct allocations. Neither declaration aliases on the elp side, so
+   rule 5 needs no exception at all.
+
+   What it costs: an `@external` declaration no longer maps one-to-one onto
+   the C signature, and "transcribe the header faithfully" is the rule that
+   makes `@external` auditable. The answer is that the arity difference is
+   *the information* — a reader sees that this binding is the interleaved
+   mode, which the faithful transcription does not say anywhere.
+
+   One consequence for codegen survives from the first answer: a `&var`
+   argument at an `@external` call lowers to a raw pointer rather than
+   `&mut`, because the thunk hands the same address to C twice and two
+   `&mut` to one allocation is undefined behaviour in Rust whatever C does.
+   That is now confined to the generated thunk instead of appearing in user
+   code.
 
 9. **A pattern is a projection, which settles matching through a
    reference.** Matching a `&var T` binds each payload field as a `&var`
@@ -1017,7 +1064,9 @@ the collection, and persisting the change requires an explicit write-back:
 ```
 
 This is the consistent reading of the old corpus's
-`state.messages.copy().append(...)`, and it is the conservative choice:
+`state.messages.copy().append(...)` — a line that **never type-checked**,
+since `collections.md` returns unit from a mutating method
+(`core-language-probes.md` §16) — and it is the conservative choice:
 an API that forgets the write-back is a visible no-op rather than an
 invisible aliasing bug.
 
@@ -1516,13 +1565,16 @@ declared tier being the one place a user gets stdlib's privilege.
 - **`string` byte access.** `s.bytes() -> Buffer<uint8>` copies, and that
   is correct but not free; the zero-copy form arrives with views. Still
   gated on the undesigned numeric tower.
-- **The nullable buffer argument is now unspellable, and that is
-  progress.** `vkEnumeratePhysicalDevices(instance, &count, null)` passes
-  `NULL` where `&Buffer<...>` is expected, and `Optional<&T>` is barred by
-  "a field may not hold a borrow". It is genuinely two operations, so the
-  honest fix is two elp declarations over one C symbol — a `symbol =`
-  argument on `@external`. That is an FFI gap rather than a storage one,
-  and this design is what exposes it.
+- **`symbol =` on `@external`, and it now has two customers rather than
+  one.** `vkEnumeratePhysicalDevices(instance, &count, null)` passes `NULL`
+  where `&Buffer<...>` is expected and `Optional<&T>` is barred, so the
+  count-then-fill call is genuinely two operations over one C symbol. Rule 8
+  above found the second customer: `fluid_synth_write_s16`'s interleaved and
+  planar modes are two operations over one symbol too, and declaring them
+  separately is what lets exclusivity hold unconditionally rather than
+  needing an exception at the boundary. Two unrelated probes, one mechanism,
+  and the second one makes it load-bearing for a rule rather than for
+  ergonomics.
 - ~~**`&var T` as a non-receiver parameter.**~~ **Ratified**, in Finding 4's
   third amendment above, and the leaning recorded here was half wrong: the
   spelling does have to exist, but the **call sites were right** and Finding
