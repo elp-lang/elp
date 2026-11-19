@@ -306,7 +306,7 @@ A markup block admits these node forms and nothing else:
 ```
 node = element | if | match | for | Slot | const
 element = IDENT arguments? block?
-for = 'for' pattern 'in' expr 'by' expr block
+for = 'for' pattern 'in' expr 'by' expr (',' expr)* block
 ```
 
 - **`element`** is one rule covering all four shapes the corpus uses:
@@ -319,7 +319,12 @@ for = 'for' pattern 'in' expr 'by' expr block
   `patterns.md` resolved two-binding iteration as record destructuring; it
   is a pattern, and `for { key as k, value as v } in map` is legal in
   markup too. `by` stays mandatory and markup-only — `control-flow.md`
-  has why it is not vestigial.
+  has why it is not vestigial, and why it takes a **comma-separated list**:
+  a compound key is an ordered sequence hashed component-wise, so joining
+  two fields costs no allocation and needs no tuple type. That is the same
+  syntactic-list shape as `implements Copy + Add`, a named style's
+  `: base + emphasis`, and a `with` block's several bindings, and it parses
+  for the same reason — the list is terminated by the block's `{`.
 - **`const x = expr`** is allowed, for a value computed once on entering
   the block. `var` is not — reactive state belongs in the component
   body, which is a statement block and already handles it.

@@ -230,10 +230,11 @@ a false claim is statically visible, so it gets a compile-time diagnostic
 too:
 
 ```elp
-for line in lines by line        // identity_by_value — the key is the value
-for name in names by name        // same
-for post in posts by post.id     // silent
-for row in rows by row.category  // silent — a projection, and a real claim
+for line in lines by line                     // identity_by_value
+for name in names by name                     // same
+for post in posts by post.id                  // silent
+for row in rows by row.category               // silent — a real claim
+for post in posts by post.authorId, post.slug // silent — a compound key
 ```
 
 The lint fires when the `by` expression is the loop binding itself, with
@@ -317,6 +318,86 @@ at all, or `id: \.self` as a default — cannot happen here. React's `key`
 is optional, Compose's is optional, and SwiftUI's `\.self` overload is the
 path of least resistance. The duplicate case is what is left *after* that
 is fixed, and it is the smaller one.
+
+### Solving it rather than linting it
+
+`diagnostics.md` states the preference this design keeps returning to:
+*"making the drift unrepresentable rather than lintable … that is the
+preferred move whenever it is available — a lint is what you reach for when
+the design cannot make the mistake impossible."* A trap plus a lint is
+therefore the fallback, not the answer, so it is worth asking what the
+answer is.
+
+There are four failures around a reconciliation key, and the design can
+reach three of them.
+
+**1. No key at all — already unrepresentable.** `by` is mandatory. This is
+the failure that actually happens in React, Compose and SwiftUI, it is the
+one that costs real users real bugs, and it cannot be written here. Worth
+putting first because the remaining three are much smaller.
+
+**2. Keying on the bare value — visible, and the message is the point.**
+`identity_by_value` fires on `by line`. But the lint's real content is not
+*"this key may repeat"*; it is **"this collection has no identity"**. A
+`[string]` document model cannot say which line is which, and no key
+expression can invent one. That is why both corpus sites resolve to a rope
+rather than to a different `by`: identity belongs to the **model**, and `by`
+is only where you *name* it. The diagnostic should say that, because the fix
+is never at the loop.
+
+**3. A compound key that allocates — solvable, and the solution is a shape
+the language already has.** `by` takes a comma-separated list:
+
+```elp
+for post in posts by post.authorId, post.slug
+```
+
+The key is the ordered sequence, hashed component-wise, so `by a, b` and
+`by b, a` are different keys — the same order-matters reading styles already
+have in `base + emphasis`. Nothing is allocated, no tuple type is needed,
+and no type is added: this is a **syntactic list in a declaration position**,
+exactly like `implements Copy + Add`, the `: A + B` on a named style, and
+the several bindings of a `with` block. The grammar needs one change,
+`'by' expr (',' expr)*`, and it parses for the reason the others do — the
+list is terminated by the block's `{`.
+
+An interpolated `string` key stays legal, because a server-provided
+composite id is a real thing. What changes is that nobody has to reach for
+one to join two fields.
+
+**One caveat, and this file's rule requires stating it: no corpus program
+needs the list.** All six markup loops key on a single field or are the two
+flagged `by line` sites. So this is designed from a *decision's
+consequence* — `patterns.md` removed tuples, which makes joining two fields
+allocate — rather than from a program that wanted it, which is weaker
+evidence than anything else in this document rests on. It is kept because
+it is purely additive and because the alternative is a workaround that is
+already the standard answer everywhere else. What would falsify it: a
+corpus entry whose compound keys all turn out to arrive from a server as
+one string, in which case the list is solving a problem nobody has.
+
+**4. A key that depends on position — not statically reachable, so it gets
+a runtime diagnostic.** The compiler cannot tell which of an iterator's
+fields is an index. The *reconciler* can tell something better, and for
+free, because it already holds both key sets: if the old and new key sets
+are disjoint while the collection's length barely moved, every key changed
+at once, and that is what a position-dependent key looks like from the
+inside. `key_churn`, a runtime diagnostic in the register `reactivity.md`
+already uses for a turn exceeding the frame budget.
+
+It is a heuristic and it is named as one. What makes it worth having is the
+failure it catches: a position key is **silent forever** otherwise — the
+list renders correctly, and the only symptoms are lost row state and
+animations that re-fire, which is the hardest thing in this area to
+attribute. One diagnostic at the first interaction is worth more than any
+amount of prose.
+
+**So the four-line summary of the answer.** The failure that matters is
+unrepresentable. The failure that signals a modelling mistake is a lint
+whose message names the model. The failure that was an ergonomic tax is
+removed by a list, which costs no type and no allocation. And the failure
+nothing static can see is caught by the one component that can see it, at
+the moment it happens.
 
 **And the corpus sites are kept**, flagged, rather than contorted. Both
 want a line identity that survives editing, which is a rope's node

@@ -124,6 +124,25 @@ error, so a new variant can only ever arrive through a deliberate
 upgrade. The break is visible and informative at the moment you choose
 it. A lint flags the exposure; it does not forbid it.
 
+### `key_churn` — a runtime diagnostic, not a lint
+
+Every key in a markup `for` changed between two renders while the
+collection's length barely moved. That is what a **position-dependent key**
+looks like from inside the reconciler — `by "{index}-{line}"` and its
+relatives — and it is the one failure around reconciliation identity that
+nothing static can see, because the compiler cannot tell which of an
+iterator's fields is an index.
+
+It is a heuristic, and it is in the register `reactivity.md` already uses
+for a turn exceeding the frame budget rather than the lint register, for
+the same reason: the condition is a fact about a run, not about a program.
+
+What earns it a place is the failure it replaces. A position key is
+**silent forever** otherwise: the list renders correctly and the only
+symptoms are lost row state and animations re-firing, which is the hardest
+thing in this area to attribute to its cause. The reconciler already holds
+both key sets, so it costs a comparison.
+
 ### `identity_by_value` — warn by default
 
 A markup `for` whose `by` expression is the loop binding itself, with no
@@ -135,6 +154,12 @@ usually false and silently collapses two rows into one. A duplicate key
 **traps** at runtime (`control-flow.md`), and this is the compile-time half:
 the shape that is almost always a false claim is statically visible even
 though uniqueness is not.
+
+**The message is the point, and it is not about the key.** What this lint
+has actually found is that *the collection has no identity* — a `[string]`
+document model cannot say which line is which, and no key expression can
+invent one. The fix is never at the loop, so the diagnostic should name the
+model rather than suggest a different `by`.
 
 Narrow by construction — it cannot fire on `by post.id` or `by
 row.category`, which are projections and therefore real claims — and a lint
@@ -162,6 +187,7 @@ Scattered through the other docs, collected here so they have a home:
 | extra fields in a structural projection are truncated | `generics.md`, and a comment in `ChatRoom/main.velp` | lint — `truncated_projection` |
 | a turn exceeds the frame budget | `reactivity.md` | runtime diagnostic |
 | a duplicate `by` key in a markup `for` | `control-flow.md` | **trap** — the same register as an out-of-bounds `[]` |
+| every `by` key changed at once | `control-flow.md` | runtime diagnostic — `key_churn` |
 
 `grammar-script-notes.md` also contains a deliberate *rejection* of a
 lint: accessibility state is derived from props rather than passed
