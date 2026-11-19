@@ -1,0 +1,215 @@
+// The ledger, and the three ways a transfer can be written. None of them is
+// good, and the least bad one needs a rule nobody has written down.
+
+import { Error, Either } from elp.types
+import { AccountId, Account, Money, Hold } from .types.account
+
+export object Ledger {
+	var accounts Map<AccountId, Account>,
+}
+
+Ledger implements Move
+
+export fn Ledger.empty() -> Self {
+	return Self { accounts = .new() }
+}
+
+export fn Ledger.open(&var self, id AccountId) {
+	self.accounts.set(id, Account.opened(id))
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FINDING 1 — a transfer cannot be written atomically, and this is the
+// corpus's first program that needs one.
+//
+// Debiting one account and crediting another is the oldest worked example in
+// computing, and it has exactly one requirement: do both or do neither. Three
+// spellings are available and each fails differently.
+//
+// **Spelling A — two sequential updates.** Reads best, and it is wrong:
+//
+//     self.accounts.update(from, fn (&var a) {
+//         a.balance = a.balance - amount
+//     })
+//     self.accounts.update(to, fn (&var b) {
+//         b.balance = b.balance + amount
+//     })
+//
+// If the second traps — `to` is not in the map — the first has already
+// happened and the money is gone. The transform's guarantee is that control
+// reaches the end of **one** closure; nothing spans two.
+//
+// **Spelling B — one update reaching the other.** Unspellable:
+//
+//     self.accounts.update(from, fn (&var a) {
+//         a.balance = a.balance - amount
+//         self.accounts.update(to, …)   // two &var paths into one Map
+//     })
+//
+// Refused by the exclusivity rule (`memory-model.md` Finding 4's third
+// amendment, rule 5), and correctly — it is the aliasing the rule exists for.
+// The trap in `aliasing.md`'s rule 3 would catch it at runtime if the static
+// check somehow did not.
+//
+// **Spelling C — move both out, mutate, put both back.** What this file does,
+// and it is `examples/LruCache`'s trick used for something it was not meant
+// for:
+//
+//     const a = self.accounts.remove(from) ?? return …
+//     const b = self.accounts.remove(to) ?? return …
+//
+// It works, it is O(1), and it has a window in which **neither account is in
+// the ledger**. Anything that reads the map during it — a re-entrant
+// observer, a reactive read, another thread if this were a `Synchronized` —
+// sees a ledger that does not balance. That is the same half-finished-value
+// hazard `aliasing.md` rule 3 records for a single cell, arriving through a
+// collection instead.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export fn Ledger.transfer(
+	&var self,
+	from AccountId,
+	to AccountId,
+	amount Money,
+) -> Either<Receipt, LedgerError> {
+	// FINDING 2 — validate-then-apply is the middle ground, and nothing says
+	// so.
+	//
+	// The reason spelling C is survivable is that **everything that can fail
+	// happens before anything is written**. Once the two accounts are known
+	// to exist and the debit is known to clear, the two mutations cannot
+	// fail, so there is no partial state to be left in.
+	//
+	// That is a real discipline and it is good practice independently of this
+	// language. But here it is load-bearing for *correctness* rather than for
+	// tidiness, and no document says it: `aliasing.md` ratified the transform
+	// on the grounds that its critical section is syntactically total, which
+	// is a statement about control flow and not about consistency.
+	//
+	// Written out, the rule is: **a transform must not contain a failure
+	// path.** Check first, then write. If that is the design's answer, the
+	// place to say it is the ratification, and the sharper version is the
+	// second candidate `aliasing.md` lists — forbid `R` from being an
+	// `Either` at all.
+	if from.equals(&to) {
+		return Err(LedgerError.SAME_ACCOUNT)
+	}
+
+	const source = self.accounts.get(from)
+		?? return Err(LedgerError.NO_ACCOUNT { id = from })
+
+	const target = self.accounts.get(to)
+		?? return Err(LedgerError.NO_ACCOUNT { id = to })
+
+	if source.available() < amount {
+		return Err(LedgerError.INSUFFICIENT { id = from, needed = amount })
+	}
+
+	// FINDING 3 — and `get` returning a value is what makes the check above
+	// a *copy* rather than a read.
+	//
+	// `Account` is `Duplicate`, so `Map.get` handing back a `V` by value
+	// cannot be free — this duplicates the holds array twice, once per
+	// account, to ask two questions about a number. `examples/LruCache` GAP 2
+	// recorded that `Map.get` on a non-`Copy` value wants two spellings and
+	// `examples/Json` found the same hole in `Index<K, V>`; this is the third
+	// sighting and the first where the cost is on a validation path that runs
+	// on every transaction.
+	//
+	// The borrowing read is blocked on `Optional<&V>`, which is blocked on a
+	// field not being allowed to hold a borrow. Four programs now want it.
+	const debited = self.accounts.remove(from)
+		?? return Err(LedgerError.NO_ACCOUNT { id = from })
+
+	const credited = self.accounts.remove(to)
+		?? return Err(LedgerError.NO_ACCOUNT { id = to })
+
+	self.accounts.set(from, Account {
+		id      = debited.id,
+		balance = debited.balance - amount,
+		holds   = debited.holds,
+	})
+
+	self.accounts.set(to, Account {
+		id      = credited.id,
+		balance = credited.balance + amount,
+		holds   = credited.holds,
+	})
+
+	return Ok(Receipt { from, to, amount })
+}
+
+// FINDING 4 — the single-element case is fine, and the contrast is the point.
+//
+// Placing a hold touches one account, so it is one transform and it reads
+// well. Everything awkward above comes from the *second* element, not from
+// the transform mechanism, which is worth separating: `update` is not the
+// problem and a pairwise operation is.
+export fn Ledger.hold(
+	&var self,
+	id AccountId,
+	reference string,
+	amount Money,
+) -> Either<Money, LedgerError> {
+	const account = self.accounts.get(id)
+		?? return Err(LedgerError.NO_ACCOUNT { id })
+
+	if account.available() < amount {
+		return Err(LedgerError.INSUFFICIENT { id, needed = amount })
+	}
+
+	return Ok(self.accounts.update(id, fn (&var a) -> Money {
+		a.holds.append(Hold { reference, amount })
+
+		return a.available()
+	}))
+}
+
+// FINDING 5 — the failure path this file could not write, kept as a comment
+// because writing it would be writing a bug.
+//
+// The natural spelling for `hold` folds the check into the transform:
+//
+//     return self.accounts.update(id,
+//         fn (&var a) -> Either<Money, LedgerError> {
+//             a.holds.append(Hold { reference, amount })
+//
+//             if a.available() < Money.zero() {
+//                 return Err(LedgerError.INSUFFICIENT { id, needed = amount })
+//             }
+//
+//             return Ok(a.available())
+//         })
+//
+// It reads better than the version above — one pass, no double lookup, the
+// check next to the thing it checks. And it is exactly the defect
+// `aliasing.md` records: the `Err` return leaves the hold **appended**, so a
+// rejected authorisation permanently reduces the available balance.
+//
+// Nothing in the language refuses it. It type-checks, it runs, and the only
+// symptom is a balance that drifts down under load.
+
+export object Receipt {
+	const from   AccountId,
+	const to     AccountId,
+	const amount Money,
+}
+
+Receipt implements Copy
+
+export enum LedgerError implements Error {
+	NO_ACCOUNT { id AccountId },
+	INSUFFICIENT { id AccountId, needed Money },
+	SAME_ACCOUNT,
+}
+
+export fn LedgerError.toString(&self) -> string {
+	return match self {
+		.NO_ACCOUNT { id }            -> "no account {id.value}"
+		.INSUFFICIENT { id, needed }  ->
+			"account {id.value} cannot cover {needed.cents}"
+		.SAME_ACCOUNT                 -> "an account cannot pay itself"
+	}
+}
+
+// vim: ft=kotlin

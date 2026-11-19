@@ -79,6 +79,15 @@ second. Two candidates is no longer "not now": it is the point at which
 either these become a small algebra with a general form, or there is a
 principled reason the set stops at two, and nobody has argued either.
 
+## Where the decided set is in tension with itself
+
+Not open questions — `tradeoffs.md` holds a cross-cutting audit of the
+decisions that have already been made: five problems with several answers,
+twelve decisions whose cost landed on a different program, and the check
+that would have caught every defect. Two entries there are one decision
+away from each other, since the pairwise operation and the borrowing read
+both dissolve if `Optional<&V>` is answered.
+
 ## One question that is not about a feature
 
 Every other entry in this file asks whether one thing is decided. This one

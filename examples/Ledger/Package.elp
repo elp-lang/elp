@@ -1,0 +1,14 @@
+import { Package, Version } from elp.package
+
+@Package(
+	name = "ledger",
+	version = .new(0, 1, 0, 0),
+	entry = "ledger.elp",
+	kind = .Library,
+	targets = [.macOS, .Linux],
+	dependencies = [
+		.stdlib("1.0.0"),
+	],
+)
+
+// vim: ft=kotlin

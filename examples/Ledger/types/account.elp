@@ -1,0 +1,85 @@
+// A double-entry ledger, written to test two notes an outside review left on
+// the corpus that no existing program could settle:
+//
+//   1. a transform that fails partway leaves a **partial write**;
+//   2. **two related elements cannot be mutated in one operation**.
+//
+// A transfer is both at once, which is why this is the program. It debits one
+// account and credits another and must do neither if it does not do both,
+// and a bank transfer is the oldest worked example in computing for exactly
+// that reason.
+
+import { Ordering, UUID } from elp.types
+
+export object AccountId {
+	const value UUID,
+}
+
+AccountId implements Copy + Equatable + Hashable
+
+export fn AccountId.equals(&self, other &Self) -> bool {
+	return self.value == other.value
+}
+
+export fn AccountId.hash(&self, into &var Hasher) {
+	self.value.hash(&var into)
+}
+
+export object Money {
+	const cents int,
+}
+
+Money implements Copy + Add + Sub + Comparable
+
+export fn Money.zero() -> Self {
+	return Self { cents = 0 }
+}
+
+export fn Money.add(&self, other &Self) -> Self {
+	return Self { cents = self.cents + other.cents }
+}
+
+export fn Money.sub(&self, other &Self) -> Self {
+	return Self { cents = self.cents - other.cents }
+}
+
+export fn Money.compareTo(&self, other &Self) -> Ordering {
+	return self.cents.compareTo(other.cents)
+}
+
+// A pending authorisation against the balance. It is a `[Hold]` rather than a
+// number so that `Account` is `Duplicate` and not `Copy`, which is the case
+// that matters: a `Copy` payload could be read out of the map, changed and
+// written back, and most real records are not `Copy`.
+export object Hold {
+	const reference string,
+	const amount    Money,
+}
+
+Hold implements Copy
+
+export object Account {
+	const id      AccountId,
+	var   balance Money,
+	var   holds   [Hold],
+}
+
+Account implements Duplicate
+
+export fn Account.opened(id AccountId) -> Self {
+	return Self { id, balance = Money.zero(), holds = [] }
+}
+
+// Available balance is the ledger balance less everything authorised against
+// it. Reads only, so it is `pure` and the `for` is ordinary.
+export pure fn Account.available(&self) -> Money {
+	var held = Money.zero()
+
+	for hold in self.holds {
+		held = held + hold.amount
+	}
+
+	return self.balance - held
+}
+
+// vim: ft=kotlin

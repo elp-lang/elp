@@ -1,8 +1,9 @@
 # Core language probes
 
-Seventeen programs written to put pressure on the parts of elp the original
+Eighteen programs written to put pressure on the parts of elp the original
 corpus never exercised, plus §16, a scan of the whole corpus run once the
-write-surface round had landed. They are **design probes, not specimens** — they
+write-surface round had landed, and a rubric at §18 for choosing the next
+ones. They are **design probes, not specimens** — they
 use constructs the language does not have, written in the most plausible
 spelling, so the gaps can be read rather than listed.
 
@@ -25,6 +26,7 @@ spelling, so the gaps can be read rather than listed.
 | `examples/LruCache` | an LRU cache over an insertion-ordered `Map` | the canonical `weak var` site, and why it needs none of it |
 | `examples/Editor` | a line editor with an undo stack | the **cell write surface**, priced per keystroke |
 | `examples/Json` | a JSON value, lexer, parser, writer, and the `@CodeGen` macro written in elp | the **macro engine** — and that an AST has no literal syntax — plus `Set`, `continue`, `Index`, `Iterable`, `char` ranges, and building a `string` |
+| `examples/Ledger` | a double-entry ledger with transfers and holds | **a pairwise mutation**, and a transform with a failure path in it |
 
 None of them parse today, and nothing checks that — the hand-written front
 end and its corpus parse test were removed (`docs/README.md`), so "the
@@ -1921,7 +1923,8 @@ keyword inside `@external` and the corpus names a field, a parameter and a
 built-in element's prop `type`), and marking only the keyword collisions is
 a better position than Rust's rather than a retreat to it, because the
 ordinary hole stays bare and highlights for free. A hole needs a type
-because the same field splices two ways — `"title"` in one position and `title` in another — which
+because the same field splices two ways — `"title"` in one position and
+`title` in another — which
 Rust handles by convention (`#name` beside `#name_str`) and this handles by
 `string` versus `Identifier`, which also means `Field.identifier()` has to
 exist beside `Field.name()`. The repetition problem **disappears** because an
@@ -2069,6 +2072,93 @@ has a dissenting site rather than a silent one. It is a readability
 preference at the place a reader asks how a loop terminates, not a program
 that cannot be written — the refusal's stated costs, no divergence
 information and no `break value`, are still unpaid by anything here.
+
+## 18. A pairwise mutation — `examples/Ledger`
+
+Written to settle two notes an outside review left on the corpus that no
+existing program could test, because no existing program does either: a
+transform that fails partway, and two related elements mutated in one
+operation. A double-entry transfer is both at once, which is why it is the
+program — debit one account, credit another, do neither if you cannot do
+both.
+
+Five findings.
+
+1. **A transfer cannot be written atomically**, and three spellings each
+   fail differently. Two sequential `update`s read best and are wrong, since
+   a trap in the second leaves the first applied. One `update` reaching the
+   other is refused by exclusivity, correctly. Moving both out and putting
+   both back works, is O(1), and has a window in which **neither account is
+   in the ledger** — the same half-finished-value hazard `aliasing.md` rule
+   3 records for one cell, arriving through a collection.
+
+2. **Validate-then-apply is the middle ground and nothing says so.** What
+   makes the third spelling survivable is that everything able to fail
+   happens before anything is written. That is good practice anywhere; here
+   it is load-bearing for *correctness*, and `aliasing.md` ratified the
+   transform on the grounds that its critical section is syntactically
+   total — a statement about control flow, not about consistency. Written
+   out, the rule is **a transform must not contain a failure path**, which
+   is the second of the three candidates that file lists.
+
+3. **`Map.get` returning `V` makes a validation read a deep copy.** Checking
+   two balances duplicates two hold arrays to ask about two numbers. Third
+   sighting of the borrowing read (`LruCache` GAP 2, `Interpreter` FINDING
+   5, `Json`'s `Index`), and the first where the cost sits on a path that
+   runs per transaction.
+
+4. **The single-element case is fine**, and the contrast is the finding.
+   Placing a hold touches one account, is one transform, and reads well.
+   Everything awkward comes from the *second* element — `update` is not the
+   problem, a pairwise operation is.
+
+5. **The failure path is a comment, because writing it would be writing a
+   bug.** Folding the check into the transform reads better than the
+   version the file ships — one pass, no double lookup, the check beside
+   the thing it checks — and the `Err` return leaves the hold appended, so a
+   rejected authorisation permanently reduces the available balance. It
+   type-checks, it runs, and the only symptom is a balance drifting down
+   under load.
+
+## The three questions a probe is for
+
+Supplied by an outside reviewer while this round was being written, and
+worth adopting as the standing rubric, because scoring the existing corpus
+against it says something uncomfortable.
+
+1. **Safety** — can the program express an invalid ownership, aliasing,
+   lifetime or concurrency operation, and does the language reject it
+   reliably?
+2. **Expressiveness** — can it express ordinary algorithms and data
+   structures without contortions, privileged escape hatches or excessive
+   boilerplate?
+3. **Composability** — do individually reasonable features still behave
+   sensibly when combined?
+
+**The corpus is lopsided, and it is lopsided in the direction that flatters
+the design.** Eighteen programs, and nearly all of them test
+expressiveness: they are written in the most plausible spelling and the gaps
+are what the spelling could not say. That is why the gap log is long and
+useful.
+
+**Almost nothing tests safety by writing something invalid and checking it
+is refused.** The corpus has two instances —
+`examples/QuadTree/tree-places.elp`, which forbids itself three constructs
+to see whether the rest suffices, and `examples/Ledger` FINDING 5, which
+writes a bug as a comment because writing it as code would compile. Every
+other rejection in the record is *argued* rather than *demonstrated*. A
+design that has never been handed a wrong program does not know whether its
+rules fire.
+
+**And nothing tests composability at all**, which is what
+`open-questions.md`'s composition question is about. Every probe exercises
+one area; the interactions between eight concurrency primitives, three
+scope-exit constructs and two body properties have no program at all.
+
+So the next entries should be chosen by what is *missing* from this rubric
+rather than by what is interesting: a program written to be **rejected**,
+and a program that puts several primitives in one place and asks whether
+they still mean what they meant alone.
 
 ## Suggested order
 
