@@ -1,0 +1,150 @@
+// Turning a hostile response into values this program is willing to hold.
+
+import { Error, Either } from elp.types
+import { Http } from elp.net
+import { JSON, parse } from elp.json
+import { Post, Author, Comment } from .types.feed
+
+const MAX_POSTS    = 200
+const MAX_BODY     = 4096
+const MAX_THREAD   = 64
+
+// FINDING 6 — every limit here is a number this file invented, and that is
+// correct, and it is also the whole gap.
+//
+// `examples/Json` FINDING 13 established the principle: recursion depth is
+// the parser's own problem, and nothing in the language should be doing it
+// for the parser. That is right. But it generalises, and the generalisation
+// is less comfortable: **a body that processes untrusted input needs a depth
+// bound, a size bound, a count bound and a time bound, and the language has
+// a mechanism for none of them.**
+//
+// The uncomfortable part is that the mechanism now *exists*. `functions.md`
+// designed body properties this week — a declared bit, a closed set,
+// propagated call-wise — and shipped two, `pure` and `realtime`. A third
+// candidate was already queued (what may appear inside a `Synchronized`
+// transform) and a fourth arrived with thread affinity.
+//
+// "This body is bounded" is a fifth, and it is the one with the clearest
+// closed set: no unbounded recursion, no allocation sized by its input, no
+// call to something that is not itself bounded. Whether that is a good idea
+// is a real question. That it is *the same shape* is not.
+//
+// Recorded as an observation rather than a proposal, because the thing it
+// actually settles is the argument in `functions.md`: two body properties is
+// two special cases, and five is an algebra.
+export fn fetchFeed(url string) -> Either<[Post], Error> {
+	const body = Http.getText(url)?
+	const document = parse(body)?
+
+	return readPosts(&document)
+}
+
+fn readPosts(document &JSON) -> Either<[Post], Error> {
+	var posts [Post] = []
+
+	// FINDING 7 — the count limit is a `break`, and `break` arrived four
+	// days before this file needed it.
+	//
+	// Worth one line because the corpus's record of `break` is thin:
+	// `examples/LruCache` wanted it for an O(1) eviction and
+	// `examples/QuadTree` had hand-rolled one. This is the first site where
+	// it is a *safety* bound rather than an efficiency one, which is a
+	// different argument for the same construct.
+	for value in document.values() {
+		if posts.length() >= MAX_POSTS {
+			break
+		}
+
+		match readPost(&value) {
+			Err(_)   -> continue
+			Ok(post) -> posts.append(post)
+		}
+	}
+
+	return Ok(posts)
+}
+
+// FINDING 8 — rejecting one bad element rather than the whole response is
+// the behaviour anyone wants, and `continue` is what makes it readable.
+//
+// The arm above drops a malformed post and keeps going. Written without
+// `continue` it is an `if` wrapping the rest of the body, which is the shape
+// `control-flow.md` cited when it gave `continue` its evidence — there, for
+// skipping whitespace in a lexer. Here the same construct is the difference
+// between a feed that renders and a feed that does not.
+fn readPost(value &JSON) -> Either<Post, Error> {
+	const id = value.get("id")
+		?? return Err(IngestError.MISSING { field = "id" })
+	const body = value.get("body")
+		?? return Err(IngestError.MISSING { field = "body" })
+
+	return match (id, body) {
+		(.STRING(rawId), .STRING(rawBody)) -> {
+			if rawBody.length() > MAX_BODY {
+				return Err(IngestError.TOO_LARGE { field = "body" })
+			}
+
+			Ok(Post {
+				id     = rawId,
+				author = readAuthor(value),
+				body   = rawBody,
+				cents  = readCents(value),
+			})
+		}
+		_ -> Err(IngestError.WRONG_TYPE { field = "id or body" })
+	}
+}
+
+fn readAuthor(value &JSON) -> Author {
+	return Author { handle = "", name = "" }
+}
+
+fn readCents(value &JSON) -> int {
+	return match value.get("cents") {
+		.SOME(.INTEGER(n)) -> n
+		_                  -> 0
+	}
+}
+
+// FINDING 9 — `.copy()`'s depth is attacker-controlled, and `aliasing.md`
+// lists that depth as open.
+//
+// That file asks *"how deep is `.copy()`?"* — whether a nested structure
+// duplicates at every level or one — and treats it as a question about
+// semantics. Here it is a question about work: if `.copy()` is deep, copying
+// one `Comment` copies a thread of whatever length the server sent, and
+// every innocent-looking duplication is an amplification factor the caller
+// cannot see.
+//
+// The recursive case has since been answered in this program's favour, and
+// only by accident. `indirect` is an **immutable** box, so a copy is a
+// pointer copy and a retain, so copying a `Comment` is O(1) however deep the
+// thread is. That was decided to keep the containing type `Copy`, with no
+// adversarial input in mind, and it happens to remove the amplification.
+//
+// What is still open is everything that is not behind an `indirect`: a
+// `[Comment]` is `Duplicate`, and `.copy()` on it duplicates every element.
+// So the answer to "how deep" is load-bearing for a security property and
+// the question is filed as an ergonomics one.
+export fn snapshot(thread &Comment) -> Comment {
+	return thread.copy()
+}
+
+export enum IngestError implements Error {
+	MISSING { field string },
+	WRONG_TYPE { field string },
+	TOO_LARGE { field string },
+	TOO_DEEP,
+}
+
+export fn IngestError.toString(&self) -> string {
+	return match self {
+		.MISSING { field }    -> "missing {field}"
+		.WRONG_TYPE { field } -> "wrong type for {field}"
+		.TOO_LARGE { field }  -> "{field} exceeds the limit"
+		.TOO_DEEP             -> "thread deeper than {MAX_THREAD}"
+	}
+}
+
+// vim: ft=kotlin

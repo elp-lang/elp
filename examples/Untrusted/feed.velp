@@ -1,0 +1,123 @@
+// Rendering a feed whose contents the program did not choose, and the file
+// that found the sharpest thing in this probe.
+
+import { Column, Row, Spacer } from elp.layout
+import { Text, Loading } from elp.components
+import { Error } from elp.types
+import { Post, totalCents } from .types.feed
+import { fetchFeed } from .internal.ingest
+
+export component Feed(source string) {
+	var posts [Post] = []
+	var failure Optional<string> = nil
+	var loading = true
+
+	effect {
+		match fetchFeed(source) {
+			Err(e)      -> failure = e.toString()
+			Ok(fetched) -> posts = fetched
+		}
+
+		loading = false
+	}
+
+	return Column {
+		if loading {
+			Loading(spin = true)
+		}
+
+		match failure {
+			nil     -> nil
+			message -> Row {
+				Text(message)
+			}
+		}
+
+		// ─────────────────────────────────────────────────────────────────
+		// FINDING 10 — **a markup `for` over untrusted ids is a remote
+		// crash**, and it is the correct, lint-clean spelling that does it.
+		//
+		// `control-flow.md` decided four days ago that a duplicate `by` key
+		// **traps**, in the register of an out-of-bounds index. Compose that
+		// with a list whose ids come from a server:
+		//
+		//   - `by post.id` is the spelling every document recommends;
+		//   - `identity_by_value` stays silent, because it is a projection
+		//     and therefore a real claim;
+		//   - and the claim is only true if the server is honest.
+		//
+		// Two posts with the same `id` — a buggy backend, a replayed
+		// pagination cursor, or an attacker — and the client traps. The
+		// *more* carefully a developer follows the design, the more directly
+		// they are exposed, because the alternative spelling the lint would
+		// have flagged (`by post`) cannot collide on duplicate ids.
+		//
+		// That is a genuine tension with a decision this design made for
+		// good reasons. The reasoning was that `by` is an **assertion of
+		// uniqueness**, a false assertion is a defect, and SwiftUI's
+		// warn-and-continue is undefined behaviour by another name. All of
+		// that holds when the list is yours. None of it holds when the list
+		// is someone else's, because then the assertion is about **data**
+		// rather than about the program, and a defect in the data should not
+		// be a defect in the program.
+		//
+		// Three ways out, and the third is the one to argue about:
+		//
+		//   1. **Dedupe at the boundary.** Correct, and it means every list
+		//      from a network needs a pass nobody will remember — which is
+		//      the "make the mistake unrepresentable" rule failing.
+		//   2. **Make the trap a drop.** The second row with a given key is
+		//      skipped. Defined, cheap, and quietly loses data.
+		//   3. **Make it a property of the key's provenance.** The trap is
+		//      right for a key the program computes and wrong for one it
+		//      received, and nothing in the language distinguishes those —
+		//      which is the same gap `examples/Rejected` case 14 found from
+		//      another direction, where a rule depends on a context the type
+		//      system cannot see.
+		//
+		// Written with the trapping spelling deliberately, because the point
+		// is that it is the recommended one.
+		// ─────────────────────────────────────────────────────────────────
+		for post in posts by post.id {
+			Row {
+				Text(post.author.name)
+				Spacer()
+				Text(post.body)
+			}
+		}
+
+		Row {
+			Text("Total")
+			Spacer()
+			Text(totalCents(&posts).toString())
+		}
+	}
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// WHAT THE ADVERSARIAL AXIS FOUND, and why it is a different axis.
+//
+// Ten findings, and not one of them is a bug in a program. Every one is a
+// ratified decision meeting input it was not designed against:
+//
+//   | decision                        | holds for | fails for             |
+//   |---------------------------------|-----------|-----------------------|
+//   | a duplicate `by` key traps      | your list | a server's list       |
+//   | `indirect` is a refcounted box  | any depth | a chain that is freed |
+//   | scalar-wise `==`                | typing    | impersonation         |
+//   | `.copy()`'s depth is open       | ergonomics| amplification         |
+//   | overflow is undecided           | literals  | sums of input         |
+//
+// The pattern is the same one `tradeoffs.md` names one level down. There, a
+// decision was checked against the program that asked for it and the cost
+// landed on a program written later. Here, a decision was checked against
+// **data the author controls** and the cost lands on data they do not.
+//
+// Two of the five are new rules rather than new features — the `by` trap and
+// the drop cascade are both things to *decide*, not things to *build*. The
+// other three are open questions that turn out to have a security face
+// nobody had attached to them, which is worth more than it sounds: an open
+// question with a consequence gets answered, and one without drifts.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// vim: ft=kotlin

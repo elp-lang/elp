@@ -1,0 +1,123 @@
+// A feed whose contents come from a server this program does not control.
+//
+// The corpus's third axis. `examples/Rejected` asks whether the language
+// refuses a **wrong program**; `examples/Dashboard` asks whether features
+// compose; this asks what happens when the *data* is chosen by someone who
+// wants the program to fail. Every finding here is a consequence of a
+// decision the design has already ratified, reached by feeding it bad input
+// rather than by writing bad code.
+
+import { UUID } from elp.types
+
+export object Author {
+	const handle string,
+	const name   string,
+}
+
+Author implements Copy
+
+export object Post {
+	const id     string,
+	const author Author,
+	const body   string,
+	const cents  int,
+}
+
+Post implements Copy
+
+// FINDING 1 — a comment thread is a recursive value type, so it is the
+// shape `indirect` was ratified for, and it is the shape that breaks.
+//
+// Nothing about this declaration is unusual. It is the second-most common
+// recursive type after an AST, it is `memory-model.md`'s worked example
+// almost verbatim, and the marker is required and present.
+export object Comment {
+	const id     string,
+	const body   string,
+	indirect var reply Optional<Comment>,
+}
+
+Comment implements Copy
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FINDING 2 — **dropping a long `indirect` chain is unbounded recursion in
+// the runtime**, and no document mentions it.
+//
+// `indirect` is a refcounted allocation. When a `Comment`'s count reaches
+// zero the box is freed, which drops the `reply` it contains, whose count
+// reaches zero, which frees that box. One native stack frame per link, on a
+// chain whose length is whatever the server sent.
+//
+// A hostile feed sends a thread 200,000 replies deep. It parses, it renders,
+// and the process dies when the user navigates away — in the **deallocator**,
+// with a stack trace pointing at nothing the program wrote.
+//
+// `memory-model.md` has a table that looks like it covers this and does not.
+// Its scoped-release section compares `with` against RAII and gives
+// *"recursive release of fields (drop glue): **no**"* — which is true and is
+// about `Scoped`. The refcount cascade is the runtime's, not `Scoped`'s, and
+// it is recursive whatever `with` does. A reader checking that table would
+// conclude the opposite of the truth.
+//
+// This is a known defect of the technique rather than a surprise: Rust has
+// exactly this bug for a long `Box` chain, and the standard answer is an
+// iterative drop that walks the chain and unlinks as it goes. The point is
+// that elp ratified `indirect` this week with the immutable box as the
+// load-bearing choice, and rule 4 — **an indirect field may be replaced,
+// never written through** — is precisely what an iterative drop needs and
+// precisely what a *program* cannot use to write one for itself, because the
+// drop is not a program.
+//
+// So it is the runtime's problem, and it is a problem nobody has written
+// down for the runtime to solve.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// FINDING 3 — `Post.id` is a `string` chosen by the server, and that makes
+// `examples/Untrusted/feed.velp`'s list key hostile. See there.
+
+// FINDING 4 — money from input, and the numeric tower's third face.
+//
+// `operators.md` lists *"widths, literal defaulting, overflow"* as open.
+// `examples/Json` found the first runtime face: an overflowing literal that
+// arrives from input rather than source, so it cannot be a compile error.
+// This is the second: arithmetic *on* a value from input.
+//
+// `cents` is parsed from the feed. A total over a page of posts is a sum of
+// attacker-chosen integers, and `Money.add` is an ordinary `+`. Whether that
+// wraps, traps or saturates is undecided, and the three answers give three
+// different programs: a wrong total, a crash, or a clamped total.
+//
+// Worth separating from a wish for bignums. The decision needed is not what
+// width `int` is; it is **what `+` does at the edge**, which every language
+// answers and this one has not.
+export fn totalCents(posts &[Post]) -> int {
+	var total = 0
+
+	for post in posts {
+		total += post.cents
+	}
+
+	return total
+}
+
+// FINDING 5 — scalar-wise equality is the right default and it is an
+// impersonation vector, which `strings.md` half-states.
+//
+// That file names the footgun — `"é" != "e\u{301}"` — and justifies it:
+// predictable, and the same choice as Rust, Go, Python, Java, C# and
+// JavaScript. All true, and the cost it states is a *user* typing the same
+// name two ways.
+//
+// The adversarial version is the other direction. A hostile account picks a
+// handle that normalizes to a trusted one, and every comparison in this
+// program says they are different — which is what lets it render beside the
+// real one. The fix is `normalized(.NFC)` before comparing, which is stdlib
+// and available, and **nothing says an identity comparison must do it**.
+//
+// That is a documentation gap rather than a design flaw, and it is the kind
+// that only shows up when the input is chosen rather than typed.
+export fn isSameAuthor(a &Author, b &Author) -> bool {
+	return a.handle == b.handle
+}
+
+// vim: ft=kotlin

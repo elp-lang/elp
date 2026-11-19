@@ -1343,6 +1343,21 @@ the thing it falsifies.
 - **Layout interaction.** An indirect field is pointer-sized, so a recursive
   type could satisfy `Atomic<T>`'s eight-byte requirement. Harmless, and worth
   noting so it is not mistaken for a bug when the layout pass reports it.
+- **Freeing a long chain is unbounded recursion, and it is the runtime's
+  problem.** The box is refcounted, so dropping the head frees it, which
+  drops the field it contains, which frees that — one native frame per link,
+  on a chain whose length may come from input. `examples/Untrusted` has it
+  with a comment thread.
+
+  Two things make this worth stating here rather than leaving to an
+  implementation. The scoped-release section above compares `with` against
+  RAII and says *"recursive release of fields (drop glue): **no**"*, which is
+  true, is about `Scoped`, and reads as covering this when it does not. And
+  the standard fix — an iterative drop that walks the chain unlinking as it
+  goes — is exactly what **rule 4** permits and exactly what a *program*
+  cannot write, since the drop is not a program. Rust has the same bug for a
+  long `Box` chain, which makes it a known cost of the technique rather than
+  a surprise.
 
 ## `Buffer<T>` — contiguous storage, and where an address may exist
 

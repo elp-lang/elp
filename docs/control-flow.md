@@ -399,6 +399,22 @@ removed by a list, which costs no type and no allocation. And the failure
 nothing static can see is caught by the one component that can see it, at
 the moment it happens.
 
+**And the trap is right for your list and wrong for someone else's.**
+`examples/Untrusted` found it: `by post.id` over a feed from a server is the
+recommended spelling, `identity_by_value` stays silent because a projection
+is a real claim, and the claim holds only if the server is honest. Two posts
+with one id and the client traps — so the more carefully a developer follows
+this section, the more directly they are exposed.
+
+The reasoning above survives and is narrower than it reads. `by` is an
+assertion of uniqueness and a false assertion is a defect — **when the list
+is yours**. When it is someone else's the assertion is about *data*, and a
+defect in the data should not be a defect in the program. Three ways out,
+none taken here: dedupe at every boundary, which is the
+unrepresentable-mistake rule failing; drop the duplicate, which is defined,
+cheap and quietly loses data; or make the trap a property of the key's
+**provenance**, which nothing in the language can express.
+
 **And the corpus sites are kept**, flagged, rather than contorted. Both
 want a line identity that survives editing, which is a rope's node
 identity — `examples/Editor` FINDING 5, now with a third program pointing

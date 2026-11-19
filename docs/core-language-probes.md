@@ -1,6 +1,6 @@
 # Core language probes
 
-Twenty programs written to put pressure on the parts of elp the original
+Twenty-one programs written to put pressure on the parts of elp the original
 corpus never exercised, plus §16, a scan of the whole corpus run once the
 write-surface round had landed, and a rubric at §18 for choosing the next
 ones — which §19 and §20 were chosen by. They are **design probes, not specimens** — they
@@ -29,6 +29,7 @@ spelling, so the gaps can be read rather than listed.
 | `examples/Ledger` | a double-entry ledger with transfers and holds | **a pairwise mutation**, and a transform with a failure path in it |
 | `examples/Dashboard` | a live progress view over a worker pool | **composability** — five primitives in one place, and the first time the reactive model meets the concurrency model |
 | `examples/Rejected` | sixteen programs that must not compile | **safety** — whether the rules refuse what they say they refuse |
+| `examples/Untrusted` | a feed reader over a server it does not control | **adversarial data** — what a ratified decision does when the input is chosen to break it |
 
 None of them parse today, and nothing checks that — the hand-written front
 end and its corpus parse test were removed (`docs/README.md`), so "the
@@ -2229,6 +2230,93 @@ The number worth keeping: **of sixteen ways to write something wrong, nine
 are not currently caught**, and not one of the nine is caught by accident. A
 corpus that only asks *can I express this* would have found none of them.
 
+## 21. Adversarial input — `examples/Untrusted`
+
+A feed reader over a server it does not control. The third axis: §20 asks
+whether the language refuses a **wrong program**, §19 asks whether features
+**compose**, and this asks what happens when the **data** is chosen by
+someone who wants the program to fail.
+
+Ten findings, and **not one of them is a bug in a program.** Every one is a
+ratified decision meeting input it was not designed against.
+
+| decision | holds for | fails for |
+|---|---|---|
+| a duplicate `by` key traps | your list | a server's list |
+| `indirect` is a refcounted box | any depth | a chain that is freed |
+| scalar-wise `==` | a user typing | impersonation |
+| `.copy()`'s depth is open | ergonomics | amplification |
+| overflow is undecided | literals | a sum of input |
+
+### The two that are rules rather than features
+
+**A markup `for` over untrusted ids is a remote crash, and the recommended
+spelling is the one that does it.** `control-flow.md` decided that a
+duplicate `by` key traps, in the register of an out-of-bounds index.
+Compose that with a list whose ids come from a server: `by post.id` is what
+every document recommends, `identity_by_value` stays silent because a
+projection is a real claim, and the claim is only true if the server is
+honest. Two posts with one id — a buggy backend, a replayed cursor, an
+attacker — and the client traps. **The more carefully a developer follows
+the design, the more directly they are exposed**, because the spelling the
+lint would have flagged cannot collide.
+
+The original reasoning holds and is narrower than it looked: `by` is an
+assertion of uniqueness, a false assertion is a defect, and SwiftUI's
+warn-and-continue is undefined behaviour renamed. All true **when the list
+is yours**. When the list is someone else's the assertion is about *data*
+rather than about the program, and a defect in the data should not be a
+defect in the program. Three ways out, and the third is the one to argue
+about: dedupe at every boundary (the unrepresentable-mistake rule failing),
+drop the duplicate (defined, cheap, loses data quietly), or make the trap a
+property of the key's **provenance** — which nothing in the language can
+express, and which is the same gap §20 case 14 found from another direction.
+
+**Dropping a long `indirect` chain is unbounded recursion in the runtime.**
+A comment thread is `const id string, indirect var reply Optional<Comment>`
+— the second-most common recursive type after an AST, and the marker is
+required and present. The box is refcounted, so freeing the head frees the
+reply, which frees the next: one native frame per link, on a chain whose
+length the server chose. It parses, it renders, and the process dies in the
+**deallocator** when the user navigates away.
+
+`memory-model.md` has a table that looks like it covers this and does not —
+its scoped-release comparison gives *"recursive release of fields (drop
+glue): **no**"*, which is true and is about `Scoped`. The refcount cascade
+is the runtime's, and it is recursive whatever `with` does, so a reader
+checking that table concludes the opposite of the truth. Rust has the same
+bug for a long `Box` chain and the standard fix is an iterative drop — and
+`indirect` rule 4, *replaceable but never written through*, is exactly what
+such a drop needs and exactly what a program cannot use to write one, since
+the drop is not a program.
+
+### And a fifth candidate body property, which settles an argument
+
+Every limit in the ingest layer is a number that file invented — depth,
+size, count. `examples/Json` FINDING 13 established that this is correct:
+recursion depth is the parser's own problem. The generalisation is less
+comfortable, because **the mechanism now exists**. `functions.md` shipped
+two body properties this week, a third was already queued, thread affinity
+is a fourth, and *"this body is bounded"* is a fifth with the clearest
+closed set of any of them — no unbounded recursion, no allocation sized by
+its input, no call to something not itself bounded.
+
+Whether that is a good idea is a real question. That it is the same shape is
+not, and it ends the argument in `functions.md`: two body properties is two
+special cases, and five is an algebra.
+
+### Why this is a different axis
+
+`tradeoffs.md` names the pattern one level down — a decision checked against
+the program that asked for it, with the cost landing on a program written
+later. This is the same failure against data: **a decision checked against
+input the author controls, with the cost landing on input they do not.**
+
+Two of the five are rules to *decide* rather than features to *build*. The
+other three are open questions that turn out to have a security face nobody
+had attached to them, which is worth more than it sounds — an open question
+with a consequence gets answered, and one without drifts.
+
 ## The three questions a probe is for
 
 Supplied by an outside reviewer while this round was being written, and
@@ -2243,6 +2331,16 @@ against it says something uncomfortable.
    boilerplate?
 3. **Composability** — do individually reasonable features still behave
    sensibly when combined?
+
+A fourth was added after §19 and §20 were written, because neither of them
+reached it and it is not a special case of the other three:
+
+4. **Adversarial data** — does a decision still hold when the *input* is
+   chosen by someone who wants the program to fail? §21 is the first entry
+   written to it, and every finding it produced is a ratified decision
+   rather than a mistake, which is what makes the axis distinct: safety asks
+   whether a wrong program is refused, and this asks whether a right one
+   survives.
 
 **The corpus was lopsided, and it was lopsided in the direction that
 flattered the design.** Eighteen programs, and nearly all of them tested
