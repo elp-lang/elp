@@ -144,28 +144,43 @@ genuinely undecided thing — that `a..b` includes both ends.
 - **`expose_protected`** is a named lint and wants a default level, which
   is `diagnostics.md`'s standing open item arriving with a customer.
 
-## Migration backlog created by the write-surface round
+## Migration backlog — after the corpus scan
 
-Not design questions. Work the ratifications of 2026-11-19 created and that
-the corpus scan will otherwise rediscover as findings.
+The scan ran (`core-language-probes.md` §16) and did the mechanical half.
+What it did **not** do, and why:
 
-1. **Every `@external` out-parameter wants `&var`.** Finding 4's third
-   amendment replaced the conservative *"`&T` is read-write at an `@external`
-   declaration"* blanket with C's own `const`. `SqliteBinding` and
-   `VulkanTriangle` have roughly twenty parameters between them that C writes
-   through and that still read `&`.
-2. **And that exposes a question the rule did not answer.** For
-   `&Buffer<T>`, C writes the *elements*, not the buffer value. So does
-   `&var Buffer<T>` mean "C may replace the buffer" or "C may fill it"? The
-   two are different permissions and `vkEnumeratePhysicalDevices` wants the
-   second. This is new, and it belongs with `memory-model.md`'s boundary
-   forms.
-3. **`nil` versus `null` in the corpus** — 117 uses across 23 files against
-   41 across 5, the `null` files being the FFI-heavy ones. Possibly a
-   deliberate distinction between an empty `Optional` and C's null pointer,
-   possibly drift. Nothing records an intent. `core-language-probes.md` §12.
-4. `name-resolution.md`'s own corpus migration backlog, four items, none
+1. **Eleven components still use the pre-`component` form**,
+   `export fn Name -> Component`, across `BlogStyle`, `SocialFeed` and
+   `ChatRoom`. Nothing in them is wrong about the language; they are older
+   than it. This is a rewrite of three apps rather than a migration, and it
+   is the single largest piece of corpus debt.
+2. **`nil` versus `null`.** The scan sharpened it rather than settling it:
+   `null` survives in exactly the seven FFI-heavy files and `nil` everywhere
+   else, which is too consistent to be drift. It may be a deliberate line
+   between an empty `Optional` and C's null pointer, and nothing records an
+   intent. Third sighting.
+3. `name-resolution.md`'s own corpus migration backlog, four items, none
    applied.
+
+Done by the scan: twelve `@external` out-parameters and five call sites took
+`&var`; six cell round-trips became transforms; two payload types went
+`const` to `var`; three method names were aligned to `collections.md`'s
+surface list.
+
+## What the corpus scan opened
+
+- **`&` has three meanings** — a borrow, a mutable borrow, and, in prop
+  position, *constructing a `Binding<T>`*, which is not a borrow at all.
+  Decided deliberately and reads identically to the first. Owner:
+  `reactivity.md`.
+- **Do mutating collection methods return unit or `Self`?**
+  `collections.md` says unit; two documents quote `xs.copy().append(y)` as
+  an expression. The migration removed the sites, so this is now a question
+  about the surface rather than a contradiction. Owner: `collections.md`.
+- **The `-ing` method pair.** `inserting`/`removing` read as "returns a new
+  collection" and the corpus used them interchangeably with the mutating
+  names. Whether non-mutating variants should exist at all is open. Owner:
+  `collections.md`.
 
 ## What the scan corrected
 

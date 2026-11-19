@@ -40,7 +40,7 @@ Statement implements Move
 export fn Statement.new(db &Sqlite3, sql string) -> Either<Self, Error> {
 	const text = CString.from(sql)
 
-	match sqlite3_prepare_v2(db, &text, -1, &out, &tail) {
+	match sqlite3_prepare_v2(db, &text, -1, &var out, &var tail) {
 		0    -> return Ok(Self { handle = out.asStatement(), sql })
 		code -> throw StatementError.CANNOT_PREPARE { sql, code }
 	}

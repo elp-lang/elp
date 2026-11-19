@@ -103,7 +103,10 @@ export fn LruCache<K, V>.put(&var self, key K, value V) {
 	self.entries.remove(key)
 	self.entries.set(key, value)
 
-	if self.entries.count() > self.capacity {
+	// MIGRATED — `count()`. `collections.md`'s surface says `length` for both
+	// `Array` and `Map`, and this file was the only one spelling it the other
+	// way, twice.
+	if self.entries.length() > self.capacity {
 		self.evict()
 	}
 }
@@ -129,7 +132,7 @@ fn LruCache<K, V>.evict(&var self) {
 }
 
 export fn LruCache<K, V>.count(&self) -> int {
-	return self.entries.count()
+	return self.entries.length()
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

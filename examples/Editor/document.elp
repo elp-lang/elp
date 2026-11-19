@@ -64,8 +64,16 @@ export fn Document.empty() -> Self {
 // complements `.update` rather than replacing it. Here is that claim with a
 // number on it.
 // ─────────────────────────────────────────────────────────────────────────────
+// MIGRATED. Kept under its original name because FINDING 2 above is a
+// *record* of what the spelling cost, and the number in it is the argument
+// for the transform. The body is now the transform.
+//
+// Two scan findings landed here. `inserting` was this file's spelling and
+// `insert` is everyone else's — one method, two names, nothing choosing.
+// And `collections.md` returns unit from a mutating method, so neither
+// spelling was ever a value to pass to `.set()`.
 export fn Document.insertToday(&var self, at int, line Line) {
-	self.lines.set(self.lines.get().copy().inserting(at, line))
+	self.lines.update(fn (&var lines) { lines.insert(at, line) })
 }
 
 // FINDING 3 — and the transform makes it O(1), with the return value doing

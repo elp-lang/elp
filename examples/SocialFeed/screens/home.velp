@@ -52,8 +52,16 @@ export fn Feed -> Component {
 		loadFeed()
 	}
 
+	// MIGRATED — `posts = posts.copy().prepend(post)`, which `aliasing.md`
+	// quotes as the corpus's evidence for the `Duplicate` tier. The scan found
+	// it never type-checked: `collections.md` declares a mutating method
+	// returning **unit**, so `.copy().prepend(post)` is not a value.
+	//
+	// `posts` is a component `var`, so it is a cell, and the ratified spelling
+	// is a transform. It is also strictly cheaper — no array duplicated per
+	// post.
 	fn handlePosted(post Post) {
-		posts = posts.copy().prepend(post)
+		posts.update(fn (&var p) { p.prepend(post) })
 	}
 
 	return Column(lazy = true) {

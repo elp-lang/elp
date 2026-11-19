@@ -15,9 +15,11 @@
 // and two independent things to keep consistent. One cell over one `Copy`
 // record is both cheaper and the only version where "set bold" is a single
 // atomic write.
+// MIGRATED — `const` to `var`, for the reason `examples/Playhead` records:
+// these were `const` only because `copyWith` was the write path.
 export object StyleValues {
-	const bold      bool,
-	const alignment Alignment,
+	var bold      bool,
+	var alignment Alignment,
 }
 
 StyleValues implements Copy
@@ -59,18 +61,23 @@ export fn Style.isBold(&self) -> bool {
 // `&self`, not `&var self`: the object is unchanged, the cell it points at
 // is not. Every Cell holding this Style sees the change.
 //
-// Note the shape — read, `copyWith`, write. `Confined<T>` has `.get()` and
-// `.set()` rather than a mutable place, which is `collections.md`'s
-// "collections hold values, not places" applied to a cell. On the cell
-// thread the read-modify-write cannot be interleaved, so this is atomic;
-// `Synchronized<T>`'s `.with()` exists precisely because that is not true
-// off it.
+// MIGRATED — this was read, `copyWith`, write: `self.values.set(self.values
+// .get().copyWith(bold = on))`, because `Confined<T>`'s only write was
+// whole-value. `aliasing.md` ratified `update(fn (&var T) -> R) -> R`, so the
+// `copyWith` goes, and with it the record copy per call.
+//
+// The original comment argued the round-trip was *atomic* because the cell
+// thread cannot interleave it. That was true and it was also the argument
+// `memory-model.md` later found being over-used: confinement orders turns and
+// says nothing about two live paths inside one. The transform makes the
+// critical section syntactically total instead, which is the property that
+// was actually wanted.
 export fn Style.setBold(&self, on bool) {
-	self.values.set(self.values.get().copyWith(bold = on))
+	self.values.update(fn (&var v) { v.bold = on })
 }
 
 export fn Style.setAlignment(&self, to Alignment) {
-	self.values.set(self.values.get().copyWith(alignment = to))
+	self.values.update(fn (&var v) { v.alignment = to })
 }
 
 // vim: ft=kotlin

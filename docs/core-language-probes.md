@@ -1,7 +1,8 @@
 # Core language probes
 
 Sixteen programs written to put pressure on the parts of elp the original
-corpus never exercised. They are **design probes, not specimens** — they
+corpus never exercised, plus §16, a scan of the whole corpus run once the
+write-surface round had landed. They are **design probes, not specimens** — they
 use constructs the language does not have, written in the most plausible
 spelling, so the gaps can be read rather than listed.
 
@@ -1694,6 +1695,119 @@ A text document with undo, on a payload where the difference is one keystroke.
    **GAP 1 is now answered** (`indirect`), so the rope is writable — and rule 4
    of that answer, the immutable box, is exactly what a persistent structure
    wants, since path-copying never writes through a shared node.
+
+## 16. The corpus scan
+
+Run after the write-surface round, `pure`, loops and `Protected<T>` were
+ratified, over all 96 files. Not a probe — a sweep for places the corpus and
+the docs disagree, and for what the corpus knows that nothing has recorded.
+
+Twelve findings. Three are defects in decisions, four are migrations the
+ratifications implied, and the rest are things the corpus had been doing
+without anyone writing them down.
+
+### Defects in decided things
+
+1. **`&var` at an `@external` declaration was over-broad, and the corpus
+   proves it in one line.** Rule 7 said C's `const` decides. Applied
+   literally, SQLite takes a non-`const` `sqlite3*` for *every* call
+   including `sqlite3_errmsg`, so every handle parameter becomes `&var` and
+   the distinction carries nothing. It cannot: `&var` can only mean
+   something where elp owns the storage C writes into. Refined in
+   `memory-model.md` to the three boundary forms — no `&var` on an opaque
+   handle, `&var` on a written slot or extent — which migrated nine slots
+   and three extents and not one handle.
+
+2. **Two `&var` arguments to one `@external` call must be allowed to
+   alias**, and the evidence is the corpus's most real-world FFI call:
+
+   ```elp
+   fluid_synth_write_s16(&state.get().synth, frames,
+                         &var output, 0, 2,
+                         &var output, 1, 2)
+   ```
+
+   One buffer, two logical channels, offset and stride as arguments — the
+   shape `examples/Playhead` FINDING 3 celebrates as the reason `Buffer<T>`
+   needs no layout parameter. Under a literal reading of the exclusivity
+   rule ratified three decisions ago, interleaved stereo is unwritable.
+   Exclusivity is between **elp-side** paths; a `&var` argument at the
+   boundary lowers to a raw pointer rather than `&mut`.
+
+3. **The idiom two documents quote as evidence for the `Duplicate` tier
+   never type-checked.** `aliasing.md` cites
+   `posts.copy().prepend(post)` and `state.messages.copy().append(...)`;
+   `collections.md` declares `fn Array.append(&var self, value T)`,
+   returning **unit**. So `.copy().append(x)` is not a value and never was.
+   Three sites, quoted twice as corpus evidence, in a language where they
+   do not compile. The migration is `update`, which is cheaper anyway, so
+   nothing is lost but the claim should not have stood.
+
+### Migrations the ratifications implied
+
+4. **Six cell round-trips became transforms**, and two of them are in
+   `examples/Playhead`'s audio callback, where each was a whole-record copy
+   per buffer on the one thread with a deadline. `update` is realtime-legal
+   — a `Confined<T>` is an `Rc<RefCell<T>>`, so it takes no lock and
+   allocates nothing.
+
+5. **`copyWith` made `const` the default on every cell payload in the
+   corpus, and `update` reverses it.** `RenderState` and `StyleValues` were
+   `const` throughout only because the write path was a rebuild. This
+   narrows `reactivity.md`'s open item 1, which is *"a constraint on
+   `copyWith`"* — identity-preservation for untouched fields — to store
+   reducers alone, since cells no longer write that way.
+
+6. **Twelve `@external` out-parameters and five call sites** took `&var`.
+
+7. **Method-name drift, with `collections.md`'s surface list as the
+   authority**: `insert` 24 against `inserting` 2, `remove` 8 against
+   `removing` 1, `length` 22 against `count` 3. Each minority is one file.
+   The `-ing` pair is the interesting half — it reads as "returns a new
+   collection", which is exactly the unit-returning confusion in finding 3.
+
+### What the corpus knew and nobody recorded
+
+8. **Eleven components still use the pre-`component` form**,
+   `export fn Name -> Component`, across `BlogStyle`, `SocialFeed` and
+   `ChatRoom` — the three original apps, none of which was migrated when
+   `component` was decided. Nothing in those files is wrong about the
+   language; they are simply older than it. Left alone here because it is a
+   rewrite of three apps rather than a finding, and recorded so the count is
+   known: eleven files.
+
+9. **`&` has three meanings and nobody has counted them.** `&x` at an
+   argument is a borrow; `&var x` is a mutable borrow; and `&x` in **prop
+   position** is not a borrow at all — `reactivity.md` makes it *construct a
+   `Binding<T>`*, a retained shared handle. The third was decided
+   deliberately and reads identically to the first. Now that mutation is
+   spelled at the call site, the sigil carries three jobs.
+
+10. **No unmarked recursive value type exists anywhere in the corpus.**
+    Checked mechanically over every `object` and `enum`: `Expr` is marked,
+    and `Env`, `Node` and `QuadNode<T>` each reach themselves only through a
+    cell or an array, so the indirection is already present. That is
+    `memory-model.md`'s claim-to-test for `indirect` holding across the
+    whole corpus rather than across the probe that produced it.
+
+11. **`null` survives in exactly the seven FFI-heavy files** and `nil`
+    everywhere else, which is more consistent than drift usually looks. It
+    may be a deliberate line between an empty `Optional` and C's null
+    pointer. Still nothing records an intent, and this is the third time it
+    has been noticed.
+
+12. **`loop` is a function name in `examples/VulkanTriangle/main.elp`**, and
+    it is legal only because `control-flow.md` refused the `loop` keyword a
+    decision earlier. Accidental, and worth one line as confirmation that
+    the refusal cost nothing.
+
+### What the scan did not find
+
+No violation of `pure`: every `pure fn` in the corpus is legal under the
+definition `functions.md` gives, which was already true before the rule
+existed. No `string` treated as `Duplicate`. No cycle that `Weak<T>` would
+have to break outside `examples/Interpreter`. And no second `realtime`
+helper beyond the one already marked.
 
 ## Suggested order
 

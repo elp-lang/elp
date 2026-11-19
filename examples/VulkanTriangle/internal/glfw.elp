@@ -37,7 +37,7 @@ import { VkInstance, VkSurfaceKHR, CString, OpaqueHandle } from .vulkan
 	// `VkInstanceCreateInfo` and the copy never happens. That is correct C
 	// and it means a `Copy` elp struct is carrying a borrowed pointer with
 	// a lifetime nothing tracks — `vk-types.elp` GAP 3.
-	export fn glfwGetRequiredInstanceExtensions(count &OpaqueHandle) -> OpaqueHandle
+	export fn glfwGetRequiredInstanceExtensions(count &var OpaqueHandle) -> OpaqueHandle
 
 	// GAP 2 — a GLFW function whose parameters are Vulkan's types, which
 	// makes one binding package depend on another.
@@ -58,7 +58,7 @@ import { VkInstance, VkSurfaceKHR, CString, OpaqueHandle } from .vulkan
 	// Worth recording as a *consequence* rather than a gap: exclusivity was
 	// argued for on symbol-collision grounds and it also buys type identity
 	// across binding packages, which is what makes multi-library FFI work.
-	export fn glfwCreateWindowSurface(instance &VkInstance, window &GLFWwindow, allocator OpaqueHandle, surface &Optional<VkSurfaceKHR>) -> int
+	export fn glfwCreateWindowSurface(instance &VkInstance, window &GLFWwindow, allocator OpaqueHandle, surface &var Optional<VkSurfaceKHR>) -> int
 }
 
 // Owned by this program: created by `glfwCreateWindow`, destroyed by

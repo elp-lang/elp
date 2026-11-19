@@ -465,7 +465,48 @@ is the one thing `export` exists to prevent.
    faithfully, which is already true of every other part of an `@external`
    declaration and is the register `aliasing.md` puts that boundary in.
 
-8. **A pattern is a projection, which settles matching through a
+   **Refined by the corpus scan, and it is narrower than it sounds.** Applied
+   literally, SQLite takes a non-`const` `sqlite3*` for every call including
+   `sqlite3_errmsg`, so every handle parameter in the corpus would become
+   `&var` and the distinction would carry no information. It does not,
+   because `&var` can only mean something where **elp owns the storage C
+   writes into** — which is exactly the three boundary forms this file
+   already has:
+
+   | boundary form | `&var`? | what it means |
+   |---|---|---|
+   | an opaque handle, `&T` over an `@external type` | **no** | the handle *is* the pointer; there is no elp storage, so C's constness is invisible and unenforceable |
+   | a slot, `&Optional<T>` | **yes, when C writes it** | the out-parameter case — `sqlite3_open`'s `db`, every Vulkan `vkCreate*` |
+   | an extent, `&Buffer<T>` | **yes, when C writes it** | C may write the **elements**. It never means C may replace the buffer: the length and the address are elp's. |
+
+   That is also the answer to the question this rule left open, and the
+   migration it implies is the one the corpus actually got: nine slots and
+   three extents, and not one handle.
+
+8. **Two `&var` arguments to one `@external` call may alias.** Rule 5's
+   exclusivity is between **elp-side** paths. It cannot reach across the
+   boundary, because the C ABI has no aliasing model, and the corpus's most
+   real-world FFI call depends on that:
+
+   ```elp
+   fluid_synth_write_s16(&state.get().synth, frames,
+                         &var output, 0, 2,    // left:  offset 0, stride 2
+                         &var output, 1, 2)    // right: offset 1, stride 2
+   ```
+
+   One allocation, two logical channels, offset and stride as arguments —
+   the shape `examples/Playhead` FINDING 3 cites as the reason `Buffer<T>`
+   needs no layout parameter. Under a literal reading of rule 5 the single
+   most common interleaved-audio call in the world is unwritable.
+
+   The consequence for codegen is worth stating rather than discovering: a
+   `&var` argument at an `@external` call lowers to a raw pointer, not to
+   `&mut`, because two `&mut` to one allocation is undefined behaviour in
+   Rust whatever C does with them. That is the boundary where `aliasing.md`
+   already says `unsafe` lives, so it costs no new rule — only the honesty
+   that exclusivity stops at the boundary.
+
+9. **A pattern is a projection, which settles matching through a
    reference.** Matching a `&var T` binds each payload field as a `&var`
    path; matching a `&T` binds `&T`. This needs no separate decision because
    rule 6 is the decision — `match self { .LEAF { entries } -> … }` and
@@ -1016,7 +1057,7 @@ gaps across four probes:
 |---|---|---|
 | `&var self.root` — a projection into a field | `core-language-probes.md`, "Mutable paths into an interior node" | `&var T`, rule 6 |
 | `&var` to a local, and re-borrowing a `&var` parameter | same | `&var T`, rules 2 and 4 |
-| matching through a reference | same | `&var T`, rule 8 |
+| matching through a reference | same | `&var T`, rule 9 |
 | whole-value assignment through a reference | `examples/QuadTree` GAP 4 | `self = …` in a method, by precedent |
 | collections hold values, not places | above, in this file | the transform closure |
 | `&var T` as a non-receiver parameter, 16 call sites | Open, in this file | itself |

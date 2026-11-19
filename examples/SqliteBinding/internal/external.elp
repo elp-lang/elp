@@ -140,7 +140,7 @@ Sqlite3Stmt implements Move
 	// the C ABI does not relate, so `0` is the only evidence the slot was
 	// written. `db.elp` reads an `Optional` and lets the code say whether to
 	// trust it.
-	export fn sqlite3_open(path &CString, db &Optional<Sqlite3>) -> int
+	export fn sqlite3_open(path &CString, db &var Optional<Sqlite3>) -> int
 	export fn sqlite3_close(db Sqlite3) -> int
 	export fn sqlite3_errmsg(db &Sqlite3) -> &CString
 
@@ -148,8 +148,8 @@ Sqlite3Stmt implements Move
 		db &Sqlite3,
 		sql &CString,
 		bytes int,
-		stmt &Optional<Sqlite3Stmt>,
-		tail &Optional<CString>,
+		stmt &var Optional<Sqlite3Stmt>,
+		tail &var Optional<CString>,
 	) -> int
 
 	export fn sqlite3_step(stmt &Sqlite3Stmt) -> int

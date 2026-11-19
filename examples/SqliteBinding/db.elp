@@ -103,7 +103,7 @@ export fn Connection.open(path string) -> Either<Self, Error> {
 	// actual difficulty rather than mutability direction.
 	var handle Optional<Sqlite3> = null
 
-	match sqlite3_open(&c, &handle) {
+	match sqlite3_open(&c, &var handle) {
 		0    -> {}
 		code -> throw DbError.CANNOT_OPEN { path, message = "sqlite error {code}" }
 	}

@@ -22,7 +22,7 @@ import { Buffer } from elp.memory
 	export type VkCommandPool
 	export type VkCommandBuffer
 
-	export fn vkCreateInstance(info &VkInstanceCreateInfo, allocator OpaqueHandle, instance &Optional<VkInstance>) -> int
+	export fn vkCreateInstance(info &VkInstanceCreateInfo, allocator OpaqueHandle, instance &var Optional<VkInstance>) -> int
 	export fn vkDestroyInstance(instance VkInstance, allocator OpaqueHandle)
 
 	// GAP 1, RESOLVED except for its nullability — the count-then-fill
@@ -60,10 +60,10 @@ import { Buffer } from elp.memory
 	// `count` is also genuinely in-out: the caller writes a capacity and the
 	// callee writes a length, which `&Optional<int>` can carry but does not
 	// *say*.
-	export fn vkEnumeratePhysicalDevices(instance VkInstance, count &Optional<int>, devices &Buffer<Optional<VkPhysicalDevice>>) -> int
+	export fn vkEnumeratePhysicalDevices(instance VkInstance, count &var Optional<int>, devices &var Buffer<Optional<VkPhysicalDevice>>) -> int
 
-	export fn vkGetPhysicalDeviceQueueFamilyProperties(device VkPhysicalDevice, count &Optional<int>, families &Buffer<Optional<OpaqueHandle>>)
-	export fn vkCreateDevice(physical VkPhysicalDevice, info OpaqueHandle, allocator OpaqueHandle, device &Optional<VkDevice>) -> int
+	export fn vkGetPhysicalDeviceQueueFamilyProperties(device VkPhysicalDevice, count &var Optional<int>, families &var Buffer<Optional<OpaqueHandle>>)
+	export fn vkCreateDevice(physical VkPhysicalDevice, info OpaqueHandle, allocator OpaqueHandle, device &var Optional<VkDevice>) -> int
 	export fn vkDestroyDevice(device VkDevice, allocator OpaqueHandle)
 
 	// GAP 2 — a handle you must never release, handed back by value.
@@ -77,12 +77,12 @@ import { Buffer } from elp.memory
 	// *right* answer: duplicating it is free and two copies have nothing to
 	// observe about each other. It is also the answer that would have been
 	// wrong for every handle in `SqliteBinding`.
-	export fn vkGetDeviceQueue(device VkDevice, family int, index int, queue &Optional<VkQueue>)
+	export fn vkGetDeviceQueue(device VkDevice, family int, index int, queue &var Optional<VkQueue>)
 
-	export fn vkCreateSwapchainKHR(device VkDevice, info OpaqueHandle, allocator OpaqueHandle, swapchain &Optional<VkSwapchainKHR>) -> int
+	export fn vkCreateSwapchainKHR(device VkDevice, info OpaqueHandle, allocator OpaqueHandle, swapchain &var Optional<VkSwapchainKHR>) -> int
 	export fn vkDestroySwapchainKHR(device VkDevice, swapchain VkSwapchainKHR, allocator OpaqueHandle)
 
-	export fn vkCreateCommandPool(device VkDevice, info OpaqueHandle, allocator OpaqueHandle, pool &Optional<VkCommandPool>) -> int
+	export fn vkCreateCommandPool(device VkDevice, info OpaqueHandle, allocator OpaqueHandle, pool &var Optional<VkCommandPool>) -> int
 	export fn vkDestroyCommandPool(device VkDevice, pool VkCommandPool, allocator OpaqueHandle)
 
 	export fn vkQueueSubmit(queue VkQueue, count int, submits OpaqueHandle, fence OpaqueHandle) -> int

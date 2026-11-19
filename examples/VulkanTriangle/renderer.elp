@@ -103,7 +103,7 @@ export fn Renderer.new(window &Window) -> Either<Self, Error> {
 
 	var instanceSlot Optional<VkInstance> = null
 
-	match vkCreateInstance(&info, null, &instanceSlot) {
+	match vkCreateInstance(&info, null, &var instanceSlot) {
 		0    -> {}
 		code -> throw RenderError.NO_INSTANCE { code }
 	}
@@ -150,7 +150,7 @@ export fn Renderer.new(window &Window) -> Either<Self, Error> {
 
 	var surfaceSlot Optional<VkSurfaceKHR> = null
 
-	match glfwCreateWindowSurface(&instance, &window.handle, null, &surfaceSlot) {
+	match glfwCreateWindowSurface(&instance, &window.handle, null, &var surfaceSlot) {
 		0    -> {}
 		code -> throw RenderError.NO_SURFACE { code }
 	}

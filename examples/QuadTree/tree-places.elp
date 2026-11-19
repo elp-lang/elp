@@ -260,7 +260,7 @@ fn QuadNode<T>.collect(&self, bounds &Rect, area &Rect, out &var [Entry<T>]) {
 				// independent of the write surface. `aliasing.md` assessed CoW
 				// as a complement to `.update`; this is a second, unrelated
 				// reason to want it, and it is the stronger one.
-				self.childAt(i).collect(&quads[i], area, out)
+				self.childAt(i).collect(&quads[i], area, &var out)
 			}
 		}
 	}

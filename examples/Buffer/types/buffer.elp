@@ -74,15 +74,25 @@ export fn Buffer.lineAt(&self, index int) -> string {
 // method; a handle type mutates shared state without needing it, and
 // `Confined<[string]>` in the declaration is what tells a reader so.
 //
-// `.copy()` on the inner `[string]` is the independent kind — it is a
-// `Duplicate`, not an alias — so this is read-modify-write on one cell and
-// not an aliasing bug.
+// MIGRATED — these were `self.lines.set(self.lines.get().copy().insert(at,
+// line))`, the idiom `aliasing.md` quotes as the corpus's evidence for
+// `Duplicate`. Two things were wrong with it and only one was known.
+//
+// The known one is cost: the cell holds the original for the whole
+// expression, so the refcount is at least two and `.copy()` duplicates every
+// line in the buffer per keystroke. `examples/Editor` FINDING 2 put a number
+// on it. `update` removes the copy entirely.
+//
+// The one the scan found: `collections.md` declares `fn Array.append(&var
+// self, value T)` returning **unit**, so `.copy().insert(at, line)` was never
+// a value and the expression never type-checked. The idiom was quoted in two
+// documents and is not writable in the language that was described.
 export fn Buffer.insert(&self, at int, line string) {
-	self.lines.set(self.lines.get().copy().insert(at, line))
+	self.lines.update(fn (&var lines) { lines.insert(at, line) })
 }
 
 export fn Buffer.remove(&self, at int) {
-	self.lines.set(self.lines.get().copy().remove(at))
+	self.lines.update(fn (&var lines) { lines.remove(at) })
 }
 
 // vim: ft=kotlin
