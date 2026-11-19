@@ -392,6 +392,96 @@ wants a contiguous allocation whose address the driver writes into, and
 `Optional<T>` is one slot. See "Collections hold values, not places"
 below.
 
+**Amended a third time, and this one reverses half of it: `&var T` is a
+parameter spelling after all.** Ratified after "One hole, reported nine
+times", below, found that the absence of it is nine gaps wearing different
+hats.
+
+The finding's argument was that mutability is *determined by what the callee
+does*, so nobody needs to declare it. That is true, and it is an argument
+about **necessity**, not about where the information belongs. Three places
+have no callee body to read, and the amendment above already conceded the
+first of them:
+
+| no body to infer from | status before |
+|---|---|
+| an `@external` declaration | conceded above — `&T` resolved to read-write |
+| an interface method requirement | `collections.md` wrote `fn hash(&self, into &var Hasher)` anyway |
+| **a function type** — `fn(&var Document)` | unnoticed, and it is the decisive one |
+
+The third is why this could not stay open. A function *type* has no body by
+construction, so `update(fn (&var T) -> R) -> R` — the transform closure the
+next section ratifies, and the fix for all nine gaps — **cannot be written
+down at all** without this spelling. `examples/Undo/types/edit.elp` has held
+`const apply fn(&var Document)` in a field since before the question was
+asked.
+
+And a fourth reason, which applies even where a body exists: an exported
+function's contract must not depend on its implementation. Whether `f`
+mutates its argument decides whether a `const` binding may be passed to it,
+which is observable at every call site in every other module. Inferring it
+from the body makes the public contract a consequence of private code, which
+is the one thing `export` exists to prevent.
+
+### The rule
+
+1. **At a declaration, `&var T` is required for any parameter the function
+   mutates**, and the body is checked against the signature rather than the
+   signature inferred from the body. `&T` is read-only, and `const` on the
+   referent remains the hard constraint Finding 4 made it.
+2. **At a call site, `&var x` is required and must agree with the
+   declaration.** This is the half of Finding 4 that is reversed. The
+   original reasoning — that a developer need not declare what is already
+   determined — does not reach the call site, because there the marker is not
+   a declaration but an assertion that matches one. What it buys is the one
+   thing this language could not show: that a call mutates its argument. The
+   corpus wrote it unprompted at 47 sites across five programs.
+3. **A receiver is never marked.** `doc.replace(…)` takes `&var self` and the
+   call says nothing, as in Rust's `v.push(x)`. Marking arguments and not the
+   receiver is the established convention and the receiver is already named
+   by the method.
+4. **Re-borrowing a `&var` parameter is a `&var` argument**, nothing special:
+   `examples/Worker/types/job.elp` writes `self.value.hash(&var into)` and it
+   is correct as written.
+5. **`&var` paths are exclusive.** Two `&var` arguments to one call may not
+   overlap, and a `&var` path may not coexist with any other path to the same
+   storage for its duration. This is Rust's rule and there is no cheaper one;
+   it is also what the "two live mutable paths" objection in "One hole"
+   wanted and could not state.
+6. **Projection is allowed through fields, and nowhere else.** `&var
+   self.root` is legal, because the path is statically known and the
+   exclusivity check can see all of it — and because the corpus already does
+   exactly this in receiver position, in every file, undeclared
+   (`self.nodes.set(at, node)` needs `&var self.nodes`). A rule that permits
+   it as a receiver and forbids it as an argument has no content. What stays
+   forbidden is projection **through a collection index** (`&var
+   children[i]`, where the container may reallocate) and **out of a cell**
+   (`&var c.contents`, which is the guard this file rejected). Those two are
+   what the transform closure is for.
+7. **At an `@external` declaration, C's `const` is the answer** — a `const
+   T*` parameter is `&T` and a writable `T*` is `&var T`. This replaces the
+   conservative blanket above, which was adopted only because no spelling
+   existed. The cost is that correctness now rests on transcribing the header
+   faithfully, which is already true of every other part of an `@external`
+   declaration and is the register `aliasing.md` puts that boundary in.
+
+8. **A pattern is a projection, which settles matching through a
+   reference.** Matching a `&var T` binds each payload field as a `&var`
+   path; matching a `&T` binds `&T`. This needs no separate decision because
+   rule 6 is the decision — `match self { .LEAF { entries } -> … }` and
+   `&var self.entries` name the same storage by two spellings, and the
+   exclusivity check sees the same path either way. It was listed as a
+   prerequisite of the transform closure (`tree-places.elp` GAP 3) rather
+   than as something with its own answer; it turns out to be a consequence.
+
+**What Finding 4 keeps.** Everything about the *read-only* case: `&x` needs
+no marker, `const` is the default, and the diagnostic for passing a `const`
+binding where mutation is required is unchanged. What it loses is the claim
+that one spelling suffices, and it is worth being plain about why it looked
+true for so long — the corpus it was derived from mutates through a receiver
+or through a cell in every single case, so the one position that needs the
+spelling never appeared.
+
 ## Finding 5 — `pure fn` + borrowing, resolved
 
 No function in the login-form exercise is marked `pure`, so the roadmap's
@@ -893,6 +983,14 @@ spelling (`map.get(k)` yielding a mutable place, or an `update(k, fn)`
 helper) can be built in elp later without changing the semantics. A
 language rule that hands out hidden aliases cannot be walked back.
 
+**Later is now.** `update(at, fn (&var T) -> R) -> R` is ratified in
+`aliasing.md` and listed in `collections.md`, and the judgement above held:
+it changed no semantics, because the transform's critical section is
+syntactically total and the element never leaves the collection. The
+sentence to keep is the last one. What was ratified is the *cheaper
+spelling*, not a mutable place — there is still no expression anywhere in
+elp that produces one.
+
 ## One hole, reported nine times — there is no place you can hand out
 
 Written after `examples/Recalc` found a cell cannot mutate a `Move`
@@ -912,17 +1010,20 @@ T`; what does not exist is any way for **a library type to expose one**.
 Every one of these is that absence, and they were filed as nine unrelated
 gaps across four probes:
 
-| report | where |
-|---|---|
-| `&var self.root` — a projection into a field | `core-language-probes.md`, "Mutable paths into an interior node" |
-| `&var` to a local, and re-borrowing a `&var` parameter | same |
-| matching through a reference | same |
-| whole-value assignment through a reference | `examples/QuadTree` GAP 4 |
-| collections hold values, not places | above, in this file |
-| `&var T` as a non-receiver parameter, 16 call sites | Open, in this file |
-| a cell's only write is whole-value | `aliasing.md`, "the loosening is already indicated" |
-| `Map.get` on a `Move` value has no meaning | `core-language-probes.md` §12 |
-| a `Move` resource inside a cell cannot be released | `examples/Playhead` GAP 6 |
+| report | where | closed by |
+|---|---|---|
+| `&var self.root` — a projection into a field | `core-language-probes.md`, "Mutable paths into an interior node" | `&var T`, rule 6 |
+| `&var` to a local, and re-borrowing a `&var` parameter | same | `&var T`, rules 2 and 4 |
+| matching through a reference | same | `&var T`, rule 8 |
+| whole-value assignment through a reference | `examples/QuadTree` GAP 4 | `self = …` in a method, by precedent |
+| collections hold values, not places | above, in this file | the transform closure |
+| `&var T` as a non-receiver parameter, 16 call sites | Open, in this file | itself |
+| a cell's only write is whole-value | `aliasing.md`, "the loosening is already indicated" | the transform closure |
+| `Map.get` on a `Move` value has no meaning | `core-language-probes.md` §12 | the transform closure, partly — see there |
+| a `Move` resource inside a cell cannot be released | `examples/Playhead` GAP 6 | the transform closure, plus `.take()` |
+
+The right-hand column was filled in afterwards, and it is the point: two
+decisions close nine reports, which is what being one absence predicted.
 
 Three things follow, and they are the reason this is worth a section.
 
@@ -947,6 +1048,14 @@ had already answered that argument for a different probe: *"Cell-thread
 confinement does not help: it rules out interleaving, and this is
 straight-line aliasing inside one turn."* Confinement orders turns. It says
 nothing about two live mutable paths within one.
+
+**All nine are now closed, by two decisions**, which is the strongest
+evidence this section was right that they were one thing: `&var T` as a
+parameter (Finding 4's third amendment) and the transform closure
+(`aliasing.md`). The three residuals that survive are each a different
+question wearing a gap's number — a consuming `.take()` on a cell, a
+borrowing `Map.get`, and a once-only closure — and none of them is about
+handing out a place.
 
 **What this does not excuse.** The reason guards were rejected —
 `aliasing.md`'s invisible yield points — is a good reason, and it applies to
@@ -1371,13 +1480,7 @@ declared tier being the one place a user gets stdlib's privilege.
   honest fix is two elp declarations over one C symbol — a `symbol =`
   argument on `@external`. That is an FFI gap rather than a storage one,
   and this design is what exposes it.
-- **`&var T` as a non-receiver parameter** is used in 16 corpus call sites
-  and in `collections.md`'s own `fn hash(&self, into &var Hasher)`, and
-  `examples/Pipeline/internal/stats.elp:56` records that Finding 4
-  deliberately does not have it. That contradiction is unrelated to storage
-  and is listed here only because it surfaced alongside it. The leaning is
-  that `collections.md`'s own argument for `&var self` — an interface
-  method has no body, so a mutating requirement cannot be inferred —
-  applies verbatim to a non-receiver parameter, so the spelling has to
-  exist and the **call sites** are what Finding 4 forbids (`&var doc`
-  should be `&doc`).
+- ~~**`&var T` as a non-receiver parameter.**~~ **Ratified**, in Finding 4's
+  third amendment above, and the leaning recorded here was half wrong: the
+  spelling does have to exist, but the **call sites were right** and Finding
+  4's call-site rule is what gives way. `&var doc` stays `&var doc`.

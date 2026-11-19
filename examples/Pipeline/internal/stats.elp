@@ -4,10 +4,14 @@
 // no cell thread has no mechanism"*. This is that mechanism, under the one
 // workload that forces it — N workers all accumulating into one counter.
 
+// MIGRATED — these were `const` when `update` took `fn (T) -> T` and the only
+// way to change one was to build a whole new `Stats`. Under the ratified
+// `fn (&var T) -> R` the transform writes fields in place, so they are `var`.
+// A small change, and it is the one that makes `copyWith` unnecessary here.
 export object Stats {
-	const built   int,
-	const skipped int,
-	const bytes   int,
+	var built   int,
+	var skipped int,
+	var bytes   int,
 }
 
 Stats implements Copy
@@ -59,24 +63,32 @@ export fn Collector.alias(&self) -> Self {
 // is the only form), and assignment of a whole new value through a
 // reference, which is `examples/QuadTree`'s GAP 4.
 //
-// Splitting it by direction needs neither:
+// RESOLVED — both of those exist now, and this file's FINDING was the reason
+// the question got asked. `memory-model.md` Finding 4's third amendment makes
+// `&var T` a parameter spelling, and `self = …` in a method covers whole-value
+// assignment, so the surface no longer has to be split by direction to dodge
+// two gaps. It is still split, for a better reason: a `Synchronized<T>` cannot
+// offer `.get()`, so `with` is its read.
 //
-//   .update(fn (T) -> T)        read-modify-write, atomically
-//   .with(fn (&T) -> R) -> R    read under the lock, return something derived
+//   .update(fn (&var T) -> R) -> R   read-modify-write under the lock
+//   .with(fn (&T) -> R) -> R         read under the lock, return a derivation
 //
-// `update` takes a **pure transform**. That is a better fit than a mutating
-// body for three reasons beyond dodging the gaps: it cannot forget to write
-// back, it composes with `copyWith` which the corpus already uses
-// everywhere, and it makes the critical section obviously total — there is
-// no path through the closure that leaves the cell unwritten.
+// What survives of the argument for a transform: it cannot forget to write
+// back, and the critical section is syntactically total — there is no path
+// through the closure that leaves the cell unwritten. What does not survive is
+// the claim that a *pure* transform is the better fit. It composed with
+// `copyWith`, and `copyWith` was the cost rather than the benefit: on a `Move`
+// payload it is impossible, which is what this round spent nine gaps finding
+// out.
 export fn Collector.recordBuilt(&self, bytes int) {
-	self.stats.update(fn (s) {
-		return s.copyWith(built = s.built + 1, bytes = s.bytes + bytes)
+	self.stats.update(fn (&var s) {
+		s.built += 1
+		s.bytes += bytes
 	})
 }
 
 export fn Collector.recordSkipped(&self) {
-	self.stats.update(fn (s) { return s.copyWith(skipped = s.skipped + 1) })
+	self.stats.update(fn (&var s) { s.skipped += 1 })
 }
 
 // `*s` is the deref-and-copy from `memory-model.md` Finding 6, legal here
@@ -100,13 +112,18 @@ export fn Collector.snapshot(&self) -> Stats {
 // body would be legal passed anywhere else, so the restriction lives in the
 // signature of whatever `update` is.
 //
-// Which suggests the answer: the parameter type is `pure fn(T) -> T`, and
-// `pure` does most of the work already — `grammar-script-notes.md`'s "no
-// external calls" rule rules out `background` and channel receives outright.
-// That would make `update` an ordinary stdlib method after all, with no new
-// mechanism, which is the first reading of this that does not require one.
+// The suggested answer was that the parameter type is `pure fn(T) -> T`, since
+// `grammar-script-notes.md`'s "no external calls" rule rules out `background`
+// and channel receives outright — making `update` an ordinary stdlib method
+// with no new mechanism.
 //
-// `functions.md` does not currently say whether `pure fn(T) -> T` is a
-// writable *function type* as opposed to a declaration form.
+// STILL OPEN, and `pure` is no longer the candidate. `aliasing.md` ratified
+// the transform **without** `pure`, because `examples/Interpreter` FINDING 8
+// showed `pure` cannot do the other job it was wanted for and a restriction by
+// capture type is "a restriction by position" in a new costume. So this gap
+// keeps its original shape and loses its proposed answer: what is forbidden
+// inside a `Synchronized` critical section is a real requirement with no
+// mechanism, and it is a restriction on a body by position whether or not
+// anyone likes that.
 
 // vim: ft=kotlin

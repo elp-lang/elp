@@ -81,9 +81,26 @@ One rule across every collection:
 | `xs.get(i)` | `Optional<T>` | `nil` |
 | `map[k]`, `map.at(k)` | `V` | **traps** |
 | `map.get(k)` | `Optional<V>` | `nil` |
+| `xs.update(i, fn)` | `R` | **traps** |
+| `map.update(k, fn)` | `R` | **traps** |
 
 `[]` is `Index.at` from `operators.md`, so the bracket form and the
 method are the same thing.
+
+`update` is the write-side member of the same family and is ratified in
+`aliasing.md`, "The transform closure":
+
+```elp
+fn Array<T>.update(&var self, at int, body fn (&var T) -> R) -> R
+fn Map<K, V>.update(&var self, key K, body fn (&var V) -> R) -> R
+```
+
+It traps on a missing index or key for the same reason `[]` does — it is
+the spelling for a position the caller has already established, and
+`set` is how a position comes into existence. There is deliberately no
+`Optional`-returning counterpart: a transform over a value that may not
+be there is an upsert, which is a different operation with a different
+signature, and no corpus program has asked for one.
 
 ### Why the bracket form traps
 
@@ -125,9 +142,22 @@ must declare what it needs. Inference would also be out of character in
 a language with mandatory type arguments, explicit conformance, and `&`
 written at every writable call site.
 
-Call sites are unchanged: `&` at a call site already infers `&T` versus
-`&mut T` from the callee (`memory-model.md`, Finding 4). Declarations
-state what they need; call sites write `&`.
+**Amended.** This section's last paragraph used to read: *"Call sites are
+unchanged: `&` at a call site already infers `&T` versus `&mut T` from the
+callee (`memory-model.md`, Finding 4). Declarations state what they need;
+call sites write `&`."* Finding 4's third amendment reverses the call-site
+half — `&var x` is now written at an argument, and must agree with the
+declaration. A **receiver** is still unmarked, so every call in this
+document is unchanged; what changes is an argument like
+`self.value.hash(&var into)`, which `examples/Worker` already wrote that
+way.
+
+The paragraph above it is strengthened rather than amended: the argument
+that *"an interface method has no body, so a mutating requirement cannot be
+inferred"* turned out to be the general argument, not a special case for
+receivers. A function **type** has no body either, which is why
+`fn (&var T) -> R` had to become writable before the transform closure
+could exist at all.
 
 ## The iteration protocol
 
@@ -221,9 +251,10 @@ design against beyond consistency.
 
 Not the interesting part, and listed only so the shape is on record.
 `Array`: `length`, `append`, `prepend`, `copy`, `contains`, `sorted`,
-`map`, `filter`, `reduce`. `Map`: `length`, `get`, `at`, `set`, `has`,
-`remove`, `keys`, `values`, `entries`. These are stdlib API rather than
-language design, and they can grow without reopening anything above.
+`map`, `filter`, `reduce`, `update`. `Map`: `length`, `get`, `at`, `set`,
+`has`, `remove`, `keys`, `values`, `entries`, `update`. These are stdlib API
+rather than language design, and they can grow without reopening anything
+above.
 
 `sorted` takes a comparator returning `Ordering`:
 
@@ -238,7 +269,10 @@ rows.sorted(fn (a, b) { b.total.compareTo(a.total) })
   iterator's concrete type is part of what the conformance promised.
 - **`a[i] = v`.** `Index` only reads. Under "collections hold values"
   an assignable index may not be wanted at all, and `set` may be the
-  whole story.
+  whole story. Narrowed by `update`: the case that actually needed a place
+  — mutating an element without copying the whole thing out and back — now
+  has a spelling, so what is left is sugar for `set`, which is a smaller
+  question than it was.
 - ~~**Two-binding `for` beyond `Entry`.**~~ **Resolved** by
   `patterns.md`: it is record destructuring, named with `as`, and
   applies to anything an iterator yields.

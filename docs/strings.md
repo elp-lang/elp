@@ -14,6 +14,16 @@ normalization.**
 
 Both are primitives: lowercase, atmospheric, never imported.
 
+**`string` is `Copy`, and `char` is `Copy`.** Ratified in `aliasing.md`,
+and forced by the first sentence above: an immutable value has no second
+state to be independent of, so a copy is a pointer copy and a retain and
+`Duplicate` would promise something unobservable. Two things follow that
+belong here rather than there — `a + b` allocates and walks both operands,
+which is where the cost of an immutable string actually is; and a `string`
+may be *borrowed* inside an `@abi(.C, realtime)` body but not copied into
+one or dropped there, because the release can reach zero and call the
+allocator.
+
 ## Why scalars, and why no normalization
 
 The decisive argument is one the design already made for another

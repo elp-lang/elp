@@ -1565,6 +1565,17 @@ JSON, a template engine, a query planner, a build-rule evaluator. What is now
 open is `Weak<T>`'s **cost**, against `@abi(.C, realtime)` forbidding a
 decrement to zero.
 
+**Ratified, with one correction this verdict invites and does not make.**
+`Weak<T>` exists, parameterised on the cell (`Weak<Confined<T>>`), `Copy`,
+upgraded through `Optional`, and forbidden outright in a realtime body. But
+it is **not** what fixes `let rec`: neither edge of that cycle may be
+weakened — weaken closure→scope and a returned closure loses its environment,
+weaken scope→closure and a sibling binding in a live scope finds `f` gone —
+which is exactly why CPython ships a collector *as well as* `weakref`. elp's
+position is Rust's and Swift's: the cycle leaks, a leak is safe, and the
+escape for a program that cares is an arena, as a library rather than a
+runtime. See `aliasing.md`, "`Weak<T>`, ratified".
+
 ## 14. The two cycle shapes — `examples/LruCache`
 
 The canonical `weak var` site, probed to find out whether §13's verdict

@@ -2,16 +2,22 @@
 // that the cost of not having it and the cost of having it are both on a page.
 //
 // ─────────────────────────────────────────────────────────────────────────────
-// THIS FILE IS A HYPOTHESIS, NOT CORPUS. It assumes a cell method the language
-// does not have:
+// THIS FILE WAS A HYPOTHESIS. The method it assumed is now ratified, in a
+// **wider** form than the one it was written against:
 //
-//     Confined<T>.update(fn (T) -> T)        // moves out, transforms, moves in
+//     assumed:   Confined<T>.update(fn (T) -> T)       // moves out and back
+//     ratified:  Confined<T>.update(fn (&var T) -> R) -> R
 //
 // Nothing imports this module and `Package.elp`'s `entry` does not reach it,
-// so it is inert. It exists because `recalc.elp` GAP 4 answers the
+// so it is still inert. It exists because `recalc.elp` GAP 4 answers the
 // reference-cycle question by leaning on that method's *absence*, and an
 // answer that rests on an absence has to be re-checked against the absence
-// being filled.
+// being filled. It was, the conclusion held, and the reversal it argued for is
+// now in `aliasing.md`.
+//
+// The widening matters to exactly one finding here. GAP 7 — "`.update` empties
+// the cell" — was an objection to the *narrow* signature, and the ratified one
+// does not empty anything. See the amendment at that gap.
 // ─────────────────────────────────────────────────────────────────────────────
 //
 // FINDING 3 — why `.update` is wanted, and it is nothing to do with cycles.
@@ -141,8 +147,8 @@ export fn Sheet.link(&var self, dependent Reference, precedent Reference) {
 	// `.update` supplies the one missing link in that chain: a way to get the
 	// payload out of the cell by value. Everything else was already there,
 	// which is why one method re-opens all of GAP 1.
-	a.update(fn (n) { return n.copyWith(precedents = n.precedents.append(b.alias())) })
-	b.update(fn (n) { return n.copyWith(dependents = n.dependents.append(a.alias())) })
+	a.update(fn (&var n) { n.precedents.append(b.alias()) })
+	b.update(fn (&var n) { n.dependents.append(a.alias()) })
 }
 
 // FINDING 6 — and now the leak is not a needle, it is **every edge**.
@@ -176,7 +182,16 @@ export fn Sheet.link(&var self, dependent Reference, precedent Reference) {
 // not to give `Confined<T>` a `.update` are therefore one decision, and they
 // are currently recorded in two places as if independent.
 
-// GAP 7 — `.update` empties the cell, and on a graph re-entry is the common
+// GAP 7, RESOLVED by the signature that was ratified rather than the one
+// assumed here — and resolved *because* this gap was written down.
+//
+// Everything below is an objection to `update(fn (T) -> T)`, which moves the
+// payload out. `update(fn (&var T) -> R) -> R` never moves it, so there is no
+// hole and a re-entrant reader sees a half-finished value instead of nothing —
+// the ordinary hazard any mutation passes through, handled by the runtime trap
+// in `aliasing.md`'s "The transform closure", rule 3. The original text:
+//
+// `.update` empties the cell, and on a graph re-entry is the common
 // case rather than the edge case.
 //
 // `.update` moves the payload out, runs the transform, moves the result in. For

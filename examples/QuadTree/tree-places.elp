@@ -17,15 +17,28 @@
 // mechanisms the hypothesis allows and nothing else.
 //
 //   1. `&var self`                       — exists today
-//   2. `&var T` as a non-receiver param  — queued, `memory-model.md` leans yes
-//   3. `cell.update(fn (&var T) -> R)`   — proposed
-//   4. `collection.update(i, fn (&var T) -> R)` — proposed, named in
-//      `memory-model.md`'s "Collections hold values, not places" as the cheaper
-//      spelling and judged purely additive
+//   2. `&var T` as a non-receiver param  — RATIFIED, `memory-model.md`
+//   3. `cell.update(fn (&var T) -> R)`   — RATIFIED, `aliasing.md`
+//   4. `collection.update(i, fn (&var T) -> R)` — RATIFIED, `collections.md`
 //
-// Explicitly forbidden, to make the test mean something: `&var self.root`,
-// `&var children[i]`, `*node = ...`, and any other place handed out by
-// projection.
+// All four are now the language, so this file stopped being a hypothesis while
+// it was still the argument for one. Two of the restrictions it imposed on
+// itself were lifted in the ratification and one was not, which is worth
+// knowing when reading the gaps below:
+//
+//   - `&var self.root` is now **legal** — projection through fields is allowed,
+//     because the corpus already does it in receiver position in every file.
+//   - matching through a reference is now **legal**, and is the same rule: a
+//     pattern is a projection.
+//   - `&var children[i]` stays **forbidden**. Projection through a collection
+//     index is what `update(i, fn)` is for, and a container that may reallocate
+//     is exactly the case the static check cannot see through.
+//
+// Explicitly forbidden while writing it, to make the test mean something:
+// `&var self.root`, `&var children[i]`, `*node = ...`, and any other place
+// handed out by projection. That the result needed none of them is the finding;
+// that two of the three turned out to be grantable anyway is the cost of the
+// finding being conservative, and it is the right direction to be wrong in.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { Point, Rect } from .types.geometry

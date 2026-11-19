@@ -68,6 +68,14 @@ the language to absorb collections, and because an auditable list in stdlib
 source matches how every other elp privilege is recorded. What it needs is a
 name and a rule for who may write it, and neither exists.
 
+**The first concrete customer arrived with `Weak<T>`.** Its parameter is a
+cell — `Weak<Confined<T>>` — so the declaration needs a constraint saying *"`C`
+is one of the two mutable cells"*, and there is no interface to name. Under
+compiler-known types the constraint is built in and invisible; under a marker
+it is an ordinary bound over a privileged interface the marker permits. The
+second answer is the one that lets a future cell kind exist without a compiler
+change, which is the leaning restated with something at stake.
+
 ## The current open items, sorted
 
 Written while the write-surface round was closing, so this is the live list
@@ -75,20 +83,26 @@ rather than an illustration.
 
 | item | bucket | note |
 |---|---|---|
-| `&var T` as a non-receiver parameter | **1** | and it is what moves the next row out of bucket 2 |
-| `update(fn (&var T) -> R) -> R` on collections | **3** | ordinary elp, conditional on the row above |
-| a recursive value type's indirection (`indirect`) | **1** | see `memory-model.md`; chosen *because* it avoids bucket 2 |
+| ~~`&var T` as a non-receiver parameter~~ | **1** | **ratified**; it is what moved the next row out of bucket 2 |
+| ~~`update(fn (&var T) -> R) -> R` on collections~~ | **3** | **ratified**, and it stayed in bucket 3 — ordinary elp over the row above |
+| ~~a recursive value type's indirection (`indirect`)~~ | **1** | **ratified**; chosen *because* it avoids bucket 2 |
 | `break` | **1** | not expressible as a library |
 | an optional borrow (`Optional<&T>`) | **1** | a lifetime rule |
-| `string`'s tier | **1** — it is primitive | but a CoW `string` puts its *implementation* in bucket 2 |
-| `update` on the four cells | **2** | interior mutability is irreducible |
-| `Weak<T>` | **2** | needs a runtime side table |
+| ~~`string`'s tier~~ | **1** — it is primitive | **ratified** `Copy`, and because it is immutable there is no CoW `string`, so nothing lands in bucket 2 |
+| ~~`update` on the four cells~~ | **2** | **ratified**; interior mutability is irreducible, so this is the round's one bucket-2 addition |
+| ~~`Weak<T>`~~ | **2** | **ratified**; needs a runtime side table, and it is the first thing to need a *constraint* over the privileged set |
 | `Map.get`'s two spellings, `Map.set`'s re-insert order | **3** | two methods and a decision |
 
-The shape of that table is the argument for the round order: three bucket-1
-items are blocking bucket-3 work, so until they land, half of what looks like
-a stdlib ergonomics question is "there is no way to write this at all", which
-is the wrong question to be answering about ergonomics.
+The shape of that table was the argument for the round order: three bucket-1
+items were blocking bucket-3 work, so until they landed, half of what looked
+like a stdlib ergonomics question was "there is no way to write this at all",
+which is the wrong question to be answering about ergonomics.
+
+**They have landed.** Six of the nine rows are struck, and the round added
+exactly one thing to bucket 2 (`update` on the cells) while moving one out of
+it (`indirect`, by not being a type). That is the rule holding under load,
+which is the only test it has had. What remains is three rows, all small, and
+the ergonomics round is no longer blocked.
 
 ## The worked example — `indirect` instead of `Boxed<T>`
 

@@ -65,9 +65,14 @@ instead of a lifetime. Same tier, same reasoning, no new precedent.
 
 ### `Confined<T>` — mutable sharing on one thread
 
-`.new(v)`, `.get()`, `.set(v)`, `.alias()`. The thing a library reaches
-for when "edit this once, and every holder sees it" is the actual
-requirement — `examples/Sheet`'s styles, `examples/Buffer`'s text.
+`.new(v)`, `.get()`, `.set(v)`, `.update(fn (&var T) -> R) -> R`,
+`.alias()`. The thing a library reaches for when "edit this once, and
+every holder sees it" is the actual requirement — `examples/Sheet`'s
+styles, `examples/Buffer`'s text.
+
+`.update` is the late addition and it is the one that matters: without it
+a cell's only write is whole-value, so a cell holding a `Move` aggregate
+cannot be written at all. See "The transform closure", below.
 
 Never `Sendable`, under any `T`. It is `Rc<RefCell<T>>`, and it is sound
 only because of cell-thread confinement (`reactivity.md`), which is
@@ -79,16 +84,21 @@ The same capability where there is no single thread to confine to:
 `kind = .Binary` server code, `background` work, `examples/Worker`'s
 pool. `Arc<Mutex<T>>`.
 
-**Its surface is two closures, split by direction:**
+**Its surface is two closures, one per direction:**
 
 ```elp
-.update(fn (T) -> T)        // read-modify-write, atomically
-.with(fn (&T) -> R) -> R    // read under the lock, return something derived
+.update(fn (&var T) -> R) -> R   // read-modify-write under the lock
+.with(fn (&T) -> R) -> R         // read under the lock, return a derivation
 ```
 
 ```elp
-hits.update(fn (n) { return n + 1 })
+hits.update(fn (&var n) { n += 1 })
 ```
+
+The direction split survives here and not on `Confined<T>`, and the reason
+is the lock rather than symmetry: a `Synchronized<T>` cannot offer `.get()`
+because a read has to be bounded by the critical section, so `with` is its
+read. `Confined<T>` has `.get()` and needs no `with`.
 
 A `.get()`/`.set()` pair over a lock is memory-safe and still
 *logically* racy — two writers interleave between the read and the write
@@ -111,25 +121,72 @@ invisible, so a lock held across one deadlocks exactly as before. The line
 is that `with` is for **resources**, which need release once and in order,
 not for **locks**, which need exclusivity between statements.
 
-`update` takes a **pure transform** rather than a mutating body, which
-is what `examples/Pipeline` corrected. A single
-`with(fn (v &var T) { ... })` needs two things the language does not
-have: a `&var T` *parameter* spelling, which `memory-model.md` Finding 4
-deliberately rejected in favour of inferring mutability from usage, and
-whole-value assignment through a reference, which is
-`examples/QuadTree`'s GAP 4. A transform needs neither, cannot forget to
-write back, composes with the `copyWith` the corpus already uses, and
-makes the critical section obviously total.
+`update` originally took a **pure transform**, `fn (T) -> T`, which is
+what `examples/Pipeline` corrected it to and which is what `Confined<T>`
+never received. That shape was chosen because a mutating body needed two
+things the language did not have — a `&var T` parameter spelling and
+whole-value assignment through a reference. **Both now exist**
+(`memory-model.md` Finding 4's third amendment, and `self = …` in a
+method), so the transform has been widened to `fn (&var T) -> R` and the
+two cells have the same shape. The properties that made the transform the
+right mechanism are unchanged: it cannot forget to write back, and the
+critical section is syntactically total.
 
-**What may appear inside the closure** is the open part. The body must
-not call `background`, receive from a channel, or reach into another
-`Synchronized`. That reads like a restriction on a closure body *by
-position*, which the language has no other instance of — but the
-parameter type being `pure fn(T) -> T` would supply it from a mechanism
-that already exists, since `grammar-script-notes.md`'s "no external
-calls" rule rules out both hazards outright. Whether `pure fn(T) -> T`
-is a writable *function type* as opposed to a declaration form is a
-question for `functions.md`.
+### The transform closure, ratified
+
+One shape, at three sites, and it is the fix for all nine reports in
+`memory-model.md`'s "One hole, reported nine times":
+
+```elp
+Confined<T>.update(fn (&var T) -> R) -> R
+Synchronized<T>.update(fn (&var T) -> R) -> R
+[T].update(at int, fn (&var T) -> R) -> R
+Map<K, V>.update(key K, fn (&var V) -> R) -> R
+```
+
+1. **The payload never leaves.** This is the difference from Rust's
+   `RefCell::replace_with` and it is what closes `examples/Recalc`'s GAP 7:
+   there is no moment at which the cell is empty, so a re-entrant read
+   cannot observe a hole. What it can observe is a half-finished value, and
+   that is what rule 3 is about.
+2. **`-> R` is load-bearing, not a convenience.** `examples/Editor` FINDING
+   3: an undo record needs the line that was replaced, and returning it out
+   of the transform is the only way to get it without a second traversal.
+3. **Re-entering a cell inside its own `update` traps**, at runtime, in the
+   same register as an out-of-bounds `[]` (`collections.md`). The static
+   exclusivity rule covers every path it can see; a second handle reached
+   through a data structure is not statically decidable, so the dynamic
+   check is the floor. A lint catches the visible case — the same cell
+   handle captured by the closure.
+4. **The closure is not `pure`, and that fork is closed.** It was argued
+   that `pure fn` would both forbid the hazards inside a `Synchronized`
+   critical section and prevent a cell cycle being built.
+   `examples/Interpreter` FINDING 8 falsified the second half: `LETREC`
+   stores an **already-aliased** value, so the transform captures a handle
+   and writes it, calling nothing, and `grammar-script-notes.md` defines the
+   rule as being about side-effectful *calls*. `pure` cannot see it. The
+   first half survives as a real requirement with no mechanism yet — a
+   `Synchronized` transform still must not `background`, receive from a
+   channel, or lock a second `Synchronized` — and it is now plainly a
+   restriction on a body *by position*, which is where it should have been
+   filed.
+5. **The `&var T` may not escape.** It is a borrow and a field may not hold
+   one, so storing it is already an error; this adds no rule and is stated
+   because the closure makes it look like it might.
+6. **`.set(v)` stays.** It is the whole-value case, it is shorter, and it is
+   what most writes are. `update` is what makes the rest possible.
+
+**What it closes.** The cell's write surface (so a `Confined<Node>` holding
+a `Move` aggregate is writable, which is five of the nine reports),
+"collections hold values, not places" at the element it was written about,
+and the invisible no-op `tree-places.elp` found in `children[i].insert(…)`.
+
+**What it does not close**, so the corpus scan can look for them: a `Move`
+resource *released* out of a cell still needs a consuming `.take()`
+(`examples/Playhead` GAP 6); `Map.get` on a `Move` value still needs a
+borrowing read, which runs into `Optional<&V>` and the no-borrow-in-a-field
+rule (`tree-places.elp` GAP 8); and a transform that captures a `Move` value
+is called exactly once but the function type does not say so (GAP 7).
 
 ### `Atomic<T>` — mutable sharing with a deadline
 
@@ -695,22 +752,22 @@ is observationally identical to a copy"*, a claim about **observation**
 settling a question about **reachability**, and it is the reason the `Knot`
 needle exists. What it does not do is decide this.
 
-### `.update` empties the cell, which is a new failure mode
+### ~~`.update` empties the cell~~ — resolved by the signature it was written against
 
-Separate from the above and true under either fork. `.update` moves the
-payload out, transforms, moves the result in, so for the transform's duration
-**the cell holds nothing**, and a transform that reaches its own cell observes
-a hole rather than a stale value.
+The objection was aimed at `update(fn (T) -> T)`, which moves the payload out,
+transforms it and moves the result in, so for the transform's duration **the
+cell holds nothing** and a transform reaching its own cell observes a hole
+rather than a stale value. `handles.elp` GAP 7 demonstrates it with an
+ordinary graph `invalidate` holding a borrow across a recursion that comes
+back round.
 
-`Synchronized<T>` has the same structure and gets away with it, because
-re-entering a held lock deadlocks — loudly. `Confined<T>` has no lock, and
-the cell thread's atomicity is exactly what does not help: the sequence being
-uninterrupted is *why* the hole is observable from inside it. This is adjacent
-to the Open item on what `.get()` returns and how long it lives, and strictly
-worse — that one is a question about a value that exists.
-
-`handles.elp` GAP 7 has the demonstration, which is an ordinary graph
-`invalidate` holding a borrow across a recursion that comes back round.
+**The ratified signature is `update(fn (&var T) -> R) -> R`, and the payload
+never leaves.** There is no hole, because nothing is moved. What survives is
+the weaker and ordinary hazard: a re-entrant reader sees a **half-finished**
+value, which is the state any mutation passes through, and that is what the
+runtime trap in "The transform closure" rule 3 is for. Kept on the page
+because the difference between the two signatures is invisible at every call
+site and this is the one place it is observable.
 
 ### And an interpreter settles it — `Weak<T>` is mandatory
 
@@ -771,6 +828,72 @@ enough for everyday graph code, because everyday graph code should not reach
 it. Which matters for the cost question: a rarely-used `Weak<T>` can afford to
 be expensive, or be **forbidden outright in an `@abi(.C, realtime)` body**
 rather than made cheap enough for one.
+
+### `Weak<T>`, ratified — and it does not solve `let rec`
+
+```elp
+fn Confined<T>.weak(&self) -> Weak<Confined<T>>
+fn Synchronized<T>.weak(&self) -> Weak<Synchronized<T>>
+fn Weak<C>.upgrade(&self) -> Optional<C>
+```
+
+1. **The parameter is the cell, not the payload.** `Weak<Confined<T>>`, so
+   that upgrading cannot hand back the wrong kind of handle and so that
+   `Sendable` falls out of the cell it names rather than needing its own rule.
+   `C` is constrained to the two mutable cells, which the compiler knows
+   because it already knows them; this is the first concrete customer for
+   `stdlib-boundary.md`'s unmade decision between a privilege marker and
+   compiler-known types, and it is noted there rather than decided here.
+2. **`Weak<C>` is `Copy`.** A weak handle grants no access at all until
+   `upgrade` is called, so a second one observes nothing — the same
+   immutability argument as `Shared<T>`, and it joins that table. The
+   consequence is a pleasing one: `.alias()` costs you a word on a strong
+   handle, and a weak handle is free, *because it is not yet a handle to
+   anything*.
+3. **`upgrade` returns `Optional<C>`, and that is the whole cost.** Every
+   traversal of a weak edge carries an `Optional`, which is exactly the
+   visibility wanted — a weak edge is a design decision and it should be
+   legible at the places that depend on it.
+4. **Forbidden outright in an `@abi(.C, realtime)` body.** Not narrowed the
+   way `string` and `Shared<T>` are narrowed to "borrow yes, copy no": using
+   a `Weak` *means* upgrading, and the strong handle that produces is dropped
+   at the end of the expression, which can reach zero and call the allocator.
+   There is no borrow-only use, so there is no rule to narrow. The table
+   above is what makes this affordable — everyday graph code should not be
+   reaching for this.
+5. **Which edge is weak is the author's decision**, and nothing infers it.
+   That is the standing cost of refcounting, it is the same cost Rust and
+   Swift pay, and it is why "A leak has no observable symptom", below, is not
+   a gap that `Weak<T>` closes.
+
+**And now the correction, because ratifying is where it has to be said:
+`Weak<T>` is not the answer to `let rec`.** The section above establishes
+that an interpreter's cycle is in the semantics and that the arena escape
+degenerates into a hand-written collector. Both stand. What does not follow,
+and what a reader will take from it, is that a weak edge fixes it — and it
+does not, because **neither edge may be weakened**:
+
+| weaken | what breaks |
+|---|---|
+| closure → captured scope | a closure returned out of its scope loses its environment |
+| scope → bound closure | a sibling binding in a live scope can still reach `f`, and `f` is gone |
+
+Which is precisely why CPython ships a cycle collector *in addition to*
+refcounting rather than exposing `weakref` and calling it done. So the
+position elp takes is the one Rust and Swift take and it should be written
+down rather than discovered: **a `let rec` cycle leaks, and a leak is safe.**
+No tracing collector, no cycle detector, no runtime elp does not otherwise
+have.
+
+What makes that acceptable rather than a hole is where the escape lives. An
+interpreter that cares reclaims scopes itself, by arena and index, and that
+is not a workaround — it is what CPython's collector *is*, written once in a
+runtime instead of once per program. The useful move is to make it a
+**library**: an `Arena<T>` with index handles is plain elp, bucket 3 in
+`stdlib-boundary.md`, and the one program in the corpus that needs it
+(`examples/Recalc`) already has it hand-written. `Weak<T>` is ratified for
+the shapes it does fix — a parent back-edge, an observer list, a cache of
+things someone else owns — and `let rec` is not one of them.
 
 **What is now open is `Weak<T>`'s cost, which is a different problem.** The
 sharp edge is in the prior-art notes below: `weak` needs a side table and must
@@ -884,10 +1007,13 @@ cheap everywhere else. Granted both, `examples/Buffer` stops duplicating
 every line per keystroke; granted only CoW, it does not.
 
 **Two amendments from `examples/Editor`, which priced this.** First, the lint
-above **cannot be computed yet**: it needs a size, `Line` holds a `string`, and
-`string`'s tier is an Open item below. That item decides most of the corpus's
-conformances *and* whether this diagnostic can exist, so nothing here is
-ratifiable until it is answered.
+above could not be computed: it needs a size, `Line` holds a `string`, and
+`string`'s tier was unstated. **That is now answered** — `string` is `Copy`
+and immutable, so it is not in CoW's domain at all and it contributes a
+pointer to the size calculation rather than a buffer. The blocker is gone and
+what is left is smaller than it looked: the lint still needs the layout pass
+to expose *"this `Copy` type's copy is a memcpy"*, which is the same gate
+`@abi(.C, realtime)` and `Atomic<T>` want.
 
 Second, and it narrows the proposal: **CoW is not the answer to the
 `Duplicate` row for a value that is deliberately snapshotted.** An undo
@@ -896,8 +1022,9 @@ buffer shared with the history entry and copies it. Snapshot per keystroke,
 copy per keystroke; the cost moved one statement right. What fixes that is a
 persistent structure whose edit copies only a root-to-leaf path, which is a
 rope, which is a recursive value type — so an undo stack needs
-`examples/QuadTree`'s GAP 1, and that gap is now blocking two unrelated
-programs. CoW remains worth having for passing, assigning and reading, where
+`examples/QuadTree`'s GAP 1, **now ratified as `indirect`**, whose immutable
+box is precisely what path-copying wants. CoW remains worth having for
+passing, assigning and reading, where
 `tree-places.elp` FINDING 5 shows it is what keeps a read-only descent
 non-quadratic.
 
@@ -925,7 +1052,7 @@ runtime.
 
 | | duplication | independence | examples |
 |---|---|---|---|
-| `Copy` | implicit | independent | primitives, `Cursor`, `Money`, `Point`, `JobId`, `Value`, **`Shared<T>` for any `T`** |
+| `Copy` | implicit | independent | primitives, **`string`**, `Cursor`, `Money`, `Point`, `JobId`, `Value`, **`Shared<T>` for any `T`**, a type with an `indirect` field |
 | `Duplicate` | explicit, via `.copy()` | independent, possibly deep | `[T]`, `Row`, `Sheet` |
 | `Move` | exclusive transfer — the source is dead | | everything else that opts in, **`Confined<T>`**, **`Synchronized<T>`** |
 
@@ -982,6 +1109,72 @@ export fn Buffer.alias(&self) -> Self {
 `Shared<T>` needs none of this. It is `Copy`, so a second handle is a
 plain assignment — which reflects the reality that immutable sharing is
 free and mutable sharing costs you a word.
+
+### `string` is `Copy`, and immutability is the whole argument
+
+Open since `examples/SqliteBinding` asked whether `Connection { handle,
+path string }` was `Copy`-eligible, and bigger than it looked: a record of
+strings is most of the corpus, so the answer decides the tier of most types
+anyone will write.
+
+**Decided: `string` is `Copy`.** It is not a judgement call, because
+`strings.md` already made it — *"`string` is an **immutable** sequence of
+Unicode scalar values"*. The third tier question in this file resolves
+against the same sentence the other two did: **an immutable alias is
+observationally identical to a copy**, so there is no second value to make,
+and a copy is a pointer copy and a retain.
+
+The alternative is not merely worse, it is incoherent. `Duplicate` promises
+*an independent value*, and independence from a value nobody can write is
+not a property — `.copy()` on a `string` would be a method whose return is
+indistinguishable from its receiver by any program. A tier whose guarantee
+is unobservable is not a tier.
+
+Four consequences, and the third is the one nobody expects:
+
+1. **A record of strings is `Copy`.** `Connection`'s `path` was never the
+   blocker; its `handle` is.
+2. **`string` leaves the copy-on-write question entirely.** The CoW
+   assessment above is about the cost of *duplicating before a write*, and
+   there is no write. CoW stays a property of exactly two stdlib types,
+   `[T]` and `Map`, which also unblocks `examples/Editor` FINDING 1 — that
+   probe could not compute the CoW lint because this tier was unstated, and
+   the answer is that `string` is not in its domain.
+3. **Concatenation is not a copy, and that is where the cost went.**
+   `a + b` allocates and walks both operands, O(n), because the result is a
+   *new* immutable value. So `string` has a cheap implicit copy and an
+   expensive explicit build, which is the right way round and is exactly
+   where a program loops without noticing. That is a lint, not an error, and
+   it belongs with the CoW lint rather than here.
+4. **A `string` may be borrowed in a realtime body but not copied into one
+   or dropped there**, because the retain's matching release can reach zero
+   and call the allocator. Same rule as `Shared<T>`. See below.
+
+### `Copy` does not mean trivially copyable, and there are now three of them
+
+Worth stating once, because it has been derived separately three times and
+the third time it should stop being a surprise.
+
+| type | what a copy is | why it is `Copy` |
+|---|---|---|
+| `Shared<T>` | pointer copy + retain | the referent is immutable |
+| `string` | pointer copy + retain | the value is immutable |
+| a type with an `indirect` field | pointer copy + retain | the box is immutable (`memory-model.md`) |
+| `Weak<C>` | pointer copy + weak retain | it grants no access until `upgrade` |
+
+`Copy` means **implicit and independent**, and immutability buys
+independence without buying a deep copy. It does not mean a memcpy, and no
+decision in this file ever said it did — but the word invites the reading,
+and a `Point` is the example everyone has in mind.
+
+The one place the distinction is load-bearing is `@abi(.C, realtime)`,
+which forbids a refcount decrement reaching zero. Under it, these three are
+borrowable and not copyable, while a `Point` is both. So the realtime rule
+cannot be phrased as *"only `Copy` types"*; it is **only `Copy` types whose
+copy is a memcpy**, which is a property the layout pass computes and the
+type system does not currently name. That is the same gate
+`examples/Editor`'s CoW lint needs and `Atomic<T>`'s eight-byte diagnostic
+already has, which makes three customers for one piece of machinery.
 
 ### The rule: `Copy` is field-wise
 
@@ -1441,21 +1634,21 @@ while `.copy()` would have had one that looked identical in both cases.
   amendment says any call may yield, so the "a call ends the turn"
   reasoning that governs narrowing has to govern this too. It currently
   does not.
-- **A cell's write surface, and `Weak<T>`, are one decision.** Whether
-  `Confined<T>` gains `update(fn (T) -> T)` or `update(pure fn (T) -> T)`
-  or neither decides whether the handle-per-node graph is constructible,
-  which decides whether `Weak<T>` is mandatory or unnecessary. Within that,
-  whether `.alias()` counts as a side-effectful call is the whole question,
-  and it is the same observation-versus-reachability conflation that makes
-  `Shared<T>` `Copy` for any `T`. Reasoned out in
-  "And the loosening is already indicated", above; probed in
-  `examples/Recalc/internal/handles.elp`. Nothing here should be settled
-  piecemeal.
-- **`string`'s tier is not stated anywhere.** It is not in the table
-  above and `strings.md` does not say. It decides whether an ordinary
-  record of strings is `Copy` or `Duplicate`, which is most of the corpus,
-  so it is a bigger hole than its size suggests. Found while working out
-  whether `Connection { handle, path string }` was `Copy`-eligible.
+- ~~**A cell's write surface, and `Weak<T>`, are one decision.**~~ **Both
+  ratified**, and they were one decision: `update(fn (&var T) -> R) -> R`
+  makes the handle-per-node graph constructible, which is what makes
+  `Weak<T>` necessary rather than optional. The sub-question — whether
+  `.alias()` counts as a side-effectful call — turned out not to be a fork
+  at all (`examples/Interpreter` FINDING 8), so `pure` is not on the
+  transform. What is left open is **not** in this bullet's shape: a `let rec`
+  cycle leaks and nothing in the language detects it, which is a documented
+  limit rather than an undecided question.
+- ~~**`string`'s tier is not stated anywhere.**~~ **Decided**: `Copy`, by
+  the same immutability argument as `Shared<T>` — see "`string` is `Copy`,
+  and immutability is the whole argument", above. What it leaves behind is
+  a smaller, sharper item: the layout pass needs to expose *"this `Copy`
+  type's copy is a memcpy"*, which `@abi(.C, realtime)`, the CoW lint and
+  `Atomic<T>` all want and none of them can currently ask for.
 - **Exactly-once release for a foreign handle.** `Move` gives at most
   once and never at least once, so a dropped handle leaks with nothing to
   notice. The candidates are a `Drop`-shaped interface, a scoped `with ...
