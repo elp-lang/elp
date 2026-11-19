@@ -1900,7 +1900,11 @@ how it splices, so a `[Statement]` hole splices in order and **Rust's
 `#(#x),*` repetition syntax never arises**; and computation happens outside
 the quote.
 
-Three things that rewrite found. A hole needs a type because the same field
+Four things that rewrite found. A hole's name may not collide with a
+keyword or with `Self` — `quote(Self = node.name(), …)` reads beautifully
+and shadows the receiver type in the one place a reader cannot see it, which
+is a rule a sigil form would not need and the first thing Rust's spelling is
+better at. A hole needs a type because the same field
 splices two ways — `"title"` in one position and `title` in another — which
 Rust handles by convention (`#name` beside `#name_str`) and this handles by
 `string` versus `Identifier`, which also means `Field.identifier()` has to

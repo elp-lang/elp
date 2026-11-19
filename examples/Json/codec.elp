@@ -5,7 +5,7 @@
 // `macros.md` has the design discussion. This file is its test: the same
 // macro, written twice, with what each spelling costs on the page.
 
-import { Interface, Declaration, Field, Statement, Identifier } from elp.macros
+import { Interface, Declaration, Statement, Identifier } from elp.macros
 import { JSON } from .types.value
 
 // FINDING 21 — `pure` holds, and that is the first thing worth checking.
@@ -85,8 +85,23 @@ pure fn encodeFor(node Declaration) -> Declaration {
 	// ordinary `[Statement]`, and the quote splices the list in order because
 	// of its **type**. One less sublanguage, and the ugliest part of Rust's
 	// form never arises.
-	return quote(Self = node.name(), writes) {
-		export fn Self.toJSON(&self) -> JSON {
+	// FINDING 28 — a hole may not be named after a keyword, and `Self` is the
+	// one that tempts you.
+	//
+	// Writing `quote(Self = node.name(), …)` reads beautifully — the
+	// generated method is `export fn Self.toJSON(&self)` and splices to
+	// `Content.toJSON`. It is also wrong: `Self` already names the receiver's
+	// type inside any method body, so a hole with that name shadows a keyword
+	// in the one place a reader is least able to notice, and the quote's own
+	// `&self` means something the hole does not.
+	//
+	// The rule the proposal needs, found by writing it: **a hole's name must
+	// not collide with a keyword or with `Self`.** One line, and it only
+	// exists because holes are ordinary identifiers — a sigil form cannot
+	// have this problem, which is the first thing Rust's spelling is better
+	// at.
+	return quote(owner = node.name(), writes) {
+		export fn owner.toJSON(&self) -> JSON {
 			var fields Map<string, JSON> = .new()
 			writes
 			return JSON.OBJECT { of = fields }

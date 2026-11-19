@@ -449,6 +449,14 @@ Four decisions, and the first is what makes the rest possible.
    and it is the same split `reactivity.md` makes between a component body
    and an `effect`.
 
+**A hole's name may not collide with a keyword, or with `Self`.** Found by
+writing the macro: `quote(Self = node.name(), …)` reads beautifully and is
+wrong, because `Self` already names the receiver's type inside any method
+body, so the hole shadows a keyword in the place a reader is least able to
+notice it. One extra rule, and it exists *only* because holes are ordinary
+identifiers — a sigil form cannot have this problem, which is the first
+thing Rust's spelling is better at.
+
 The cost, stated: a reader can see the holes but cannot tell them from
 locals **at a glance**, which is the dual of Rust's problem. The mitigation
 is that they are declared one line up in a signature, exactly like any
