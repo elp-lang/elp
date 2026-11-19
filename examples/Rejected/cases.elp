@@ -1,0 +1,235 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// EVERY PROGRAM IN THIS FILE IS SUPPOSED TO BE REJECTED.
+//
+// Do not fix them. The file is the corpus's only **safety** probe: eighteen
+// other programs ask whether the language can express something, and this one
+// asks whether it refuses what it says it refuses.
+//
+// `core-language-probes.md` §18 records why that matters. Nearly every
+// rejection in the design record is *argued* rather than *demonstrated*, and
+// a design that has never been handed a wrong program does not know whether
+// its rules fire.
+//
+// Each case carries a verdict:
+//
+//   REFUSED    — a rule exists, names this shape, and clearly covers it.
+//   UNCLEAR    — a rule exists and does not obviously reach this shape.
+//   NOT REFUSED — nothing in the record rejects it, and it should be rejected.
+//
+// Sixteen cases. Seven are REFUSED, five are UNCLEAR, four are NOT REFUSED.
+// ─────────────────────────────────────────────────────────────────────────────
+
+import { Confined, Synchronized, Shared } from elp.concurrency
+import { Error } from elp.types
+
+export object Doc {
+	var lines [string],
+}
+
+export object Node {
+	var value int,
+	indirect var next Optional<Node>,
+}
+
+// ── 1. REFUSED — a cell crossing a thread ────────────────────────────────────
+// `aliasing.md`: `Confined<T>` is never `Sendable`, under any `T`, and a
+// `background` body may only capture `Sendable` values. Two rules meet and
+// the diagnostic names the type.
+fn case1(doc Confined<Doc>) {
+	background(fn {
+		doc.get().lines.length()
+	})
+}
+
+// ── 2. REFUSED — two mutable paths to one place ──────────────────────────────
+// `memory-model.md` Finding 4's third amendment, rule 5: two `&var`
+// arguments to one call may not overlap.
+fn swapBadly(a &var string, b &var string) {}
+
+fn case2() {
+	var name = "x"
+	swapBadly(&var name, &var name)
+}
+
+// ── 3. REFUSED — a field holding a borrow ────────────────────────────────────
+// `aliasing.md`, the field-wise precisions: a borrow is unconditionally
+// `Copy` and a field outlives the call that produced it.
+export object Holder {
+	const borrowed &string,
+}
+
+// ── 4. REFUSED — writing through an indirect field ───────────────────────────
+// `memory-model.md`, `indirect` rule 4: the box is immutable, so the field
+// may be replaced and never written through. `write_through_indirect`.
+fn case4(node &var Node) {
+	node.next.value = 5
+}
+
+// ── 5. REFUSED — a `pure fn` reading a mutable cell ──────────────────────────
+// `functions.md`, the closed set: reading or writing `Confined`,
+// `Synchronized`, `Atomic`, `Ring` or `Published` is impure, because two
+// calls can return two answers.
+pure fn case5(counter &Confined<int>) -> int {
+	return counter.get()
+}
+
+// ── 6. REFUSED — a `pure fn` declaring `&var` ────────────────────────────────
+// `memory-model.md` Finding 5, now a rule rather than a consequence.
+pure fn case6(out &var [string]) {
+	out.append("no")
+}
+
+// ── 7. REFUSED — `const` where mutation is required ──────────────────────────
+// Finding 4's original half, which survives: the referent's `const`ness is a
+// hard constraint checked against the declared `&var`.
+fn case7() {
+	const fixed = "x"
+	swapBadly(&var fixed, &var fixed)
+}
+
+// ── 8. UNCLEAR — mutating a collection while iterating it ────────────────────
+// `control-flow.md` claims this "needs no rule of its own", because
+// `iterator()` takes `&self` and `append` takes `&var self`, so the two
+// overlap.
+//
+// That argument assumes the iterator's borrow **lasts the whole loop**, and
+// no document says how long it lasts. `collections.md` says only that
+// `for x in xs` calls `xs.iterator()` once and then `next()` until nil. If
+// the borrow ends at each `next()`, this is legal and the claim is wrong.
+fn case8(xs &var [string]) {
+	for x in xs {
+		xs.append(x)
+	}
+}
+
+// ── 9. UNCLEAR — assigning through an index ──────────────────────────────────
+// `operators.md` says `Index` only reads and that under "collections hold
+// values" an assignable index may not be wanted. That is a statement about
+// what exists, not about what this *is*: a parse error, an unknown-method
+// error, or a missing feature. `examples/Editor` FINDING 6 wanted it and
+// wrote a nested `update` instead.
+fn case9(xs &var [string]) {
+	xs[0] = "no"
+}
+
+// ── 10. UNCLEAR — allocating in a real-time body ─────────────────────────────
+// `functions.md` makes `realtime` a body property forbidding allocation, and
+// names the cost: "stdlib operations have to carry an allocates/does-not-
+// allocate property, propagated through calls". That property does not
+// exist, so the rule cannot currently fire on anything — including this,
+// where the interpolation allocates.
+@abi(.C, realtime)
+realtime fn case10(frames int) -> int {
+	const label = "frames: {frames}"
+
+	return label.length()
+}
+
+// ── 11. UNCLEAR — a transform that calls into another lock ───────────────────
+// `aliasing.md` requires that a `Synchronized` transform must not
+// `background`, receive from a channel, or reach into another
+// `Synchronized`, and records that this is "a restriction on a body by
+// position" with **no mechanism**. `pure` was the candidate and was ruled
+// out. So the rule is written down and nothing enforces it.
+fn case11(a &Synchronized<int>, b &Synchronized<int>) {
+	a.update(fn (&var x) {
+		x += b.with(fn (y) { return *y })
+	})
+}
+
+// ── 12. UNCLEAR — a `Copy` conformance over a non-`Copy` field ───────────────
+// `aliasing.md` makes `Copy` field-wise and **declared**: a type is `Copy`
+// only if every field is. So this is refused — but the same file also makes
+// eligibility *necessary rather than sufficient*, and nothing states what
+// happens when a declaration asserts a conformance the fields deny. An error
+// naming the field is the obvious answer and it is not written anywhere.
+export object Mixed {
+	const shared Confined<Doc>,
+}
+
+Mixed implements Copy
+
+// ── 13. NOT REFUSED — cancellation unwinding a transform ─────────────────────
+// Found by `examples/Dashboard`. `reactivity.md` makes cancellation
+// cooperative: it lands at a yield point and unwinds. A transform may call
+// anything, so it may yield. The unwind leaves the payload half-written.
+//
+// `aliasing.md` records that a *failing* transform leaves a partial write
+// and lists three candidate answers; all three are about failure paths. This
+// has no failure path, nothing on the page to see, and no rule at all.
+fn case13(state &Synchronized<Doc>, from int) {
+	state.update(fn (&var doc) {
+		doc.lines.append("start")
+		slowNetworkThing(from)       // yields; cancellation lands here
+		doc.lines.append("end")
+	})
+}
+
+fn slowNetworkThing(n int) {}
+
+// ── 14. NOT REFUSED — a lock taken on the cell thread ────────────────────────
+// Also from `examples/Dashboard`. Every rule is satisfied:
+// `Synchronized<T>` is `Sendable`, the read is legal, the lock is correct.
+// The composition is a UI thread blocking on a worker's lock, and the only
+// thing that notices is `reactivity.md`'s frame-budget diagnostic, after the
+// fact.
+fn case14(counts &Synchronized<int>) -> int {
+	return counts.with(fn (n) { return *n })
+}
+
+// ── 15. NOT REFUSED — a `background` body outliving its component ────────────
+// `reactivity.md` ends an `effect`'s coroutine by cancelling it when the
+// component goes away. A `background` spawned from an ordinary `fn` called
+// by a component has no stated owner, so the workers outlive the screen and
+// nothing in the type system notices.
+fn case15(doc Shared<Doc>) {
+	background(fn {
+		doc.get().lines.length()
+	})
+}
+
+// ── 16. NOT REFUSED — a macro that does not terminate ────────────────────────
+// `functions.md` states that `pure` does not imply termination, and
+// `macros.md` leaves the step budget open. So the compile-time evaluator has
+// nothing to stop this.
+@macro
+pure fn Forever(node Declaration) -> [Declaration] {
+	var out [Declaration] = []
+
+	while true {
+		out.append(node)
+	}
+
+	return out
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// WHAT WRITING THIS FOUND, which is not what it was written to find.
+//
+// The expectation was that most cases would be REFUSED and the file would be
+// a regression suite. Seven are. The other nine split two ways and the split
+// is the finding:
+//
+// **Five UNCLEAR cases are all the same shape** — a rule exists, is correct,
+// and **names a mechanism that does not exist yet**. Case 8 needs a borrow
+// duration nothing states; case 10 needs the allocates property
+// `functions.md` costed and nobody built; case 11 needs the body-position
+// restriction that lost `pure` as its candidate; case 12 needs a diagnostic
+// for a conformance the fields deny. These are not holes in the design, they
+// are the distance between a decision and a checker — and a design with no
+// compiler cannot tell them apart from holes, which is the argument for
+// writing this file now rather than after one exists.
+//
+// **Four NOT REFUSED cases are all composition failures**, and three of the
+// four came from `examples/Dashboard` an hour earlier. Each is two correct
+// features making one wrong program, with no rule to point at because no
+// rule was written about the pair. That is the composability question with
+// code under it.
+//
+// The most useful number here: of sixteen ways to write something wrong,
+// **nine are not currently caught**, and not one of the nine is caught by
+// accident. A corpus that only asks "can I express this" would have found
+// none of them.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// vim: ft=kotlin

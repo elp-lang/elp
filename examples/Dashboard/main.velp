@@ -1,0 +1,151 @@
+// The reading half, and the file where the reactive model meets the
+// concurrency model for the first time in the corpus.
+//
+// Every other `.velp` reads state that lives on the cell thread. This one
+// reads state produced by workers that are not on it, which is the ordinary
+// shape of every progress bar ever written and which the design has never
+// been asked to express.
+
+import { App, Column, Row, Spacer } from elp.layout
+import { Text, Button, Loading } from elp.components
+import { Published, Synchronized } from elp.concurrency
+import { Pool, Progress } from .internal.workers
+import { page, bar } from .styles
+
+export component Dashboard(paths [string]) {
+	// FINDING 5 — a component `var` holding a `Move` handle, and the tier
+	// says yes while nothing says what it means.
+	//
+	// `Pool` is `Move`. A component `var` lowers to a cell on the cell
+	// thread, and `Confined<T>` is never `Sendable` under any `T`, so the
+	// pool handle cannot leave this component — which is correct and is what
+	// keeps the workers' inbox from being shared.
+	//
+	// What no document says is what happens to the pool when the component
+	// goes away. `reactivity.md` ends an `effect`'s coroutine by cancelling
+	// it; a `background` body spawned *inside* a nested function has no
+	// stated owner at all. So the workers may outlive the screen that started
+	// them and nothing in the type system notices.
+	var pool Optional<Pool> = nil
+	var latest Progress = Progress { done = 0, total = 0, failed = 0 }
+
+	effect {
+		const started = Pool.started(4, paths.length())
+
+		for path in paths {
+			started.submit(path)
+		}
+
+		pool = .SOME(started)
+
+		// FINDING 6 — `defer` inside an `effect` is the designed shape, and
+		// it is the one place in this program where teardown is defined.
+		//
+		// `reactivity.md`: cleanup is cancellation, and where it genuinely is
+		// not — telling a server you are leaving, unregistering a callback —
+		// the answer is `defer` in the effect body. Stopping a worker pool is
+		// exactly that case.
+		defer { started.stop() }
+
+		// FINDING 7 — and here the two models fail to meet.
+		//
+		// `started.reader()` is a `Published<Progress>`. Reading it does
+		// **not** subscribe, because `Published<T>` is a sampled reader with
+		// no notification list — `aliasing.md` builds it for a reader with
+		// its own clock, and the whole point is that the writer never blocks
+		// and never notifies.
+		//
+		// `reactivity.md`'s model is the opposite: a read subscribes, a write
+		// patches. There is no third thing. So this loop is the only way to
+		// get a published value onto the screen, and it is a **busy poll with
+		// no clock** — it runs as fast as the scheduler lets it, on the cell
+		// thread, against a frame budget `reactivity.md` has a runtime
+		// diagnostic for.
+		//
+		// What this wants is `frame`: a demand-driven clock, which
+		// `examples/Playhead` FINDING 13 already has a correction for and
+		// which `reactivity.md` does not mention. Written as the busy loop
+		// because writing `frame` here would be inventing it.
+		const feed = started.reader()
+
+		while true {
+			latest = feed.sampled()
+		}
+	}
+
+	fn percent() -> int {
+		if latest.total == 0 {
+			return 0
+		}
+
+		return (latest.done * 100) / latest.total
+	}
+
+	return Column(style = page) {
+		Row {
+			Text("Rendering")
+			Spacer()
+			Text("{latest.done} of {latest.total}")
+		}
+
+		Row(style = bar, width = .percent(percent()))
+
+		// FINDING 8 — a lock on the cell thread, and nothing forbids it.
+		//
+		// The natural way to show a derived figure is to ask the authoritative
+		// counter rather than the sampled copy:
+		//
+		//     Text("{pool.counts.with(fn (p) { return p.failed }).toString()}")
+		//
+		// `Synchronized<T>.with` takes the lock. On the cell thread. In a
+		// markup read, which runs inside a turn that `reactivity.md` gives a
+		// frame budget and a runtime diagnostic for overrunning.
+		//
+		// Every rule here is satisfied: `Synchronized<T>` is `Sendable`, the
+		// read is legal, the lock is correct. The composition is a UI thread
+		// blocking on a worker's lock, and the only thing that would catch it
+		// is the frame-budget diagnostic firing after the fact.
+		//
+		// This is the clearest instance of the composability question: two
+		// correct features, one bad program, and no rule to point at.
+		match pool {
+			nil -> Loading(spin = true)
+			_   -> Button(onPress = fn { stop() }) {
+				Text("Stop")
+			}
+		}
+	}
+
+	fn stop() {
+		match pool {
+			nil -> nil
+			p   -> p.stop()
+		}
+	}
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// WHAT THIS PROBE FOUND, as a composition table rather than a gap list.
+//
+// The question was whether individually reasonable primitives behave sensibly
+// together. Five pairs, and they do not fail the same way:
+//
+//   | pair                                  | result                        |
+//   |---------------------------------------|-------------------------------|
+//   | `defer` + `background`                | **composes** — designed       |
+//   | `defer` + `effect`                    | **composes** — designed       |
+//   | `Channel` + `background` + `break`    | **composes**                  |
+//   | `Published<T>` + a component read     | **no mechanism**, wants `frame`|
+//   | cancellation + `Synchronized.update`  | **unsound** — partial write   |
+//   | `Synchronized.with` + a markup read   | **legal and wrong**           |
+//
+// Three categories, and the middle one is the one to act on. A missing
+// mechanism is a gap and gaps are cheap. A pair that is legal and wrong is a
+// diagnostic. A pair that is **unsound** — cancellation unwinding out of a
+// transform, leaving the payload half-written with no failure path on the
+// page — is a rule that needs changing, and `aliasing.md`'s three candidate
+// answers for the partial write were all written about failure and none of
+// them covers this.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// vim: ft=kotlin

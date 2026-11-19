@@ -1,9 +1,9 @@
 # Core language probes
 
-Eighteen programs written to put pressure on the parts of elp the original
+Twenty programs written to put pressure on the parts of elp the original
 corpus never exercised, plus §16, a scan of the whole corpus run once the
 write-surface round had landed, and a rubric at §18 for choosing the next
-ones. They are **design probes, not specimens** — they
+ones — which §19 and §20 were chosen by. They are **design probes, not specimens** — they
 use constructs the language does not have, written in the most plausible
 spelling, so the gaps can be read rather than listed.
 
@@ -27,6 +27,8 @@ spelling, so the gaps can be read rather than listed.
 | `examples/Editor` | a line editor with an undo stack | the **cell write surface**, priced per keystroke |
 | `examples/Json` | a JSON value, lexer, parser, writer, and the `@CodeGen` macro written in elp | the **macro engine** — and that an AST has no literal syntax — plus `Set`, `continue`, `Index`, `Iterable`, `char` ranges, and building a `string` |
 | `examples/Ledger` | a double-entry ledger with transfers and holds | **a pairwise mutation**, and a transform with a failure path in it |
+| `examples/Dashboard` | a live progress view over a worker pool | **composability** — five primitives in one place, and the first time the reactive model meets the concurrency model |
+| `examples/Rejected` | sixteen programs that must not compile | **safety** — whether the rules refuse what they say they refuse |
 
 None of them parse today, and nothing checks that — the hand-written front
 end and its corpus parse test were removed (`docs/README.md`), so "the
@@ -2120,6 +2122,90 @@ Five findings.
    type-checks, it runs, and the only symptom is a balance drifting down
    under load.
 
+## 19. Composition — `examples/Dashboard`
+
+The first program in the corpus where the reactive model meets the
+concurrency model. Every other `.velp` reads state that lives on the cell
+thread; this one reads state produced by workers that are not on it, which is
+the ordinary shape of every progress bar ever written and which the design had
+never been asked to express.
+
+Five primitives in one place — `background`, `Channel<T>`,
+`Synchronized<T>`, `Published<T>` and `defer` — and the result is a table
+rather than a gap list, because they do not all fail the same way.
+
+| pair | result |
+|---|---|
+| `defer` + `background` | **composes** — designed |
+| `defer` + `effect` | **composes** — designed |
+| `Channel` + `background` + `break` | **composes** |
+| `Published<T>` + a component read | **no mechanism**, wants `frame` |
+| cancellation + `Synchronized.update` | **unsound** — partial write |
+| `Synchronized.with` + a markup read | **legal and wrong** |
+
+Three categories, and they want three different responses.
+
+**No mechanism.** `aliasing.md` builds `Published<T>` for a reader with its
+own clock: the writer never blocks and never notifies. `reactivity.md`'s
+model is that a read subscribes and a write patches, and a patch is
+cell-thread-bound. So a value published by a worker **cannot notify
+anything**, and the only way to show it is to poll once a frame — which is
+`frame`, a construct `examples/Playhead` FINDING 13 already has a
+*correction* for and which `reactivity.md` does not mention at all. Both
+halves read as complete on their own; what joins them is undesigned.
+
+**Legal and wrong.** `Synchronized<T>.with` in a markup read takes a worker's
+lock on the cell thread, inside a turn with a frame budget. Every rule is
+satisfied — the type is `Sendable`, the read is legal, the lock is correct —
+and the only thing that notices is the frame-budget diagnostic, after the
+fact. Two correct features, one bad program, no rule to point at.
+
+**Unsound**, and this is the one to act on. `reactivity.md` makes
+cancellation cooperative: it lands at a yield point and unwinds the stack. A
+transform may call anything, so it may yield. The unwind leaves the payload
+**half-written**. `aliasing.md` records that a *failing* transform leaves a
+partial write and offers three candidate answers — all three are about
+failure paths, and this has none. The transform's guarantee was that its
+critical section is *syntactically* total, and cancellation is precisely a
+non-syntactic exit.
+
+## 20. Rejection — `examples/Rejected`
+
+Sixteen programs that are all supposed to be refused, which is the corpus's
+only **safety** probe. It was written expecting to be a regression suite and
+it is not.
+
+**Seven are refused cleanly**, by rules that name the shape: a `Confined<T>`
+captured by a `background` body, two `&var` arguments to one call, a field
+holding a borrow, a write through an `indirect` field, a `pure fn` reading a
+cell or declaring `&var`, and a `const` where mutation is required.
+
+**Five are UNCLEAR, and they are all the same shape** — a rule exists, is
+correct, and **names a mechanism that does not exist yet.** Mutating a
+collection while iterating needs a borrow *duration* nothing states, so
+`control-flow.md`'s claim that it "needs no rule of its own" rests on an
+assumption that is not written down. Allocating in a realtime body needs the
+allocates-or-not property `functions.md` costed and nobody built, so that
+rule cannot currently fire on anything. A transform reaching a second lock
+needs the by-position restriction that lost `pure` as its candidate.
+Assigning through an index is refused by nothing in particular. A `Copy`
+conformance over a `Confined` field is refused field-wise, with no stated
+diagnostic for a declaration asserting what the fields deny.
+
+Those five are not holes in the design; they are **the distance between a
+decision and a checker** — and a project with no compiler cannot tell the
+two apart, which is the argument for writing this file now rather than after
+one exists.
+
+**Four are NOT REFUSED, and all four are composition failures**, three of
+them from §19 an hour earlier: cancellation unwinding a transform, a lock on
+the cell thread, a `background` body outliving its component, and a macro
+that does not terminate.
+
+The number worth keeping: **of sixteen ways to write something wrong, nine
+are not currently caught**, and not one of the nine is caught by accident. A
+corpus that only asks *can I express this* would have found none of them.
+
 ## The three questions a probe is for
 
 Supplied by an outside reviewer while this round was being written, and
@@ -2135,8 +2221,8 @@ against it says something uncomfortable.
 3. **Composability** — do individually reasonable features still behave
    sensibly when combined?
 
-**The corpus is lopsided, and it is lopsided in the direction that flatters
-the design.** Eighteen programs, and nearly all of them test
+**The corpus was lopsided, and it was lopsided in the direction that
+flattered the design.** Eighteen programs, and nearly all of them tested
 expressiveness: they are written in the most plausible spelling and the gaps
 are what the spelling could not say. That is why the gap log is long and
 useful.
@@ -2155,10 +2241,12 @@ rules fire.
 one area; the interactions between eight concurrency primitives, three
 scope-exit constructs and two body properties have no program at all.
 
-So the next entries should be chosen by what is *missing* from this rubric
-rather than by what is interesting: a program written to be **rejected**,
-and a program that puts several primitives in one place and asks whether
-they still mean what they meant alone.
+So the next entries were chosen by what is *missing* from this rubric rather
+than by what is interesting: §19 puts five primitives in one place and asks
+whether they still mean what they meant alone, and §20 is sixteen programs
+written to be **rejected**. Between them they found one unsound pair, four
+composition failures nothing catches, and five rules that name a mechanism
+nobody has built.
 
 ## Suggested order
 

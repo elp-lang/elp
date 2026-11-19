@@ -79,6 +79,28 @@ second. Two candidates is no longer "not now": it is the point at which
 either these become a small algebra with a general form, or there is a
 principled reason the set stops at two, and nobody has argued either.
 
+## What the composability probes found
+
+`examples/Dashboard` and `examples/Rejected` were written to the rubric in
+`core-language-probes.md` §18, and between them they moved three things out
+of "nobody has checked" and into this file.
+
+| | |
+|---|---|
+| **Cancellation can unwind out of a transform** | `aliasing.md` — **unsound**, not a gap. The payload is left half-written with no failure path on the page, and all three candidate answers to the partial-write defect are about failures the author wrote. |
+| A `Published<T>` cannot notify a component | `reactivity.md` — no mechanism joins them, and the only thing that would is `frame`, which that file does not mention. Both halves read as complete alone. |
+| A lock taken on the cell thread | `reactivity.md` — legal, correct by every rule, and a UI thread blocking on a worker's lock. Wants a diagnostic, not a rule. |
+
+And five rules that **name a mechanism nobody has built**, which is a
+different category from an open question and is collected here so it stops
+reading as one: the duration of an iterator's borrow (`control-flow.md`
+depends on it), the allocates-or-not property (`functions.md` costed it,
+nothing has it, so `realtime` cannot currently fire), the by-position
+restriction on a `Synchronized` transform body, what rejects `a[i] = v`, and
+the diagnostic for a conformance the fields deny.
+
+Of sixteen ways to write something wrong, **nine are not currently caught**.
+
 ## Where the decided set is in tension with itself
 
 Not open questions — `tradeoffs.md` holds a cross-cutting audit of the

@@ -1,0 +1,14 @@
+export stylesheet {
+	page {
+		padding = 16,
+		gap = 12,
+	}
+
+	bar {
+		height = 8,
+		radius = 4,
+		background = .Accent,
+	}
+}
+
+// vim: ft=css

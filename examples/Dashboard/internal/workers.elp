@@ -1,0 +1,148 @@
+// The worker side of a live dashboard: a pool that renders thumbnails and
+// reports progress to something watching.
+//
+// This file exists for the **composability** question `open-questions.md`
+// raises — whether individually reasonable primitives still behave sensibly
+// together. It puts five in one place: `background`, `Channel<T>`,
+// `Synchronized<T>`, `Published<T>` and `defer`. Each is designed; no
+// document reasons about more than two at a time.
+
+import { Synchronized, Published, Atomic } from elp.concurrency
+import { Channel } from elp.concurrency
+import { Error } from elp.types
+
+export object Progress {
+	var done  int,
+	var total int,
+	var failed int,
+}
+
+Progress implements Copy
+
+export enum WorkerMessage {
+	RENDER { path string },
+	STOP,
+}
+
+WorkerMessage implements Copy + Sendable
+
+export object Pool {
+	const inbox   Channel<WorkerMessage>,
+	const counts  Synchronized<Progress>,
+	const feed    Published<Progress>,
+}
+
+Pool implements Move
+
+// FINDING 1 — `Published<T>` is written here and read by a component, and
+// **there is no mechanism that connects the two.**
+//
+// `aliasing.md` designs `Published<T>` as the reader's half of a deadline
+// pair: the writer publishes without blocking and the reader samples, with a
+// generation on the payload so a stale reading is discardable. Every example
+// in that file has the reader on a thread with its own clock.
+//
+// A component has no clock. `reactivity.md`'s model is that a read subscribes
+// and a write patches, and a patch happens on the **cell thread** — so a
+// value published from a worker cannot notify anything, because notification
+// is cell-thread-bound and the writer is not on it.
+//
+// That leaves exactly one way for a dashboard to show this: poll it, once a
+// frame. Which is `frame` — a construct the design refers to, that
+// `examples/Playhead` FINDING 13 has a *correction* for, and that
+// **`reactivity.md` does not mention at all**.
+//
+// So the composition failure is not that the two primitives conflict. It is
+// that the only thing joining them is undesigned, and both halves read as
+// complete on their own.
+export fn Pool.started(workers int, total int) -> Self {
+	const inbox = Channel<WorkerMessage>.new()
+	const zero = Progress { done = 0, total, failed = 0 }
+	const counts = Synchronized<Progress>.new(zero)
+	const feed = Published<Progress>.new(zero)
+
+	for _ in 0..workers - 1 {
+		background(fn {
+			// FINDING 2 — `defer` inside a `background` body is the one
+			// composition in this file that works exactly as both documents
+			// say it should.
+			//
+			// `reactivity.md` makes `defer` scope-scoped and runs it on
+			// cancellation unwind; the coroutine is owned by whatever spawned
+			// it; a channel's iterator blocks in `next()` and that block is a
+			// yield point. So cancelling the pool unwinds each worker through
+			// its `defer` and the count is released.
+			//
+			// Recorded because a composability probe that only finds failures
+			// is not measuring anything.
+			counts.update(fn (&var p) { p.total = p.total })
+			defer { counts.update(fn (&var p) { p.failed = p.failed }) }
+
+			for message in inbox {
+				match message {
+					.STOP -> break
+
+					.RENDER { path } -> {
+						// FINDING 3 — and this is the damning one.
+						//
+						// `render` can fail and can **yield**, because
+						// nothing stops a transform calling something that
+						// does. `reactivity.md` makes cancellation
+						// cooperative: it takes effect at the next yield
+						// point and unwinds the stack.
+						//
+						// So a cancellation can land **inside** this
+						// transform, unwind out of it, and leave `Progress`
+						// half-written — `done` incremented, `failed` not.
+						// `aliasing.md` records that a failing transform
+						// leaves a partial write and offers three answers;
+						// none of them is about cancellation, which arrives
+						// without a failure path and without anything on the
+						// page to see.
+						//
+						// The transform's guarantee was that its critical
+						// section is *syntactically* total. Cancellation is
+						// precisely a non-syntactic exit.
+						counts.update(fn (&var p) {
+							match render(path) {
+								Ok(_)  -> p.done += 1
+								Err(_) -> p.failed += 1
+							}
+						})
+
+						feed.publish(counts.with(fn (p) { return *p }))
+					}
+				}
+			}
+		})
+	}
+
+	return Self { inbox, counts, feed }
+}
+
+// FINDING 4 — the pool cannot tell anyone it finished, and that is
+// `examples/Pipeline` GAP 1 arriving in a second program.
+//
+// `background` returns nothing to join. The only completion signal available
+// is a message on a channel the *caller* owns, which means a dashboard that
+// wants "all done" has to count to `total` itself and trust the arithmetic.
+// Two probes now; neither invented a join, because inventing one is the
+// design decision.
+export fn Pool.submit(&self, path string) {
+	self.inbox.send(.RENDER { path })
+}
+
+export fn Pool.stop(&self) {
+	self.inbox.send(.STOP)
+}
+
+export fn Pool.reader(&self) -> Published<Progress> {
+	return self.feed.reader()
+}
+
+fn render(path string) -> Either<int, Error> {
+	// Elided: decode, scale, write. It allocates, it does I/O, it blocks.
+	return Ok(path.length())
+}
+
+// vim: ft=kotlin

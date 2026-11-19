@@ -225,8 +225,25 @@ Three candidate answers, none decided:
   only where the payload is cheap, which is not where this matters.
 
 Raised by an outside review of the corpus, which asked what an early-return
-path inside an `update` does. Nothing in the corpus takes one, which is why
+path inside an `update` does. Nothing in the corpus took one, which is why
 neither the probe nor the ratification found it.
+
+**And it is worse than a failure path, because cancellation is not one.**
+`examples/Dashboard` found the sharper case: `reactivity.md` makes
+cancellation cooperative — it lands at the next yield point and **unwinds the
+stack** — and a transform may call anything, so it may yield. The unwind
+leaves the payload half-written with **no failure path on the page to see**.
+
+All three candidates above are about a failure the author wrote. None covers
+an exit the author did not write, and the second one — forbid `R` from being
+an `Either` — does not help at all here, which is worth knowing because it
+was the most promising of the three. The transform's guarantee was that its
+critical section is *syntactically* total, and cancellation is precisely a
+non-syntactic exit.
+
+So this is the one pair in the corpus the composability probe classed as
+**unsound** rather than as a gap or a bad program, and it is the entry in
+`tradeoffs.md` with the shortest fuse.
 
 **What it closes.** The cell's write surface (so a `Confined<Node>` holding
 a `Move` aggregate is writable, which is five of the nine reports),
