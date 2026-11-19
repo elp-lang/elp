@@ -425,6 +425,21 @@ and the honest move at that point is to design one rather than add a third
 keyword. That decision is not made here; it is recorded so the next person
 to want a body property knows they are the one who tips it.
 
+**And a second candidate arrived the same week, which settles that it is no
+longer "not now".** `Sendable` says whether a *value* may cross a thread;
+nothing says whether a *function must run on a particular one*. GLFW's event
+loop must be called from the thread that created the window, and
+`core-language-probes.md` §10 finding 7 records the general form —
+*"main-thread affinity is a property of a call, not of a value"* — while the
+Open item below asks whether a callback's affinity may be declared. Neither
+noticed that affinity is this mechanism: a declared bit, a closed set,
+call-wise propagation.
+
+So there are two candidates for a third body property and no argument on
+the table for why the set should stop at two. Either they become a small
+algebra with a general form, or the stopping point needs a reason. That is
+a decision owed rather than a question open.
+
 ### The rule
 
 1. **`pure` is declared, checked, and never inferred.** `pure fn total(…)`.

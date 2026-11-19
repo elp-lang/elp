@@ -185,6 +185,49 @@ Map<K, V>.update(key K, fn (&var V) -> R) -> R
 6. **`.set(v)` stays.** It is the whole-value case, it is shorter, and it is
    what most writes are. `update` is what makes the rest possible.
 
+**A defect the widening introduced, and it was not noticed when this was
+ratified.** A transform that fails partway leaves the payload **partially
+mutated**, and there is no rollback.
+
+```elp
+c.update(fn (&var t) -> Either<int, Error> {
+	t.a = computeA()
+	t.b = computeB()?    // fails here; `t.a` is already written
+	return Ok(t.a + t.b)
+})
+```
+
+The argument for the transform was that *"it cannot forget to write back, and
+the critical section is syntactically total"*. Both are still true and
+neither is the property wanted here: total means **control reaches the end**,
+not that the value left behind is consistent. Under the original
+`update(fn (T) -> T)` this could not happen — a transform either returned a
+new value or it did not, so failure left the cell untouched. **Widening to
+`&var T` is what introduced it**, and the widening is right for every other
+reason.
+
+It also extends the re-entrancy hazard rule 3 already records. That one says
+a re-entrant *reader* can see a half-finished value; this says the **caller**
+can, after the transform returns, with nothing marking it.
+
+Three candidate answers, none decided:
+
+- **State it and move on.** A failing transform leaves a partial write, the
+  same way a failing method leaves a partially mutated receiver, which is
+  already true everywhere in the language. Cheapest, and it gives up the one
+  thing the cell idiom used to have for free.
+- **Require the transform to be total**, so `R` may not be an `Either` and a
+  failure has to be computed before the transform opens. Honest, and it
+  pushes the work to the caller in exactly the case — a read-modify-write
+  that can fail — where the transform was most wanted.
+- **Snapshot and restore on a failing return**, which needs `T` to be
+  `Duplicate` and costs the copy the transform exists to avoid. Available
+  only where the payload is cheap, which is not where this matters.
+
+Raised by an outside review of the corpus, which asked what an early-return
+path inside an `update` does. Nothing in the corpus takes one, which is why
+neither the probe nor the ratification found it.
+
 **What it closes.** The cell's write surface (so a `Confined<Node>` holding
 a `Move` aggregate is writable, which is five of the nine reports),
 "collections hold values, not places" at the element it was written about,
