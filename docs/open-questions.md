@@ -37,6 +37,46 @@ constructs. Fixed there; the exactly-once-release item survives with a
 different shape — not "elp needs a mechanism" but "elp has three and none is
 mandatory".
 
+## One question that is not about a feature
+
+Every other entry in this file asks whether one thing is decided. This one
+asks whether the decided things **compose**, and nothing in the design record
+answers it.
+
+**Do the concurrency primitives form one model?** There are now eight —
+`Confined<T>`, `Synchronized<T>`, `Atomic<T>`, `Ring<T>`, `Published<T>`, a
+component `var` (which is a cell), `background`, and `Channel<T>` — plus
+`effect`, the cell thread, `defer`, and `@abi(.C, realtime)` as a body
+property over the lot. Each arrived from a probe that needed it and each is
+defensible on its own. **No document reasons about more than two at a time.**
+
+Raised by an outside review of the repository, and it is the one thing in
+that review the record did not already track. It is also the same
+methodological failure as the three defects `core-language-probes.md` §16
+found, one level up: those were rules checked against the case that
+motivated them and not against the set they governed, and this is a set of
+features each checked against its own probe and never against each other.
+
+Concrete pairs nobody has written down:
+
+- A `Published<T>` read inside an `effect` — does it subscribe, or is it a
+  sample? `reactivity.md` says a read subscribes and `aliasing.md` designs
+  `Published<T>` for a reader with a deadline, which are different answers.
+- `defer` inside a `Synchronized.update` transform. `defer` runs on
+  cancellation unwind; the transform is a critical section. Nothing says
+  whether a cancellation can land inside one.
+- A `Ring<T>` endpoint captured by a `background` body, when `Move` is what
+  enforces SPSC and a closure capture is governed by `Copy`/`Move`.
+- `Weak<T>` upgraded on the cell thread, which is forbidden in a realtime
+  body and unexamined everywhere else.
+- A component `var` holding a `Synchronized<T>`: two cells, one on the cell
+  thread and one not, and the reactive system has no idea.
+
+The reactivity round is where this lands, because reactivity is the thing
+that touches all of them. Worth doing as a **composition audit** rather than
+as a list of fixes: the output is a table of which primitives may appear
+inside which, not a set of new features.
+
 ## The three with no design at all — all three now designed
 
 These were not "open" in the ordinary sense. They were depended on by
