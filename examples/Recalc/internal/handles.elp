@@ -59,7 +59,12 @@
 // Which is a strong enough case that it should be assumed to be coming, and
 // *that* is why the cycle answer needs re-checking.
 
-import { Reference, Value, Formula } from ..types.reference
+// MIGRATED — multi-dot import paths. `name-resolution.md` settles that a
+// single leading dot means "this package, rooted at the package directory",
+// and that **there is no `..` and no file-relative form at all**: moving a
+// file changes no import in it. These read `..` and `...` as if the dots
+// counted directories.
+import { Reference, Value, Formula } from .types.reference
 import { Confined } from elp.concurrency
 
 // The edges are handles again, exactly as GAP 1 drafted them.

@@ -1,19 +1,38 @@
+// MIGRATED — the same three undocumented features `examples/BlogStyle`'s
+// `internal/api.elp` had, and its GAP 1 and GAP 2 are the write-up: a field
+// with no `const`/`var`, a field default standing in for a type, and Go-style
+// tags. `Author`'s fields had no marker at all, which `aliasing.md` makes an
+// error.
+
 import { UUID } from elp.types
+import { CodeGen } from elp.macros
 
 export object Author {
-	displayName string
-	avatarUrl   Optional<string>
+	const displayName string,
+	const avatarUrl   Optional<string>,
 }
 
-// A single feed entry. imageUrl is nil for a text-only post, or the URL
-// the server returned for an image the author attached from their device.
+Author implements Copy
+
+// A single feed entry. `imageUrl` is nil for a text-only post, or the URL the
+// server returned for an image the author attached from their device.
+//
+// `likes` is `var` because the feed increments it in place — which is also
+// why `Post` is `Copy` rather than `Duplicate`: every field is, including
+// `string` (`aliasing.md`, "`string` is `Copy`").
 @CodeGen(Codec<JSON>)
 export object Post {
-	id       = UUID.v4()     `json: "id"`,
-	author   Author          `json: "author"`,
-	body     string          `json: "body"`,
-	imageUrl Optional<string> `json: "imageUrl"`,
-	likes    = 0,
+	const id       UUID,
+	const author   Author,
+	const body     string,
+	const imageUrl Optional<string>,
+	var   likes    int,
+}
+
+Post implements Copy
+
+export fn Post.new(author Author, body string, imageUrl Optional<string>) -> Self {
+	return Self { id = UUID.v4(), author, body, imageUrl, likes = 0 }
 }
 
 // vim: ft=kotlin

@@ -1,9 +1,19 @@
+// MIGRATED — was `export fn HelloWorld -> App`, which predates the
+// `component` keyword. A markup block only has meaning in a `component`
+// (`grammar-script-notes.md`), so the old form made `App { … }` an object
+// literal rather than markup.
+//
+// `App(globalStyles = Styles())` is gone with it: there is no whole-sheet
+// value to pass. Appearance arrives by one route, the `style` prop, and a
+// site-wide default arrives by the `defaults` mechanism — `App(textStyle =
+// body)` — which is the one ambient thing in the styling model.
+
 import { App, Surface, Content } from elp.app
-import { Styles } from .styles
+import { body } from .styles
 
 @App
-export fn HelloWorld -> App {
-	return App(globalStyles = Styles()) {
+export component HelloWorld() {
+	return App(textStyle = body) {
 		Surface {
 			Content()
 		}

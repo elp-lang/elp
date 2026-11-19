@@ -8,7 +8,12 @@
 // need both directions: forward edges to evaluate a cell, reverse edges to
 // know who to dirty when it changes. Every real spreadsheet has both.
 
-import { Reference, Value, Formula } from ..types.reference
+// MIGRATED — multi-dot import paths. `name-resolution.md` settles that a
+// single leading dot means "this package, rooted at the package directory",
+// and that **there is no `..` and no file-relative form at all**: moving a
+// file changes no import in it. These read `..` and `...` as if the dots
+// counted directories.
+import { Reference, Value, Formula } from .types.reference
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GAP 1 — the version the question assumed, and it does not compile.

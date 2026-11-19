@@ -29,6 +29,12 @@ export fn main() {
 	with Glfw.initialised()? as _,
 	     Window.open(800, 600, "triangle")? as window,
 	     Renderer.new(&window)? as renderer {
+		// `&window` and `&renderer`, not `&var` — and the corpus sweep
+		// checked this rather than assuming it. Both `pumpEvents` and
+		// `drawFrame` take `&self`, because what they mutate lives behind an
+		// opaque C handle rather than in elp storage. That is exactly the
+		// refinement the sweep made to `memory-model.md` rule 7: `&var`
+		// means something only where elp owns what C writes into.
 		loop(&window, &renderer)
 	}
 

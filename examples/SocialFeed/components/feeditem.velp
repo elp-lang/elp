@@ -1,21 +1,31 @@
+// MIGRATED — `export fn FeedItem(post Post) -> Component` predates the
+// `component` keyword, and four `class = "..."` props became named styles.
+// `Component` was also used in the return type without being imported.
+
 import { Column, Row } from elp.layout
 import { Text, Image } from elp.components
 
 import { Post } from .types.post
+import { feedItem, author, postImage } from .styles
 
-export fn FeedItem(post Post) -> Component {
-	return Column(class = "feed-item") {
+export component FeedItem(post Post) {
+	return Column(style = feedItem) {
 		Row {
-			Text(post.author.displayName, class = "author")
+			Text(post.author.displayName, style = author)
 		}
 
 		Row {
 			Text(post.body)
 		}
 
-		if post.imageUrl != nil {
-			Row {
-				Image(source = post.imageUrl, class = "post-image")
+		// Narrowing by binding rather than by an `!= nil` test: `operators.md`
+		// ends the turn at any call, so the tested value and the used value
+		// have to be the same binding. `match` supplies that; an `if` with a
+		// separate read does not.
+		match post.imageUrl {
+			nil -> nil
+			url -> Row {
+				Image(source = url, style = postImage)
 			}
 		}
 	}

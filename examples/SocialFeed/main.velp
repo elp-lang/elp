@@ -1,9 +1,15 @@
+// MIGRATED — `export fn SocialFeed -> App` predates `component`, and
+// `App(globalStyles = Styles())` passed a whole-sheet value that does not
+// exist: named styles are imported by destructuring and there is no
+// `.selp`-level value (`grammar-script-notes.md`). A site-wide text style is
+// the `defaults` mechanism instead.
+
 import { App, Surface, Content } from elp.app
-import { Styles } from .styles
+import { author } from .styles
 
 @App
-export fn SocialFeed -> App {
-	return App(globalStyles = Styles()) {
+export component SocialFeed() {
+	return App(textStyle = author) {
 		Surface {
 			Content()
 		}

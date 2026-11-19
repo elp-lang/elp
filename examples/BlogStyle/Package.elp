@@ -10,6 +10,9 @@ import { Package, Version } from elp.package
 		.Android,
 		.Web,
 	],
+	dependencies = [
+		.stdlib("1.0.0"),
+	],
 )
 
 // vim: ft=kotlin

@@ -1,15 +1,23 @@
-// Imports tree shake and only import the desired exports of a module.
-import { OBJC, OBJC_Obj } from elp.interop
-import { Error, Either, From, Codec, ToString, Uuid } from elp.types
+// The blog's data layer, and the file that was written as a tour of the
+// language. It is kept in that spirit and migrated onto what the language
+// actually decided, because a tour that teaches the wrong spelling is worse
+// than no tour.
+//
+// Seven things changed. Five are findings in their own right and are written
+// up as gaps at the bottom, because the old corpus used features that no
+// document records.
+
+import { Error, Either, From, Codec, UUID } from elp.types
 import { CodeGen } from elp.macros
-import { Reactive } from elp.app.state
-import { Http, HttpError } from elp.net
+import { Http, HttpError, HttpBody } from elp.net
 
-// You can call C, C++ and Objective C code by defining it as external and it's signature.
-@external(.OBJC) fn OBJC_msgSend<T: OBJC_Obj + Sendable>(T, OBJC_Selector) -> T
-
-// Enums take data which can be used in pattern matching.
-// this enum has a to<JSON> generated for it as well, this requires thqt any unionised type present musy also implement Codec<JSON> which string does. this will serialize to a string with the defwult enum serializer. i.e ".SERVER("some error"")"
+// An enum's cases take payloads, which are records — so `SERVER { message
+// string }` is arity 1 and keeps the parenthesised construction form
+// (`patterns.md`).
+//
+// `@default` marks the case `@CodeGen(Default)` generates a `Default`
+// conformance for. A macro is an ordinary `pure fn` run at compile time
+// (`macros.md`), and these two are stdlib's.
 @CodeGen(ToJSON, Default)
 export enum ApiErrorType {
 	SERVER { message string },
@@ -18,78 +26,149 @@ export enum ApiErrorType {
 	UNKNOWN,
 }
 
-// An exported object with the name Content,
-// objects can define their default values and types are inferred
-// or just define their type. Note the assignment and type declarations.
-// Also note the discrete, Go like tagged fields, these optional tokens enable safe metaprogramming and can be of any value.
-// They are a build time feature similar to a @macro
+// MIGRATED — fields. This object used to read:
+//
+//     id     = UUID.v4() `json: "id"`,
+//     title  string      `json: "title"`,
+//     calls  = 0,
+//
+// Three separate things no document records: a field whose type is inferred
+// from a default, a default at all, and a Go-style tag. See GAP 1 and GAP 2.
+//
+// `aliasing.md` requires every field to spell `const` or `var` — bare is an
+// error — so each one does, with its type written out.
 @CodeGen(Codec<JSON>)
 export object Content {
-    id     = UUID.v4() `json: "id"`,
+	const id    UUID,
+	const title string,
+	const body  string,
 
-    title  string      `json: "title"`,
-    body   string      `json: "body"`,
-	calls  = 0,
+	// Was `calls = 0`. An excerpt is what the listing screen actually needs
+	// and the old field was never read, so it is replaced by the thing that
+	// is.
+	const excerpt string,
 }
 
-// Note the macro @CodeGen, this is a build time feature — this macro generates
-// the same code as the tagged object above.
+export fn Content.new(title string, body string, excerpt string) -> Self {
+	return Self { id = UUID.v4(), title, body, excerpt }
+}
+
 @CodeGen(ToJSON, Default)
 export object ApiError {
-	type ApiErrorType
-	message string
+	const type    ApiErrorType,
+	const message string,
 }
 
-// Conformance is always its own declaration, never folded into the object.
-// Objects can implement multiple interfaces, joined with `+` — the same way a
-// generic bound lists more than one interface. Interfaces don't influence the
-// runtime, they are a compile time and static analysis tool. Note the generics
-// syntax here which specializes the Interface to a type: you could implement
-// From<Error>, From<int8>, From<string>, etc.
+// Conformance is always its own declaration, never folded into the object,
+// and several are joined with `+` — the same shape a generic bound uses.
+// Interfaces have no runtime presence; they are a compile-time tool.
 ApiError implements Error + From<HttpError>
 
-// Note this function implementation doesn't take a self making it a static method.
-fn ApiError.new(type ApiErrorType) -> Self {
-	return Self { type }
+// No `self`, so this is a static method on `ApiError` rather than an
+// instance one. `Self` names the receiver's type.
+fn ApiError.new(type ApiErrorType, message string) -> Self {
+	return Self { type, message }
 }
 
-// Define methods on the object. self here denotes that it is an instance method,
-// the .toString method is a requirement of the Error interface. Note that you can't create nested functions and instead should consider redesigning your API or using composition techniques.
+// `toString` is `Error`'s one requirement.
 fn ApiError.toString(&self) -> string {
-    return self.message
+	return self.message
 }
 
-// This method is a static method as it doesn't take a self parameter.
+// MIGRATED — the arms used to carry trailing commas and construct with
+// `.USER(value.toString())` against a `.new(.UNKNOWN)` that took one
+// argument. A range pattern includes both ends (`control-flow.md`), which is
+// what makes `400..499` mean what it looks like.
 fn ApiError.from(value HttpError) -> Self {
 	return match value.responseCode {
-		400..499 -> .USER(value.toString()),
-		500..599 -> .SERVER(value.toString()),
-		_ -> .new(.UNKNOWN),
+		400..499 -> Self.new(.USER(value.toString()), value.toString())
+		500..599 -> Self.new(.SERVER(value.toString()), value.toString())
+		_        -> Self.new(.UNKNOWN, "unknown transport failure")
 	}
 }
 
-// This function returns an Either<Content, Error>. Because there are two potential Error implementations in the return tree we just say this can return an Error, and at the call site we can match on its type to work out whether it was an ApiError or a SerializationError.
+// `Either<Content, Error>` rather than `Either<Content, ApiError>` because
+// more than one error type can reach here; the caller matches on the
+// interface and narrows if it cares (`dispatch.md`).
 export fn getBlogPost(id string) -> Either<Content, Error> {
-    return match Http.get<Content>("https://jsonplaceholder.typicode.com/posts/{id}") {
-		Err(err) -> Err(ApiError.from(err))
-		Ok(postJSON) -> Ok(Content.fromJSON(postJSON))
+	return match Http.get<Content>("https://example.invalid/posts/{id}") {
+		Err(err)  -> Err(ApiError.from(err))
+		Ok(post)  -> Ok(post)
 	}
 }
 
-export fn createBlogPost(title string, body string) -> Either<Content, Error> {
-	const payload HttpBody<Content> = .new(.new(
-		title,
-		body
-	))
-
-    return match Http.post<Content>("https://jsonplaceholder.typicode.com/posts/", { contentType = .JSON, body = payload }) {
-		Err(err) -> Err(ApiError.from(err))
-		Ok(postJSON) -> {
-			const created Content = .fromJSON(postJSON)
-
-			return Ok(created)
-		}
+// ADDED — `screens/blog/index.velp` called this and it did not exist.
+export fn getBlogContent() -> Either<[Content], Error> {
+	return match Http.get<[Content]>("https://example.invalid/posts") {
+		Err(err)   -> Err(ApiError.from(err))
+		Ok(posts)  -> Ok(posts)
 	}
 }
+
+// ADDED — `screens/about.velp` called this and it did not exist either.
+export fn getAboutContent() -> Either<Content, Error> {
+	return match Http.get<Content>("https://example.invalid/about") {
+		Err(err)     -> Err(ApiError.from(err))
+		Ok(content)  -> Ok(content)
+	}
+}
+
+export fn createBlogPost(title string, body string, excerpt string) -> Either<Content, Error> {
+	const payload HttpBody<Content> = .new(Content.new(title, body, excerpt))
+
+	return match Http.post<Content>("https://example.invalid/posts", payload) {
+		Err(err)      -> Err(ApiError.from(err))
+		Ok(created)   -> Ok(created)
+	}
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GAP 1 — field defaults are used by the old corpus and recorded nowhere.
+//
+// `id = UUID.v4()` declared a field with no type and an initialiser, and
+// `calls = 0` did the same. Neither `aliasing.md` (which decides that a field
+// spells `const` or `var`) nor `memory-model.md` (which decides what `var` on
+// a field grants) says whether a field may carry a default at all, let alone
+// when the default runs — once per type, or once per construction, which for
+// `UUID.v4()` is the whole question.
+//
+// Migrated to a `new` factory, which is the corpus's idiom everywhere else
+// (`Money.zero()`, `Link.generateCode()`, `Stats.zero()`) and which makes the
+// per-construction answer explicit. Worth deciding rather than inferring,
+// because object literals are checked exhaustively for an owned aggregate
+// (`patterns.md`) and a default is the one thing that would weaken that.
+//
+// GAP 2 — Go-style field tags are used by the old corpus and recorded
+// nowhere.
+//
+// The original comment called them *"discrete, Go like tagged fields, these
+// optional tokens enable safe metaprogramming and can be of any value"*. That
+// is a real feature with real consequences — a second, untyped metadata
+// channel on every field, readable by macros — and `macros.md` does not
+// mention it. Its stated job here, naming the JSON key, is also exactly what
+// `@CodeGen(Codec<JSON>)` is for, so nothing is lost by dropping them.
+//
+// GAP 3 — `@external(.OBJC)` was declared here, outside a block, with a
+// generic signature:
+//
+//     @external(.OBJC) fn OBJC_msgSend<T: OBJC_Obj + Sendable>(T, OBJC_Selector) -> T
+//
+// Three ways off-spec. `functions.md` makes `@external` a **block** carrying
+// the library; only `.C` is a designed dialect; and a generic external
+// function has no meaning at an ABI that has no generics. Dropped rather than
+// repaired — FFI is taught properly in `examples/SqliteBinding` and
+// `examples/VulkanTriangle`, and Objective-C interop is genuinely undesigned.
+//
+// GAP 4 — two imports named things that do not exist. `ToString` is not an
+// interface anywhere (the corpus interpolates primitives directly and calls
+// `.toString()` explicitly for everything else, which the corpus scan found
+// and `strings.md` still does not state), and `Reactive` from `elp.app.state`
+// is `memory-model.md`'s *internal lowering* name for a cell, not a type a
+// program may import.
+//
+// GAP 5 — `Http.get<Content>` was treated as returning undecoded JSON that
+// the caller then passed to `Content.fromJSON`, while its type argument said
+// otherwise. One of the two had to go; the type argument is the one that
+// carries information, so `Http.get<T>` decodes.
 
 // vim: ft=kotlin

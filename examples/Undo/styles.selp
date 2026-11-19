@@ -1,0 +1,17 @@
+// ADDED by the corpus sweep. Both components referred to `Styles.bar` and
+// `Styles.page` and there was no stylesheet in the package at all — and no
+// import either, so the name `Styles` resolved to nothing.
+
+export stylesheet {
+	page {
+		padding = 16,
+		gap = 8,
+	}
+
+	bar {
+		gap = 8,
+		paddingVertical = 8,
+	}
+}
+
+// vim: ft=css

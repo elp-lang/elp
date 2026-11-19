@@ -1,29 +1,44 @@
-import { Uuid } from elp.types
+// MIGRATED. Five changes, and the params object is the one worth reading.
+//
+//   1. `object BlogPostParams { postId string }` declared a field with no
+//      `const` or `var`. `aliasing.md` makes bare an **error**: a field
+//      spells one or the other, exactly like a local.
+//   2. `export fn BlogPost({ params }) -> Component` predates `component`,
+//      and the destructured parameter still does not parse —
+//      `grammar-script-notes.md` lists it under "still to decide", and the
+//      open half is typing, since the type arrives from `@Screen<T>` rather
+//      than from the signature. Written here as an ordinary typed parameter,
+//      which is the form that exists.
+//   3. `const post, err = getBlogPost(...)` is a `match`, as in `about.velp`.
+//   4. `class = "..."` became named styles; `asString()` became `toString()`.
+//   5. `import { Uuid } from elp.types` was unused, and the spelling is
+//      `UUID` — `name-resolution.md`'s migration backlog has both in the
+//      corpus and asks for one.
+
 import { Screen } from elp.app
-import { Column, Row, Text } from elp.ui
-
+import { Column, Row } from elp.layout
+import { Text } from elp.components
+import { getBlogPost } from .internal.api
 import { Paragraph } from .components.paragraph
+import { page, title, errorRow } from .styles
 
-object BlogPostParams {
-    postId string
+export object BlogPostParams {
+	const postId string,
 }
 
 @Screen<BlogPostParams>
-export fn BlogPost({ params }) -> Component {
-	const post, err = getBlogPost(params.postId)
-
-    Column {
-        if err != nil {
-            Row(class = "error-row") {
-                Text(err.asString())
-            }
-        } else {
-            Row {
-                Text(post.title, class = "title")
-                Paragraph(post.body)
-            }
-        }
-    }
+export component BlogPost(params BlogPostParams) {
+	return Column(style = page) {
+		match getBlogPost(params.postId) {
+			Err(err) -> Row(style = errorRow) {
+				Text(err.toString())
+			}
+			Ok(post) -> Row {
+				Text(post.title, style = title)
+				Paragraph(post.body)
+			}
+		}
+	}
 }
 
 // vim: ft=kotlin

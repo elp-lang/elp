@@ -159,7 +159,7 @@ export fn Renderer.new(window &Window) -> Either<Self, Error> {
 
 	var deviceSlot Optional<VkDevice> = null
 
-	match vkCreateDevice(physical, null, null, &deviceSlot) {
+	match vkCreateDevice(physical, null, null, &var deviceSlot) {
 		0    -> {}
 		code -> throw RenderError.NO_DEVICE { code }
 	}
@@ -171,12 +171,12 @@ export fn Renderer.new(window &Window) -> Either<Self, Error> {
 	// evidence here, and `??` is carrying real weight rather than satisfying
 	// the type checker.
 	var queueSlot Optional<VkQueue> = null
-	vkGetDeviceQueue(device, 0, 0, &queueSlot)
+	vkGetDeviceQueue(device, 0, 0, &var queueSlot)
 	const graphics = queueSlot ?? throw RenderError.NO_DEVICE { code = 0 }
 
 	var swapchainSlot Optional<VkSwapchainKHR> = null
 
-	match vkCreateSwapchainKHR(device, null, null, &swapchainSlot) {
+	match vkCreateSwapchainKHR(device, null, null, &var swapchainSlot) {
 		0    -> {}
 		code -> throw RenderError.NO_SWAPCHAIN { code }
 	}
@@ -185,7 +185,7 @@ export fn Renderer.new(window &Window) -> Either<Self, Error> {
 
 	var poolSlot Optional<VkCommandPool> = null
 
-	match vkCreateCommandPool(device, null, null, &poolSlot) {
+	match vkCreateCommandPool(device, null, null, &var poolSlot) {
 		0    -> {}
 		code -> throw RenderError.NO_SWAPCHAIN { code }
 	}

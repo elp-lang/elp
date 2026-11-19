@@ -1,56 +1,74 @@
+// MIGRATED. Four changes, and the error field is the one with teeth.
+//
+//   1. `export fn Composer -> Component` predates `component`.
+//   2. `var err Error` declared a bare interface-typed variable with no
+//      initial value, then assigned `nil` to it. An interface type is not
+//      nilable; absence is `Optional<T>` (`name-resolution.md`, `T?` is sugar
+//      for it). Written as `Optional<string>` here, matching
+//      `examples/Expenses`, because what the view needs is the message.
+//   3. `class = "..."` became named styles; `asString()` became `toString()`.
+//   4. The two `x != nil` tests became `match` bindings — `operators.md` ends
+//      the turn at any call, so a test and a later read of the same cell are
+//      not the same value.
+
 import { Column, Row } from elp.layout
 import { Form, TextArea, ImagePicker, Button } from elp.forms
 import { Text, Image } from elp.components
 
 import { createPost } from .internal.api
 import { Post } from .types.post
+import { errorRow, imagePreview } from .styles
 
 // Lets the user write a text post and optionally attach a photo already
 // stored on their device, picked via the OS's native file/photo picker.
-export fn Composer -> Component {
+export component Composer() {
 	export *fn onPosted(post Post)
 
 	var body string
-	var imagePath Optional<string>
+	var imagePath Optional<string> = nil
 	var posting = false
-	var err Error
+	var err Optional<string> = nil
 
 	fn handleSubmit() {
 		posting = true
 		err = nil
 
+		// `defer` is scope-scoped and runs on normal exit, on cancellation
+		// unwind and on panic unwind (`reactivity.md`), so the spinner cannot
+		// be left on by an early return. It used to be cleared twice, once in
+		// each arm.
+		defer { posting = false }
+
 		return match createPost(body, imagePath) {
 			Ok(post) -> {
-				posting = false
 				body = ""
 				imagePath = nil
 				onPosted(post)
 			}
-			Err(apiErr) -> {
-				posting = false
-				err = apiErr
-			}
+			Err(apiErr) -> err = apiErr.toString()
 		}
 	}
 
-	return Form(onSubmit=handleSubmit) {
-		if err != nil {
-			Row(class = "error-row") {
-				Text(err.asString())
+	return Form(onSubmit = handleSubmit) {
+		match err {
+			nil     -> nil
+			message -> Row(style = errorRow) {
+				Text(message)
 			}
 		}
 
-		TextArea(&body, placeholder="What's on your mind?")
+		TextArea(&body, placeholder = "What's on your mind?")
 
-		ImagePicker(&imagePath, placeholder="Attach a photo")
+		ImagePicker(&imagePath, placeholder = "Attach a photo")
 
-		if imagePath != nil {
-			Row(class = "image-preview") {
-				Image(source = imagePath)
+		match imagePath {
+			nil  -> nil
+			path -> Row(style = imagePreview) {
+				Image(source = path)
 			}
 		}
 
-		Button(type=.FORM_SUBMIT, disabled=posting) {
+		Button(type = .FORM_SUBMIT, disabled = posting) {
 			Text(if posting { "Posting..." } else { "Post" })
 		}
 	}

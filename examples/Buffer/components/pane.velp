@@ -1,4 +1,13 @@
-import { View } from ...internal.view
+// MIGRATED — multi-dot import paths. `name-resolution.md` settles that a
+// single leading dot means "this package, rooted at the package directory",
+// and that **there is no `..` and no file-relative form at all**: moving a
+// file changes no import in it. These read `..` and `...` as if the dots
+// counted directories.
+import { View } from .internal.view
+// MIGRATED — was `Styles.<name>` against a stylesheet that did not exist.
+// Named styles are imported by destructuring and there is no whole-sheet
+// value (`grammar-script-notes.md`); `styles.selp` is new.
+import { pane } from .styles
 
 component Pane {
 	export var view Binding<View>
@@ -11,7 +20,7 @@ component Pane {
 	//
 	// It is now visible one hop away — `Buffer` holds a `Confined<[string]>`
 	// and `Cursor` is `Copy` — rather than being unknowable.
-	return Column(style = Styles.pane) {
+	return Column(style = pane) {
 		Text("{label} — line {view.cursor.line} of {view.buffer.lineCount()}")
 
 		// GAP — does reading a `Confined<T>` inside a component body
@@ -32,6 +41,9 @@ component Pane {
 		// `.get()` is written explicitly because the handle is not a
 		// collection and `for` needs a materialised one with a `by`
 		// identity.
+		// Same hazard as `examples/Undo/main.velp`: `by line` over a
+		// `[string]` collapses duplicate lines. Kept, flagged, and it is the
+		// second sighting.
 		for line in view.buffer.lines.get() by line {
 			Text(line)
 		}

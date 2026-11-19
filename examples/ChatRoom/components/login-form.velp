@@ -1,4 +1,3 @@
-import { Column } from elp.layout
 import {
 	Form,
 	EmailInput,
@@ -7,8 +6,18 @@ import {
 } from elp.forms
 import { error } from elp.macros
 import { Text } from elp.components
-import { User, UserMessage } from .types.chat
+// MIGRATED — `UserMessage` was imported from `.types.chat` and is not
+// declared there; `User` is imported and not used either, now that the props
+// are a parameter list.
 
+// GAP 1 — how a component conforms to a props interface, which
+// `interfaces.md` lists as open and this is the corpus's only instance.
+//
+// `LoginProps` declares the props as *methods*, because an interface is
+// method-only. A component declares its props as a parameter list. Nothing
+// says how the two meet: whether a component may declare a conformance at
+// all, and if so whether a prop satisfies a nullary method requirement.
+// Left as written, because it is the evidence.
 export interface LoginProps {
 	fn email() -> Optional<string>
 	fn password() -> Optional<Protected<string>>
@@ -23,54 +32,74 @@ export enum LoginError {
 	SERVER_ERROR { message string },
 }
 
-// Components are a visual element that can be presented to the user.
-// Behind the scenes though this is just an object that implements the
-// Component and Either interfaces.
-export fn LoginForm -> Component {
-	// Exports in a component are considered the props of the component.
-	// Similarly to the way that React and Svelte have props and SwiftUI has
-	// struct properties. Exporting is the same as marking as "public".
+// MIGRATED — `export fn LoginForm -> Component` predates the `component`
+// keyword. That is the only change to this line.
+//
+// `export var email` is **not** the old form and stays: `grammar-script-notes
+// .md`, "Params and props are different things, already decided", keeps both.
+// A **param** (`component Message(from User, body string)`) is a constant
+// input with no cell and no observation; a **prop** (`export var email ...`)
+// is reactive and observed. This component wants the second, because a parent
+// writes it and `EmailInput` writes it back.
+//
+// Worth stating because it was nearly migrated away during the corpus sweep:
+// `examples/Expenses` writes `component EntryForm(draft Binding<string>)`,
+// which looks like the same thing done differently and is not. That is a
+// *constant handle* to a cell somebody else owns — the param cannot be
+// rebound, the cell it points at can be written — which is the same
+// distinction `examples/Sheet` draws when `Style.setBold` takes `&self` and
+// not `&var self`.
+export component LoginForm() {
 	export var email Optional<string>
+
 	// `*fn onSubmit(...)` would declare a *required* callback prop
-	// (functions.md). This component deliberately handles its absence, so the
-	// optionality is spelled out the same way `email`'s is, one line up.
+	// (`functions.md`). This component deliberately handles its absence, so
+	// the optionality is spelled out.
 	export var onSubmit Optional<fn(string, Protected<string>)>
 
-	// They also have their own private variables as this is a block/lexical scope.
-	// Note that a variable is just that, it's variable in nature so it is mutable.
-	// When declaring vars in a component, they are observed for changes by the compiler
-	// and cause reactivity to change in your application.
+	// A component's own `var`s are private state, and each one lowers to a
+	// cell: reads subscribe and writes patch (`reactivity.md`).
 	var password Protected<string>
 	var attempts = 0
 
-	// Functions can be declared in a block and are only available here unless returned (moved.)
-	// `throw` here is sugar for `return Err(...)` — nothing more. It doesn't bubble past
-	// this function and there's no boundary catching it; whoever calls handleSubmit gets
-	// back an ordinary Either and matches it like any other function result.
+	// A function declared in a block is local to it. `throw` is sugar for
+	// `return Err(...)` and nothing more: it does not bubble, there is no
+	// boundary catching it, and whoever calls `handleSubmit` gets an ordinary
+	// `Either` to match on (`error-handling.md`).
 	fn handleSubmit() {
 		attempts += 1
 
 		// `onSubmit` is a cell, so it is narrowed by *binding* rather than by
 		// an `isNil()` test: a call between the test and the use would end
-		// the turn and another turn could clear it (operators.md, "The
+		// the turn and another turn could clear it (`operators.md`, "The
 		// amendment: a call ends the turn").
-		// MIGRATED — `callback(email, password)`. `aliasing.md` makes
-		// `Protected<T>` **`Duplicate`, never `Copy`**, so handing the secret
-		// to a callback is an explicit `.copy()`: a second copy of a password
-		// is a decision, and this is the site that makes it. `email` is
-		// `Optional<string>` and `string` is `Copy`, so it needs nothing.
+		//
+		// MIGRATED — the call was `callback(email, password)`. `aliasing.md`
+		// makes `Protected<T>` **`Duplicate`, never `Copy`**, so handing the
+		// secret on is an explicit `.copy()`. A second copy of a password is a
+		// decision, and this is the site that makes it. `email` reads through
+		// its binding and `string` is `Copy`, so it needs nothing.
 		return match onSubmit {
 			nil      -> throw LoginError.NO_HANDLER
 			callback -> callback(email, password.copy())
 		}
 	}
 
-	// A component must return something that implements Component or nil.
-	return Form(onSubmit=handleSubmit) {
-		EmailInput(&email, placeholder="Enter your email")
-		SecureTextInput(&password, placeholder="Enter your password")
+	// A component returns something implementing `Component`, or nil.
+	//
+	// `&email` on a value that is already a `Binding<string>` is correct and
+	// not a double-wrap: `reactivity.md` makes `&` **idempotent** in prop
+	// position, and always written, because the point is visibility at the
+	// use site.
+	//
+	// Nothing here exposes the secret, which is the honest state of this
+	// file: `Protected<T>.expose()` belongs in whatever builds the login
+	// request body, one call away and outside this package.
+	return Form(onSubmit = handleSubmit) {
+		EmailInput(&email, placeholder = "Enter your email")
+		SecureTextInput(&password, placeholder = "Enter your password")
 
-		Button(type=.FORM_SUBMIT) {
+		Button(type = .FORM_SUBMIT) {
 			Text("Log in")
 		}
 	}

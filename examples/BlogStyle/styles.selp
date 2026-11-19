@@ -1,11 +1,41 @@
-import { FontFamily, GoogleFont } from elp.ui.font
+// MIGRATED — this file was type selectors (`App { … }`, `Text { … }`) at the
+// top level of a `.selp`, which is the model `grammar-script-notes.md`
+// replaced outright: there are no type selectors and no scope chain, and a
+// stylesheet is a module of **named styles**. Each one below is imported by
+// destructuring and applied at a use site with `style =`.
 
-App {
-	ignoreSafeAreas = .All
+import { GoogleFont } from elp.ui.font
+
+export stylesheet {
+	page {
+		padding = 16,
+		gap = 12,
+		ignoreSafeAreas = .All,
+	}
+
+	title {
+		fontFamily = .GoogleFont("Patua One"),
+		fontWeight = .SEMIBOLD,
+	}
+
+	// The `.selp` cannot say "every Text on the site", so a style that used
+	// to be a bare `Text { }` selector becomes a name somebody applies. That
+	// is the cost of dropping selectors and it is paid here, visibly.
+	body {
+		fontFamily = .GoogleFont("Patua One"),
+		padding = 16,
+	}
+
+	date {
+		fontWeight = .LIGHT,
+		padding = 16,
+	}
+
+	errorRow {
+		padding = 8,
+		background = .Danger,
+		color = .White,
+	}
 }
 
-Text {
-    fontFamily = .GoogleFont("Patua One")
-}
-
-// vim: ft=kotlin
+// vim: ft=css

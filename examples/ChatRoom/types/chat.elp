@@ -1,13 +1,30 @@
+// MIGRATED — fields had no `const`/`var` marker, which `aliasing.md` makes an
+// error, and `reactions [string] = []` carried a default, which is
+// `examples/BlogStyle/internal/api.elp` GAP 1: no document says whether a
+// field may have one or when it runs.
+
 import { UUID } from elp.types
 
 export object User {
-	displayName string
+	const displayName string,
 }
 
+User implements Copy
+
 export object Message {
-	body string
-	user User
-	reactions [string] = []
+	const id        UUID,
+	const body      string,
+	const user      User,
+	var   reactions [string],
+}
+
+// `Duplicate` rather than `Copy`, because `[string]` is `Duplicate` and
+// `Copy` is field-wise. Nothing about this is a judgement call once the field
+// list is written down.
+Message implements Duplicate
+
+export fn Message.new(user User, body string) -> Self {
+	return Self { id = UUID.v4(), body, user, reactions = [] }
 }
 
 // vim: ft=kotlin

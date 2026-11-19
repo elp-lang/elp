@@ -1,5 +1,10 @@
-import { Cursor, Selection } from ..types.cursor
-import { Buffer } from ..types.buffer
+// MIGRATED — multi-dot import paths. `name-resolution.md` settles that a
+// single leading dot means "this package, rooted at the package directory",
+// and that **there is no `..` and no file-relative form at all**: moving a
+// file changes no import in it. These read `..` and `...` as if the dots
+// counted directories.
+import { Cursor, Selection } from .types.cursor
+import { Buffer } from .types.buffer
 
 // FINDING 2, RESOLVED — a composite where one field aliases and two do not.
 //

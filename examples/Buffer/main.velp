@@ -1,5 +1,9 @@
 import { Buffer } from .types.buffer
 import { View, scrollPast, appendBanner } from .internal.view
+// MIGRATED — was `Styles.<name>` against a stylesheet that did not exist.
+// Named styles are imported by destructuring and there is no whole-sheet
+// value (`grammar-script-notes.md`); `styles.selp` is new.
+import { page } from .styles
 
 // Two panes on one buffer. The program is small because the finding did not
 // need a big one: `Copy` appeared four times in this corpus entry and meant
@@ -42,7 +46,7 @@ component App {
 		appendBanner(&buffer, "// scrolled to {moved.line}")   // everyone changed
 	}
 
-	return Column(style = Styles.page) {
+	return Column(style = page) {
 		Row {
 			Pane(&left, label = "left")
 			Pane(&right, label = "right")

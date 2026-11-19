@@ -1,20 +1,31 @@
+// MIGRATED — three things, and the second is the interesting one.
+//
+//   1. `export fn About -> Component` predates `component`.
+//   2. `const aboutContent, err = getAboutContent()` destructured two values
+//      out of one call. elp has no tuple type (`patterns.md`) and a failure
+//      is a value (`error-handling.md`), so the shape is a `match` on the
+//      `Either` — which also makes the error path impossible to forget,
+//      where the old spelling let `err` be ignored.
+//   3. `class = "error-row"` became `style = errorRow`, a named style. The
+//      imports were also missing `Column`, `Row` and `Text` entirely.
+
 import { Screen } from elp.app
+import { Column, Row } from elp.layout
+import { Text } from elp.components
 import { getAboutContent } from .internal.api
 import { Paragraph } from .components.paragraph
+import { page, title, errorRow } from .styles
 
 @Screen
-export fn About -> Component {
-    const aboutContent, err = getAboutContent()
-
-	return Column {
-		if err != nil {
-			Row(class = "error-row") {
-				Text(err.asString())
+export component About() {
+	return Column(style = page) {
+		match getAboutContent() {
+			Err(err) -> Row(style = errorRow) {
+				Text(err.toString())
 			}
-		} else {
-			Row {
-				Text(aboutContent.title, class = "title")
-				Paragraph(aboutContent.body)
+			Ok(content) -> Row {
+				Text(content.title, style = title)
+				Paragraph(content.body)
 			}
 		}
 	}

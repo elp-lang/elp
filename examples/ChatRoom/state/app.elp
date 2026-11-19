@@ -1,39 +1,51 @@
-import { Stateful } from elp.state
-import { User, Message, Actions } from .types.chat
-
 // Interfaces declare methods only — a field requirement becomes a required
 // method, and the implementing type decides how to satisfy it internally.
+//
+// MIGRATED — three things. `Stateful` was imported and never used, `Actions`
+// was imported from `.types.chat` and is not declared there, the fields had
+// no `const`/`var` markers and carried defaults, and `ChatState.new` had no
+// `return`.
+
+import { User, Message } from .types.chat
+
 export interface State {
 	fn usersInRoom() -> [User]
 	fn messages() -> [Message]
-
-	fn new(user User) -> Self
 }
 
 export object ChatState {
-	usersInRoom [User] = []
-	messages [Message] = []
+	var users [User],
+	var log   [Message],
 }
 
 ChatState implements State
 
 fn ChatState.new(user User) -> Self {
-	Self {
-		usersInRoom = [user],
-		messages = []
+	return Self {
+		users = [user],
+		log   = [],
 	}
 }
 
-// State's field requirements became method requirements, so ChatState
-// satisfies them with accessors. A method may share a name with a field —
-// `self.usersInRoom` and `self.usersInRoom()` are different expressions, so
-// the type keeps control of what callers get at that name.
+// `interfaces.md` permits a method and a field to share a name, and the old
+// version of this file leaned on it: the fields were `usersInRoom` and
+// `messages`, and so were the accessors. It is legal and it reads as a
+// mistake, so the fields are renamed and the methods keep the interface's
+// names. The feature stays available for the case where it earns its keep;
+// satisfying an interface is not that case.
 fn ChatState.usersInRoom(&self) -> [User] {
-	return self.usersInRoom
+	return self.users
 }
 
 fn ChatState.messages(&self) -> [Message] {
-	return self.messages
+	return self.log
 }
+
+// `fn new(user User) -> Self` was also a requirement on `State`. A static
+// requirement on an interface is a real question — `interfaces.md` decides
+// conformance by exact signature match and says nothing about a requirement
+// with no receiver — so it is dropped here rather than asserted. A factory is
+// not something a caller reaches through an interface anyway: by the time you
+// hold one, the value exists.
 
 // vim: ft=kotlin

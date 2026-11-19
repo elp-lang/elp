@@ -1,6 +1,15 @@
+// MIGRATED — multi-dot import paths. `name-resolution.md` settles that a
+// single leading dot means "this package, rooted at the package directory",
+// and that **there is no `..` and no file-relative form at all**: moving a
+// file changes no import in it. These read `..` and `...` as if the dots
+// counted directories.
 import { Document, Edit } from .types.edit
 import { History, retrying } from .internal.history
 import { Toolbar } from .components.toolbar
+// MIGRATED — was `Styles.<name>` against a stylesheet that did not exist.
+// Named styles are imported by destructuring and there is no whole-sheet
+// value (`grammar-script-notes.md`); `styles.selp` is new.
+import { page } from .styles
 
 // A notes editor whose whole point is the undo stack. Everything interesting
 // is in types/edit.elp and internal/history.elp; this file is here to show
@@ -59,7 +68,7 @@ component App {
 		})
 	}
 
-	return Column(style = Styles.page) {
+	return Column(style = page) {
 		Toolbar(
 			&history,
 			onUndo = fn { history.undo(&var document) },
@@ -68,6 +77,18 @@ component App {
 
 		TextInput(&draft, placeholder = "New line", onSubmit = addLine)
 
+		// GAP — keying by the value, and `control-flow.md` argues this exact
+		// case against deriving identity from a type. `document.lines` is
+		// `[string]`, so two identical lines collapse into one row: the
+		// reconciler cannot tell them apart, and an editor is the program
+		// most likely to contain two blank lines.
+		//
+		// Written out, `by line` is a visible claim the author can be wrong
+		// about — which is the argument for `by` being mandatory and explicit
+		// rather than derived. Here the claim is wrong, and nothing in the
+		// language can say so. What this document actually wants is a line
+		// identity that survives editing, which is a rope's node identity,
+		// i.e. `examples/Editor` FINDING 5 arriving from the view layer.
 		for line in document.lines by line {
 			Row {
 				Text(line)

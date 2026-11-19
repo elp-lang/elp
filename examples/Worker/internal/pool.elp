@@ -8,8 +8,13 @@
 // blocked receiver whose sender has gone, multi-consumer channels, and what
 // "cell" means on a target with no UI thread.
 
+// MIGRATED — multi-dot import paths. `name-resolution.md` settles that a
+// single leading dot means "this package, rooted at the package directory",
+// and that **there is no `..` and no file-relative form at all**: moving a
+// file changes no import in it. These read `..` and `...` as if the dots
+// counted directories.
 import { Error } from elp.types
-import { Job, JobId, JobState, PoolError } from ..types.job
+import { Job, JobId, JobState, PoolError } from .types.job
 
 export enum PoolMsg {
 	SUBMIT { job Job, reply Channel<Either<JobId, Error>> },

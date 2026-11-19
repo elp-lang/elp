@@ -1,14 +1,25 @@
-import { Column } from elp.layout
-import { Text, Component } from elp.components
-import { User, UserMessage } from .types.chat
+// MIGRATED, and the old version did not mean what it looked like.
+//
+// It matched `from User` against `nil` and `Some(user)`. `User` is not
+// optional, so neither arm was reachable; `Some` was removed from the
+// language when `nil` became the only absent value
+// (`grammar-script-notes.md`); and both arms produced the same `Slot` with
+// only the style differing, so the match was doing nothing a boolean could
+// not.
+//
+// What it was reaching for is "is this message mine?", which is a comparison
+// against the signed-in user and therefore a prop.
 
-export fn Message(from User, body string) -> Component {
-	return match from {
-		nil -> Column(class="from-me") {
-			Slot
-		}
-		Some(user) -> Column(class="to-me") {
-			Slot
-		}
+import { Column } from elp.layout
+import { Text } from elp.components
+import { User } from .types.chat
+import { fromMe, toMe } from .styles
+
+export component MessageView(from User, body string, mine bool) {
+	return Column(style = if mine { fromMe } else { toMe }) {
+		Text(from.displayName)
+		Text(body)
 	}
 }
+
+// vim: ft=kotlin

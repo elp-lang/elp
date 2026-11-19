@@ -1,0 +1,18 @@
+// ADDED by the corpus sweep, for the same reason as `examples/Undo`:
+// `Styles.pane` and `Styles.page` named a stylesheet that did not exist.
+
+export stylesheet {
+	page {
+		padding = 12,
+		gap = 12,
+	}
+
+	pane {
+		padding = 8,
+		gap = 4,
+		border = 1,
+		radius = 4,
+	}
+}
+
+// vim: ft=css

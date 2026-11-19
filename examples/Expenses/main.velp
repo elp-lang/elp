@@ -5,7 +5,12 @@ import { Expense } from .types.expense
 import { largest } from .internal.stats
 import { EntryForm } from .components.entry-form
 import { Breakdown } from .components.breakdown
-import { Styles } from .styles
+// MIGRATED — was `import { Styles } from .styles` with `Styles.<name>` at
+// each use site.
+// `grammar-script-notes.md`: named styles are exported and imported by
+// destructuring like any other symbol, there is no default import and no
+// whole-sheet value, so a `.selp` needs no name of its own.
+import { screen } from .styles
 
 const SAVE_KEY = "expenses.v1"
 
@@ -40,7 +45,7 @@ export component Main() {
 	}
 
 	return App(textStyle = .Body) {
-		Column(style = Styles.screen) {
+		Column(style = screen) {
 			Text(headline(), variant = .Heading1)
 
 			Breakdown(expenses)

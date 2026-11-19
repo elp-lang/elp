@@ -1,42 +1,43 @@
-import { Element, Column, Row, Text, Date } from elp.app.ui.elements
-import { Stylesheet } from elp.app.ui.styling
-import { Paragraph } from .components.paragraph
-import { FontWeight } from elp.app.ui.elements.Text
+// MIGRATED. The old version imported from `elp.app.ui.elements`,
+// `elp.app.ui.styling` and `elp.app.ui.elements.Text` — three roots, one of
+// them a type used as a path segment — and declared a `Stylesheet { }` block
+// with comma-separated type selectors (`Text, Date { … }`).
+//
+// GAP 1 — the four-roots problem is still a real open question and this file
+// is where it was worst. `name-resolution.md` records that the corpus imports
+// `Text` from four different roots for what is apparently one set of
+// components, and calls it a stdlib organisation question rather than a
+// resolution one. This file now uses the newer corpus's spelling
+// (`elp.layout`, `elp.components`) because consistency beats four answers,
+// but nothing has *decided* that layout.
+
+import { Screen } from elp.app
+import { Column, Row } from elp.layout
+import { Text, Link, Date } from elp.components
+import { page, title, date } from .styles
 
 const NAME = "Dave"
 
 @Screen
-export fn Home -> Element {
-    return Column {
-        Row(columns = 2) {
-            Column {
-                Text("Current date:")
-            }
-            Column {
-                Text(Date.Now(format="ll"))
-            }
-        }
-        Row {
-            Text("hello {NAME}")
-            Link(to = "about") {
-                Text("Read about Ellipsis")
-            }
-        }
-    }
-}
+export component Home() {
+	return Column(style = page) {
+		Row(columns = 2) {
+			Column {
+				Text("Current date:", style = title)
+			}
+			Column {
+				Text(Date.now(format = "ll"), style = date)
+			}
+		}
 
-Stylesheet {
-    Text, Date {
-        padding = 16
-    }
+		Row {
+			Text("hello {NAME}")
 
-    Text {
-        fontWeight = .SEMIBOLD
-    }
-
-    Date {
-        fontWeight = .LIGHT
-    }
+			Link(to = "about") {
+				Text("Read about Ellipsis")
+			}
+		}
+	}
 }
 
 // vim: ft=kotlin

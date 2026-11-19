@@ -1,24 +1,29 @@
-import {
-	Component,
-	Stylesheet,
-	components: {
-		Text,
-	},
-	font: {
-		FontWeight, Otf
-	}
-} from elp.ui
-import { FONT_COZETTE } from .constants
+// MIGRATED, and this file had four separate problems.
+//
+//   1. `export fn Paragraph(text string) -> Component` predates `component`,
+//      and its body had no `return`.
+//   2. The import used nested namespaces —
+//      `import { Component, components: { Text }, font: { FontWeight } }` —
+//      which `name-resolution.md` rejects: a module path segment is always a
+//      file, never a sub-namespace and never a type. Consumers write several
+//      import lines.
+//   3. `import { FontWeight } from elp.app.ui.elements.Text` was the same
+//      rule broken the other way, a type used as a path segment.
+//   4. `Stylesheet { Text { … } }` was a capitalised, imported block using a
+//      type selector. A stylesheet block is lowercase, needs no import, and
+//      holds named styles.
 
-export fn Paragraph(text string) -> Component {
-	Text(text)
+import { Text } from elp.components
+import { body } from .styles
+
+export component Paragraph(text string) {
+	return Text(text, style = body + emphasis)
 }
 
-Stylesheet {
-    Text {
-        .fontFamily = .Otf(),
-        .fontWeight = FontWeight.BOLD
-    }
+stylesheet {
+	emphasis {
+		fontWeight = .BOLD,
+	}
 }
 
 // vim: ft=kotlin

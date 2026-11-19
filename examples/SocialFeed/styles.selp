@@ -1,11 +1,40 @@
-import { FontFamily, GoogleFont } from elp.ui.font
+// MIGRATED — was two type selectors at the top level of a `.selp`
+// (`App { … }`, `Text { … }`). There are no type selectors; a stylesheet is a
+// module of named styles (`grammar-script-notes.md`).
 
-App {
-	ignoreSafeAreas = .All
+import { GoogleFont } from elp.ui.font
+
+export stylesheet {
+	screen {
+		gap = 12,
+		ignoreSafeAreas = .All,
+	}
+
+	feedItem {
+		padding = 12,
+		gap = 6,
+	}
+
+	author {
+		fontFamily = .GoogleFont("Inter"),
+		fontWeight = .SEMIBOLD,
+	}
+
+	postImage {
+		radius = 8,
+	}
+
+	imagePreview {
+		padding = 8,
+		radius = 8,
+		background = .Muted,
+	}
+
+	errorRow {
+		padding = 8,
+		background = .Danger,
+		color = .White,
+	}
 }
 
-Text {
-	fontFamily = .GoogleFont("Inter")
-}
-
-// vim: ft=kotlin
+// vim: ft=css

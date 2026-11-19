@@ -1,6 +1,9 @@
 import { Package, Version } from elp.package
 
-export @Package(
+// MIGRATED — `export` dropped, same as `examples/SocialFeed`. The
+// `dependencies` value was also a brace-delimited map (`{ elp = "1.0.0" }`)
+// where the manifest takes a list of variants (`name-resolution.md`).
+@Package(
 	name = "chat",
 	version = .new(1, 0, 0, 0),
 	entry = "main.velp",
@@ -9,9 +12,9 @@ export @Package(
 		.Android,
 		.Web,
 	],
-	dependencies = {
-		elp = "1.0.0"
-	}
+	dependencies = [
+		.stdlib("1.0.0"),
+	],
 )
 
 // vim: ft=kotlin

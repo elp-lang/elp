@@ -1,3 +1,6 @@
+// The feed screen. Two things in here are findings rather than code, and both
+// predate every decision this file has now been migrated onto.
+
 import { Screen } from elp.app
 import { Column, Row } from elp.layout
 import { Text, Loading } from elp.components
@@ -6,13 +9,17 @@ import { getFeed } from .internal.api
 import { Composer } from .components.composer
 import { FeedItem } from .components.feeditem
 import { Post } from .types.post
+import { screen, errorRow } from .styles
 
 @Screen
-export fn Feed -> Component {
+export component Feed() {
 	var posts [Post] = []
 	var loading = true
 	var refreshing = false
-	var err Error
+
+	// MIGRATED — was `var err Error`, a bare interface-typed variable assigned
+	// `nil`. An interface type is not nilable; absence is `Optional<T>`.
+	var err Optional<string> = nil
 
 	// `getFeed()` yields, so `loading = true` and `loading = false` land in
 	// different turns and two refreshes can be in flight at once — the first
@@ -23,9 +30,12 @@ export fn Feed -> Component {
 	// state and a concurrency guard are genuinely two different things, and
 	// conflating them was the original bug. `refreshing` is the guard, and it
 	// works because the test and the write are adjacent with no call between
-	// them (reactivity.md, "A yield point ends the turn").
+	// them (`reactivity.md`, "A yield point ends the turn").
 	fn loadFeed() {
-		if refreshing { return }
+		if refreshing {
+			return
+		}
+
 		refreshing = true
 		defer { refreshing = false }
 
@@ -38,12 +48,12 @@ export fn Feed -> Component {
 			}
 			Err(apiErr) -> {
 				loading = false
-				err = apiErr
+				err = apiErr.toString()
 			}
 		}
 	}
 
-	// The body runs once at mount, on the cell thread. Calling loadFeed()
+	// The body runs once at mount, on the cell thread. Calling `loadFeed()`
 	// directly would block that thread for the whole fetch and settle
 	// `loading` back to false before the first render, making the spinner
 	// below unreachable. `effect` is the component-scoped coroutine, so a
@@ -64,12 +74,13 @@ export fn Feed -> Component {
 		posts.update(fn (&var p) { p.prepend(post) })
 	}
 
-	return Column(lazy = true) {
+	return Column(lazy = true, style = screen) {
 		Composer(onPosted = handlePosted)
 
-		if err != nil {
-			Row(class = "error-row") {
-				Text(err.asString())
+		match err {
+			nil     -> nil
+			message -> Row(style = errorRow) {
+				Text(message)
 			}
 		}
 
@@ -78,7 +89,12 @@ export fn Feed -> Component {
 				Loading(spin = true)
 			}
 		} else {
-			for post in posts {
+			// MIGRATED — the markup `for` had no `by`, and identity is
+			// mandatory on one. This loop is the case it is mandatory *for*:
+			// `animationIn = .Fade` means a row that loses its identity
+			// re-animates, and `handlePosted` prepends, so every row's index
+			// shifts on every new post.
+			for post in posts by post.id {
 				Row(animationIn = .Fade) {
 					FeedItem(post)
 				}

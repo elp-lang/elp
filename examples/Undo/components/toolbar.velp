@@ -1,4 +1,13 @@
-import { History } from ...internal.history
+// MIGRATED — multi-dot import paths. `name-resolution.md` settles that a
+// single leading dot means "this package, rooted at the package directory",
+// and that **there is no `..` and no file-relative form at all**: moving a
+// file changes no import in it. These read `..` and `...` as if the dots
+// counted directories.
+import { History } from .internal.history
+// MIGRATED — was `Styles.<name>` against a stylesheet that did not exist.
+// Named styles are imported by destructuring and there is no whole-sheet
+// value (`grammar-script-notes.md`); `styles.selp` is new.
+import { bar } from .styles
 
 // Both callback-prop forms, side by side, now that `functions.md` has
 // settled them: `*fn` declares a required one, and an optional one is an
@@ -18,7 +27,7 @@ component Toolbar {
 		}
 	}
 
-	return Row(style = Styles.bar) {
+	return Row(style = bar) {
 		Button(onPress = onUndo, disabled = !history.canUndo()) {
 			Text(undoLabel())
 		}

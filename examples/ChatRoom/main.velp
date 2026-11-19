@@ -1,9 +1,17 @@
-import { App, Window } from elp.app
-import { State } from elp.app.state
-import { Form, Label, Input, Button } from elp.ui.elements
-import { Http, HttpError } from elp.net
+// The chat app, and the file the old corpus used to teach state management.
+// Kept in that spirit and migrated; the prose about `pure` is rewritten,
+// because `functions.md` has since specified it and the old description was
+// close but wrong in two places.
+
+import { App } from elp.app
+import { Column } from elp.layout
+import { Form, TextInput, Button } from elp.forms
+import { Text } from elp.components
+import { Http, HttpBody } from elp.net
+import { StateDispatch } from elp.state
 import { Message, User } from .types.chat
-import { Message as MessageView } from .components.message
+import { MessageView } from .components.message
+import { page } from .styles
 
 export enum AppActions {
 	AUTHENTICATED_ISH { authed bool },
@@ -12,91 +20,141 @@ export enum AppActions {
 	NEW_MESSAGE { userName string, body string },
 }
 
-// A pure function is a type-state limitation on the ability of this function.
-// It removes the lexical scoping ability of this function beyond it's body,
-// this guarantees that it cannot modify anything externally.
-// It also enforces all arguments immutable.
-// Other limitations of a pure function are that it has limited access to the
-// standard library so a pure function may not make external calls, external requests,
-// do any kind of asynchronous work. It is "pure", what goes in will produce the same output every time.
-// note that enums are always const as they cannot be changed at any point beyond creation.
-// It's worth noting that the type of a function is ImpureFn and a pure function is PureFn. These types are
-// type compatible.
-pure fn AppReducer(const state ChatAppState, const action AppActions) -> ChatAppState {
-	// Note that this match is exhaustive so there's no catch-all at the end.
-	// Also note the shorthand assignment of values like authed, name and loading.
-	// If the name of the variable is the same as it's receiver then you can omit the = assignment.
-	return match action {
-		.AUTHENTICATED_ISH(authed) -> state.copyWith(authed),
-		.LOG_IN(name) -> state.copyWith(name),
-		.LOADING(loading) -> state.copyWith(loading)
-		.NEW_MESSAGE { userName, body } -> state.copyWith(messages = state.messages.copy().append(
-			Message(
-				user = User(displayName = userName),
-				body
-			)
-		))
-	}
-}
-
-// Middleware runs side-effects driven by actions. Long-running work is handed off to
-// a coroutine (Go-style) rather than marked async — the runtime owns the coroutine's lifetime.
-// Note that this match ISN'T exhaustive and we DO have a catch-all, noted by the unnamed variable _.
-fn AppMiddleware(const state ChatAppState, action AppActions, dispatch StateDispatch<AppActions>) {
-	return match action {
-		.LOG_IN(name) -> {
-			dispatch(.LOADING(true))
-
-			// Anonymous objects can be useful and the type-system allows this as they conveniently overlap in compatible ways.
-			// The same wouldn't be possible if the generic for HttpRequestBody required another non-optional field, they may be
-			// compatible on the surface but the memory assigned to the expected type would be invalid.
-			// However, if the argument to .new contained extra fields, it would be a compiler warning but the extra fields would
-			// actually be truncated as the type on the left projects the values on the right.
-			const body HttpRequestBody<object{name string}> = .new(object{name})
-
-			return match Http.post<object{success bool}, Error>({body}) {
-				Ok(res) -> {
-					dispatch(.LOADING(false))
-					dispatch(.AUTHENTICATED_ISH(res.success))
-				}
-				_ -> dispatch(.LOADING(false))
-			}
-		},
-		_ -> nil
-	}
-}
-
 export object ChatAppState {
-	messages [Message],
-	members  [User],
-	loggedIn User?
+	var messages [Message],
+	var members  [User],
+	var loggedIn User?,
 }
 
 ChatAppState implements Default
 
-fn ChatAppState.default -> Self {
-	return Self {
-		messages = [],
-		members = [],
-		loggedIn = nil
+fn ChatAppState.default() -> Self {
+	return Self { messages = [], members = [], loggedIn = nil }
+}
+
+// `pure` is a property of this function's body, declared and checked, not
+// inferred (`functions.md`, "`pure`, and the two body properties"). Its
+// closed set: no `@external` call, no `background` or `effect`, no channel
+// traffic, and no read or write of a mutable cell. A reducer is the shape
+// that was always meant to satisfy it.
+//
+// MIGRATED — the old comment said two things that are now known to be wrong.
+// It said `pure` "removes the lexical scoping ability of this function beyond
+// its body", which is not what purity is — a `pure fn` may capture and may
+// mutate its own locals, and `examples/Expenses` does both. And it said "what
+// goes in will produce the same output every time", which is determinism and
+// is a *joint* property: purity plus an insertion-ordered `Map` plus the
+// target being an explicit input. Purity alone does not buy it.
+//
+// Two spellings also changed. Parameters were written `const state` — a
+// parameter is already constant (`memory-model.md`, "Arguments are constant"),
+// so the marker said nothing. And the arms carried trailing commas.
+pure fn AppReducer(state ChatAppState, action AppActions) -> ChatAppState {
+	// Exhaustive, so there is no catch-all. Note the shorthand on the arms
+	// that rebuild one field: when the binding's name matches the field's,
+	// the `=` is omitted.
+	return match action {
+		.AUTHENTICATED_ISH(authed) -> state.copyWith(authed)
+		.LOG_IN(name)              -> state.copyWith(name)
+		.LOADING(loading)          -> state.copyWith(loading)
+
+		// MIGRATED — this arm built a `Message` with call syntax
+		// (`Message(user = ..., body)`) where object construction is
+		// `Type { field = value }`, and appended with
+		// `state.messages.copy().append(...)`, which the corpus scan found
+		// returns **unit** and was never a value.
+		//
+		// A reducer returns a new state rather than mutating one, so the
+		// transform that replaced that idiom everywhere else does not apply
+		// here: there is no cell. `copyWith` survives in exactly this
+		// position, which is what `reactivity.md`'s open item 1 is about.
+		//
+		// And it takes three lines, which is the corpus scan's finding 3 with
+		// a cost attached. `append` returns unit, so there is no fluent form;
+		// a `-ing` variant that returns a new collection is an **open**
+		// question (`collections.md`), and inventing one here to make this
+		// read better is how the old corpus got `inserting` beside `insert`.
+		// Written out instead, and a block arm's value is its final
+		// expression — not a `return` (`patterns.md`).
+		.NEW_MESSAGE { userName, body } -> {
+			var grown = state.messages.copy()
+			grown.append(Message.new(User { displayName = userName }, body))
+
+			state.copyWith(messages = grown)
+		}
 	}
 }
 
+// Middleware runs the side effects an action implies. Long-running work is
+// handed to a coroutine rather than marked async — the runtime owns its
+// lifetime, and there are no coloured functions.
+//
+// This match is deliberately **not** exhaustive, and `_` is the catch-all.
+// `collections.md` settled that `_` is the only one; the old corpus also
+// wrote `..`, which collides with range syntax.
+fn AppMiddleware(state ChatAppState, action AppActions, dispatch StateDispatch<AppActions>) {
+	return match action {
+		.LOG_IN(name) -> {
+			dispatch(.LOADING(true))
+
+			// GAP 1 — a structural object type, second instance in the
+			// corpus. `generics.md` lists this as its open item and the old
+			// comment here is still the best statement of why anyone wants
+			// one: *"if the argument to `.new` contained extra fields, it
+			// would be a compiler warning but the extra fields would be
+			// truncated, as the type on the left projects the values on the
+			// right."* That is projection-and-truncation, it is structural
+			// subtyping, and `diagnostics.md` already reserves the lint name
+			// (`truncated_projection`).
+			const body HttpBody<object{ name string }> = .new(object{ name })
+
+			return match Http.post<object{ success bool }>("https://example.invalid/login", body) {
+				Ok(res) -> {
+					dispatch(.LOADING(false))
+					dispatch(.AUTHENTICATED_ISH(res.success))
+				}
+				Err(_) -> dispatch(.LOADING(false))
+			}
+		}
+		_ -> nil
+	}
+}
+
+// GAP 2 — a macro taking type arguments, one of which is itself a macro.
+//
+// `generics.md` lists this as open and this line is its only instance. It is
+// also the only place in the corpus where a component's props arrive from a
+// macro rather than from its signature, which is the typing half of
+// `grammar-script-notes.md`'s "destructured params do not parse": written as
+// an ordinary parameter list here, because that is the form that exists.
 @App<ChatApp, @Reducer<AppReducer, AppMiddleware>>
-export fn ChatApp({state, dispatch}) {
+export component ChatApp(state ChatAppState, dispatch StateDispatch<AppActions>) {
 	var name string
 
-	if state.loggedIn != nil {
-		for message in state.messages {
-			MessageView(message)
-		}
-	} else {
-		Form(onSubmit={fn { dispatch(.LOG_IN(name)) }}) {
-			Label("Enter your display name") {
-				Input(name = "display-name", type = "text", value = name)
+	return Column(style = page) {
+		match state.loggedIn {
+			nil -> Form(onSubmit = fn { dispatch(.LOG_IN(name)) }) {
+				// MIGRATED — `reactivity.md`'s recorded corpus bug. This was
+				// `Input(name = "display-name", type = "text", value = name)`,
+				// passing `name` **by value**, so the field got a read-only
+				// copy and could never write back: `dispatch(.LOG_IN(name))`
+				// would always send an empty string. `&name` is the binding.
+				TextInput(&name, placeholder = "Enter your display name")
+
+				Button(type = .FORM_SUBMIT) {
+					Text("Log in")
+				}
 			}
-			Button {
-				Text("Log in")
+
+			me -> {
+				// MIGRATED — the markup `for` had no `by`, which is mandatory.
+				for message in state.messages by message.id {
+					MessageView(
+						from = message.user,
+						body = message.body,
+						mine = message.user.displayName == me.displayName,
+					)
+				}
 			}
 		}
 	}

@@ -1,0 +1,26 @@
+// ADDED by the migration. `components/message.velp` used
+// `class = "from-me"` and `class = "to-me"`, and there was no stylesheet in
+// this package at all — the class names referred to nothing.
+
+export stylesheet {
+	page {
+		padding = 16,
+		gap = 8,
+	}
+
+	fromMe {
+		padding = 8,
+		radius = 8,
+		background = .Accent,
+		alignSelf = .End,
+	}
+
+	toMe {
+		padding = 8,
+		radius = 8,
+		background = .Muted,
+		alignSelf = .Start,
+	}
+}
+
+// vim: ft=css

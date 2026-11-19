@@ -149,11 +149,9 @@ genuinely undecided thing — that `a..b` includes both ends.
 The scan ran (`core-language-probes.md` §16) and did the mechanical half.
 What it did **not** do, and why:
 
-1. **Eleven components still use the pre-`component` form**,
-   `export fn Name -> Component`, across `BlogStyle`, `SocialFeed` and
-   `ChatRoom`. Nothing in them is wrong about the language; they are older
-   than it. This is a rewrite of three apps rather than a migration, and it
-   is the single largest piece of corpus debt.
+1. ~~**Eleven components still use the pre-`component` form.**~~ **Done** —
+   the three original apps are swept (`core-language-probes.md` §16, "The
+   sweep"), and the component form was the smallest thing wrong with them.
 2. **`nil` versus `null`.** The scan sharpened it rather than settling it:
    `null` survives in exactly the seven FFI-heavy files and `nil` everywhere
    else, which is too consistent to be drift. It may be a deliberate line
@@ -166,6 +164,26 @@ Done by the scan: twelve `@external` out-parameters and five call sites took
 `&var`; six cell round-trips became transforms; two payload types went
 `const` to `var`; three method names were aligned to `collections.md`'s
 surface list.
+
+## What the sweep of the three original apps opened
+
+- **May a field carry a default, and when does it run?** `id = UUID.v4()`
+  was used by the old corpus and no document says. Once per type or once
+  per construction is the whole question, and object literals being checked
+  exhaustively for an owned aggregate (`patterns.md`) is what a default
+  would weaken. Owner: `aliasing.md`, which owns field declarations.
+- **Go-style field tags.** A second untyped metadata channel on every
+  field, readable by macros, used by the old corpus and absent from
+  `macros.md`. Its stated job is what `@CodeGen(Codec<JSON>)` does. Owner:
+  `macros.md`.
+- **Keying a markup `for` by the element's own value.** `by line` over a
+  `[string]` collapses duplicates, and `examples/Undo` and
+  `examples/Buffer` both do it. Not a language gap — the claim is explicit
+  and wrong, which is what `control-flow.md` says `by` is for — but it is
+  the first case where the corpus makes a false one. Owner:
+  `core-language-probes.md`, with `examples/Editor` FINDING 5.
+- **Objective-C interop.** `@external(.OBJC)` was used and only `.C` is
+  designed. Owner: `functions.md`.
 
 ## What the corpus scan opened
 

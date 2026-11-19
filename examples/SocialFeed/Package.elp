@@ -1,6 +1,9 @@
 import { Package, Version } from elp.package
 
-export @Package(
+// MIGRATED — `export @Package(` dropped its `export`. A manifest is not
+// imported by anything, so `export` on it is meaningless
+// (`name-resolution.md`'s migration backlog, item 4).
+@Package(
 	name = "social_feed",
 	version = .new(1, 0, 0, 0),
 	entry = "main.velp",
@@ -9,6 +12,9 @@ export @Package(
 		.iOS,
 		.Android,
 		.Web,
+	],
+	dependencies = [
+		.stdlib("1.0.0"),
 	],
 )
 

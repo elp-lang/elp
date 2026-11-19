@@ -1801,6 +1801,52 @@ without anyone writing them down.
     decision earlier. Accidental, and worth one line as confirmation that
     the refusal cost nothing.
 
+### The sweep — and the three apps were further behind than the count said
+
+Finding 8 said eleven components used the pre-`component` form and left them.
+They are migrated now, and the form was the smallest thing wrong with them.
+`BlogStyle`, `SocialFeed` and `ChatRoom` are the original corpus and predate
+almost every decision; sweeping them surfaced six more things, and three are
+features the old corpus used that **no document records**.
+
+**Undocumented features, now written up as gaps in the files that used
+them.** A field default standing in for a type (`id = UUID.v4()`), with no
+answer anywhere to when it runs — once per type or once per construction,
+which for `UUID.v4()` is the whole question. Go-style field tags
+(`` `json: "id"` ``), a second untyped metadata channel on every field that
+`macros.md` does not mention and whose only stated job is what
+`@CodeGen(Codec<JSON>)` is for. And `@external(.OBJC)` declared outside a
+block with a generic signature, three ways off-spec at once.
+
+**Four decided things the apps contradicted.** `class = "error-row"` and
+type selectors in a `.selp`, both replaced by named styles. `import { Styles
+} from .styles` with `Styles.screen` at each use — there is no whole-sheet
+value, and this was in the *newer* files too (`Expenses`, `Undo`, `Buffer`),
+two of which referred to a stylesheet that did not exist at all. Multi-dot
+import paths (`..types.job`, `...internal.history`) in nine files, where
+`name-resolution.md` settles that one dot means the package root and there
+is no `..` at all. And `var err Error` — a bare interface-typed variable
+assigned `nil`, where absence is `Optional<T>`.
+
+**Two things that looked like drift and were not.** `export var` as a prop
+is **correct**: `grammar-script-notes.md` keeps params and props as separate
+decided things, a param being a constant input with no cell and a prop being
+reactive and observed. That nearly got migrated away. And
+`loop(&window, &renderer)` in `examples/VulkanTriangle` is right to take
+`&` rather than `&var`, because `pumpEvents` and `drawFrame` mutate behind an
+opaque C handle rather than in elp storage — the sweep's own finding 1,
+confirmed from the other direction.
+
+**And one new gap, from the view layer.** `examples/Undo` and
+`examples/Buffer` both write `for line in lines by line` over a `[string]`,
+keying rows by their own text. Two identical lines collapse into one row, and
+an editor is the program most likely to contain two blank ones. This is
+exactly the case `control-flow.md` argues when it refuses to derive identity
+from a type — and here the explicit claim is *wrong*, with nothing in the
+language able to say so. What both files want is a line identity that
+survives editing, which is a rope's node identity, which is
+`examples/Editor` FINDING 5 arriving from the view layer.
+
 ### What the scan did not find
 
 No violation of `pure`: every `pure fn` in the corpus is legal under the

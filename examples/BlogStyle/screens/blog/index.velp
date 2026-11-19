@@ -1,18 +1,48 @@
-import { Animations } from elp.ui.animations
-import { Screen } from elp.app
-import { Component } from elp.ui
+// MIGRATED, and this file is where the old corpus was furthest from the
+// language. Four changes:
+//
+//   1. `export fn BlogListing -> Component` predates `component`, and the
+//      body had no `return`.
+//   2. `const posts, loading, err = getBlogContent()` destructured **three**
+//      values from one call. There is no tuple type, and a loading flag is
+//      not part of a result — it is component state, so it is a `var` here
+//      and an `effect` sets it.
+//   3. The markup `for` had no `by`. Identity is mandatory on a markup `for`
+//      (`grammar-script-notes.md`), and this loop is the exact case it is
+//      mandatory for: `animationIn = .Fade` means a row losing its identity
+//      re-animates.
+//   4. `class = "error-row"` and `class="title"` became named styles.
+//
+// It also imported `Animations` and `Component` and used neither.
 
-import { getAboutContent } from .internal.api
+import { Screen } from elp.app
+import { Column, Row } from elp.layout
+import { Text, Loading } from elp.components
+import { Content } from .internal.api
+import { getBlogContent } from .internal.api
 import { Paragraph } from .components.paragraph
+import { page, title, errorRow } from .styles
 
 @Screen
-export fn BlogListing -> Component {
-	const posts, loading, err = getBlogContent()
+export component BlogListing() {
+	var posts [Content] = []
+	var failure Optional<string> = nil
+	var loading = true
 
-	Column(lazy = true) {
-		if err != nil {
-			Row(class = "error-row") {
-				Text(err.asString())
+	// `effect` with no key never restarts, so this is "load once at mount".
+	effect {
+		match getBlogContent() {
+			Err(err)  -> failure = err.toString()
+			Ok(found) -> posts = found
+		}
+
+		loading = false
+	}
+
+	return Column(lazy = true, style = page) {
+		if failure != nil {
+			Row(style = errorRow) {
+				Text(failure)
 			}
 		}
 
@@ -21,14 +51,14 @@ export fn BlogListing -> Component {
 				Loading(spin = true)
 			}
 		} else {
-			for post in posts {
+			for post in posts by post.id {
 				Row(animationIn = .Fade) {
-					Text(post.title, class="title")
+					Text(post.title, style = title)
 					Paragraph(post.excerpt)
 				}
 			}
 		}
-    }
+	}
 }
 
 // vim: ft=kotlin

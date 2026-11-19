@@ -2,7 +2,12 @@ import { Column, Row } from elp.layout
 import { Form, TextInput, Picker, Button } from elp.forms
 import { Text } from elp.components
 import { Expense, Category, Money } from .types.expense
-import { Styles } from .styles
+// MIGRATED — was `import { Styles } from .styles` with `Styles.<name>` at
+// each use site.
+// `grammar-script-notes.md`: named styles are exported and imported by
+// destructuring like any other symbol, there is no default import and no
+// whole-sheet value, so a `.selp` needs no name of its own.
+import { composer, row } from .styles
 
 // Parsing "12.34" into integer cents. A view-layer concern only because the
 // platform gives us a string; the arithmetic is the same integer discipline
@@ -49,12 +54,12 @@ export component EntryForm(draft Binding<string>) {
 		}
 	}
 
-	return Form(onSubmit = handleSubmit, style = Styles.composer) {
+	return Form(onSubmit = handleSubmit, style = composer) {
 		if err != nil {
 			Text(err)
 		}
 
-		Row(style = Styles.row) {
+		Row(style = row) {
 			TextInput(&note, placeholder = "What was it?")
 			TextInput(&draft, placeholder = "0.00", keyboard = .Decimal)
 		}
