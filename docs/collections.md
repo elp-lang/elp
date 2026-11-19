@@ -286,5 +286,53 @@ rows.sorted(fn (a, b) { b.total.compareTo(a.total) })
   unqualified, with no exception carved into it, and `Buffer<T>`'s own elp
   face obeys it too: `at(i)` returns a copy and no expression anywhere
   produces an address.
+
+  **A note, not a proposal — growth mode may be the axis this question is
+  really on.** Goose (aardappel/goose) has no heap at all: memory is the
+  native stack, static data, and compiler-assigned *data stacks*, each a
+  reserved range with a bump pointer, under a compile-time proof that at
+  most one resizable value is live per stack and always on top. Growing
+  therefore never relocates and never checks capacity, and freeing is one
+  store that resets the top. On top of that it has five array kinds —
+  fixed, sized-at-construction, capacity-bounded `T[..k]`, grow-only
+  `T[>..]`, grow-shrink `T[>..<]` — and the property it claims for the
+  grow-only kind is the interesting one: **references into it stay valid
+  as it grows.**
+
+  That bears directly on a rule ratified in `memory-model.md` Finding 4's
+  third amendment, which forbids projecting a mutable path through a
+  collection index *because the container may reallocate*. Under Goose's
+  taxonomy that is a property of **one growth mode**, not of arrays, and a
+  grow-only `[T]` could grant `&var xs[i]` soundly. If elp ever wants an
+  indexed mutable place, this is the axis on which it becomes available,
+  and it is a smaller change than it sounds because the restriction is
+  already written down as being about reallocation.
+
+  It stays a note for three reasons. No corpus program has asked for
+  `&var xs[i]` — `update(i, fn)` covers the write and copy-on-write covers
+  the read (`tree-places.elp` FINDING 5). A second array kind is a real
+  cost in a language with mandatory type arguments and explicit
+  conformance: two types, a conversion, and a variance question, for one
+  capability. And Goose buys its guarantee with prices elp has already
+  spent elsewhere — no escaping closures, no function pointers, no
+  indexing into a variable-size array, no growable data held across a
+  recursive call, whole-program compilation only — so the arrangement does
+  not transplant, only the axis does.
+
+  What *does* transplant is the other half: Goose's `slot_pool<T>` and
+  `slice_pool<T>` are ordinary library types over a grow-only array, which
+  is exactly the bucket-3 `Arena<T>` that `aliasing.md`'s `Weak<T>` section
+  points at for a cycle it cannot break — and Goose states the failure mode
+  plainly, that a slot returned to a pool while still referenced reads
+  whatever its next owner stored, *a logic bug and not memory corruption*.
+  That is the question `examples/Recalc`'s index arena leaves open, with a
+  defensible answer already attached to it.
+
+  The broader adjacency, worth recording because it is where elp and a
+  no-heap language actually meet: **`@abi(.C, realtime)` already describes
+  a Goose-shaped sublanguage** — no allocation, no lock, no refcount
+  decrement reaching zero — arrived at from the other direction, one
+  function at a time. `Buffer<T>` is the contiguous extent; a pool over it
+  is the missing half.
 - ~~**`Char`**~~ **Resolved** by `strings.md`: `char`, lowercase, one
   Unicode scalar value.
