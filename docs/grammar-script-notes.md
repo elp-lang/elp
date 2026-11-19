@@ -21,9 +21,11 @@ genuinely language-level questions it did surface were folded into
    callers and callees don't have to know whether work happens on a
    background coroutine.
 
-2. **No `while` / `loop` / `break` / `continue`.** Only `for x in expr` is
-   defined today. Conditional loops are a known gap and will be added.
-   Until then, recursion or `for x in someIterator` covers it.
+2. ~~**No `while` / `loop` / `break` / `continue`.**~~ **Resolved** by
+   `control-flow.md`, and the answer is three of the four: `while` and
+   `break` and `continue` exist, `loop` does not, and neither do labels.
+   The grammar gains `while expr block`, `break` and `continue` as
+   statements.
 
 3. **No `?` error-propagation operator.** Errors are always pattern-matched
    explicitly. The compiler is expected to warn on unhandled `Either<_, E>`
@@ -304,7 +306,7 @@ A markup block admits these node forms and nothing else:
 ```
 node = element | if | match | for | Slot | const
 element = IDENT arguments? block?
-for = 'for' IDENT 'in' expr 'by' expr block
+for = 'for' pattern 'in' expr 'by' expr block
 ```
 
 - **`element`** is one rule covering all four shapes the corpus uses:
@@ -313,7 +315,11 @@ for = 'for' IDENT 'in' expr 'by' expr block
   `parse_primary` and the postfix loop; unifying them is what removes
   the special-casing.
 - **`if` / `match` / `for`** keep markup context through their bodies
-  and arms, as above.
+  and arms, as above. The binding was written `IDENT` here until
+  `patterns.md` resolved two-binding iteration as record destructuring; it
+  is a pattern, and `for { key as k, value as v } in map` is legal in
+  markup too. `by` stays mandatory and markup-only — `control-flow.md`
+  has why it is not vestigial.
 - **`const x = expr`** is allowed, for a value computed once on entering
   the block. `var` is not — reactive state belongs in the component
   body, which is a statement block and already handles it.

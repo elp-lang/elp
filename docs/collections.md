@@ -184,6 +184,11 @@ virtual call per element in the language's hottest construct.
 `for x in xs` calls `xs.iterator()` once and then `next()` until it
 returns `nil`. One protocol covers arrays, `Map`, ranges and channels.
 
+The loop *statements* built on this — `while`, `break`, `continue`, and
+why there is no `loop` and no labels — are in `control-flow.md`. Two
+pieces of surface it names as wanted and leaves here: `indices()`, and
+`reversed()` on an iterable. `examples/Undo` wants both at once.
+
 ### Channels fall out of it
 
 A `Channel<T>`'s iterator blocks in `next()` until a value arrives and
@@ -223,6 +228,10 @@ answers itself.
 `0..n` is an expression producing a `Range`, which is `Iterable<int>`.
 `400..499` in a match is a **pattern**. Same token, two constructs,
 distinguished by context exactly as Rust does.
+
+**`a..b` includes both ends**, decided in `control-flow.md` and forced by
+the pattern side: `400..499` has to include 499. A range whose end is
+below its start is empty, so `0..n - 1` iterates nothing when `n` is 0.
 
 ### `..` as a catch-all collides, and `_` wins
 

@@ -108,31 +108,24 @@ export fn LruCache<K, V>.put(&var self, key K, value V) {
 	}
 }
 
-// FINDING 3 — eviction needs "the oldest entry", and the absence of `break`
-// makes an O(1) operation O(n).
+// FINDING 3, RESOLVED — and this file is the evidence that closed it.
 //
-// The least-recently-used entry is the first in iteration order, and that is
-// one step of the iterator. elp has no way to take it:
+// Eviction needs "the oldest entry", which is the first in iteration order
+// and therefore one step of the iterator. With no `break`, a `for` that
+// stops after the first element could not be written, and the only access to
+// order was the protocol itself — so the original spelling materialised every
+// key to use one, turning the single operation an LRU cache exists to make
+// cheap into a linear scan.
 //
-//   - §7b records that **there is no `break`**, so a `for` that stops after
-//     the first element cannot be written;
-//   - `collections.md`'s iteration protocol is the only access to order, and
-//     nothing exposes a `.first()` or a positional read;
-//   - so the spelling below materialises every key to use one.
-//
-// This is the first place in the corpus where the missing `break` has a
-// measurable cost rather than being a stylistic gap: it turns the one
-// operation an LRU cache exists to make cheap into a linear scan, which
-// defeats the data structure. Either `break` or a `Map.first()` fixes it, and
-// `break` is the one that generalises.
+// `control-flow.md` adds `break`, citing this finding, and the fix is the
+// four lines below. Worth noting the alternative that was available and was
+// not taken: a `Map.first()` would have fixed this one site, and `break`
+// generalises to every other early exit in the language.
 fn LruCache<K, V>.evict(&var self) {
-	const oldest = self.entries.keys()
-
-	if oldest.length() == 0 {
-		return
+	for key in self.entries.keys() {
+		self.entries.remove(key)
+		break
 	}
-
-	self.entries.remove(oldest[0])
 }
 
 export fn LruCache<K, V>.count(&self) -> int {

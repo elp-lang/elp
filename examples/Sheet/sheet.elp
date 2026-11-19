@@ -109,24 +109,25 @@ export fn Workbook.duplicated(&self, as title string) -> Self {
 // needs its receiver's type checked to be read correctly.
 
 export fn Sheet.blank(name string, rows int, columns int, style Style) -> Self {
+	// MIGRATED — two counter loops, and the corpus's only nested pair. Neither
+	// index is used for anything but counting, so both become `_`. This is
+	// also the case `control-flow.md` admits reads worst under an inclusive
+	// range: `rows - 1` is arithmetic the old `r < rows` did not need, and it
+	// is only correct because a range whose end is below its start is empty.
 	var made [Row] = []
-	var r = 0
 
-	while r < rows {
+	for _ in 0..rows - 1 {
 		var cells [Cell] = []
-		var c = 0
 
-		while c < columns {
+		for _ in 0..columns - 1 {
 			// `.alias()` per cell: every cell in the sheet points at the one
 			// style that was passed in. Passing `style` bare would move it
 			// and fail on the second iteration, which is the loop making
 			// `Move` do exactly the job it is for.
 			cells.append(Cell.empty(style.alias()))
-			c += 1
 		}
 
 		made.append(Row { cells })
-		r += 1
 	}
 
 	return Self { name, rows = made }

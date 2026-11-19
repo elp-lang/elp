@@ -9,9 +9,12 @@ export fn main() -> int {
 	const pool = Pool.start(4)
 
 	var submitted [JobId] = []
-	var i = 0
 
-	while i < 32 {
+	// MIGRATED — this was `var i = 0` and a `while i < 32` with `i += 1` at
+	// the bottom, written that way because `control-flow.md` did not exist
+	// and nothing confirmed a range was iterable. It is, and `0..31` includes
+	// both ends, which is the one thing about ranges that was never decided.
+	for i in 0..31 {
 		const job = Job { id = JobId { value = i }, payload = "task-{i}" }
 
 		match pool.submit(job) {
@@ -30,8 +33,6 @@ export fn main() -> int {
 			const lost = pool.shutdown()
 			Console.log("shutdown with {lost} jobs still queued")
 		}
-
-		i += 1
 	}
 
 	// Every submit after the shutdown should have been refused with

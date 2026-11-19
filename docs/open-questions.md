@@ -21,14 +21,19 @@ work and have nothing written down.
 |---|---|---|
 | ~~**`pure`**~~ | — | **Designed**, in `functions.md`, "`pure`, and the two body properties". A declared bit, checked against a closed set of operations, propagated call-wise — no effect system, by the same pattern that makes `Copy` field-wise. What it left behind is smaller and listed below. |
 | **`Protected<T>`** | `memory-model.md`'s worked example, `functions.md`'s signatures, `generics.md`'s evidence table, the original corpus | `aliasing.md` says only what it is *not* ("not a peer of these three, it is a compiler-enforced access restriction"). What it restricts, and how, is nowhere. |
-| **Loops** | every probe — `while` appears in `TextSearch`, `QuadTree`, `Worker` and more | No doc owns loop statements. `core-language-probes.md` §2 establishes that `while` is *needed*; `grammar-script-notes.md` gap #2 lists it as open; nothing specifies `while`, `loop`, `break` or `continue`. |
+| ~~**Loops**~~ | — | **Designed**, and they have an owner at last: `control-flow.md`. `while`, `break` and `continue` exist; `loop` and labels do not. `a..b` includes both ends, which was never decided either. |
 
-`pure` was taken first, for the reason given here — it was the only one whose
-absence could make a *decided* thing wrong rather than unwritten. It did:
+`Protected<T>` is the one left. `pure` was taken first, for the reason given
+here — it was the only one whose absence could make a *decided* thing wrong
+rather than unwritten. It did:
 `functions.md`'s claim that real-time safety is purity plus a ban on
 allocation turned out to be backwards, since a real-time body calls C and
-reads cells and is therefore maximally impure. `Protected<T>` and loops are
-still open.
+reads cells and is therefore maximally impure. Loops followed, and turned
+out to be mostly *collection* rather than design: ranges, the iteration
+protocol and the binding pattern were already decided in three other files
+and had never been gathered, so what `control-flow.md` actually adds is
+`while`, `break`, `continue`, four refusals with their costs, and one
+genuinely undecided thing — that `a..b` includes both ends.
 
 ## Owned, and live
 
@@ -40,6 +45,9 @@ still open.
 | Optional chaining | `operators.md` — the last residue of the "core expression language" gap |
 | `a[i] = v` | `operators.md`, narrowed by `update(i, fn)` |
 | May an expression span a line break? | `grammar-script-notes.md` — `QuadTree/types/geometry.elp` depends on the answer |
+| An exclusive range form, if `0..n - 1` reads badly after migration | `control-flow.md` |
+| A labelled `break`; a diverging `while true` | `control-flow.md` — both additive, neither wanted by a probe |
+| `xs.indices` and `reversed()` | `collections.md` — stdlib surface |
 | Are `from` and `as` reserved or contextual? | `grammar-script-notes.md` |
 | Float vs range lexing — `.5` is currently illegal by accident | `grammar-script-notes.md` |
 | Destructured params do not parse | `grammar-script-notes.md` |

@@ -38,17 +38,16 @@ export fn Pool.start(workers int) -> Self {
 	// one of them — that is a different guarantee from broadcast, and nothing
 	// says which `Channel<T>` provides. `LinkShortener` has a single consumer
 	// so it never had to say.
-	var spawned = 0
-
-	while spawned < workers {
+	// MIGRATED — a counter loop that never used its counter, which is the
+	// clearest case for `_` as the binding: the range supplies the count and
+	// nothing in the body wants the index.
+	for _ in 0..workers - 1 {
 		background(fn {
 			for job in work {
 				const state = run(&job)
 				inbox.send(.COMPLETED { id = job.id, state })
 			}
 		})
-
-		spawned += 1
 	}
 
 	background(fn {
@@ -56,18 +55,22 @@ export fn Pool.start(workers int) -> Self {
 		var queued [Job] = []
 		var draining = false
 
-		// GAP 2 — there is no `break`.
+		// GAP 2, RESOLVED — `break` exists (`control-flow.md`).
 		//
-		// The corpus has `while` and `for` and not one `break` or `continue`.
-		// A SHUTDOWN arm has to stop this loop, and the only exit elp offers
-		// is `return` from the enclosing function — which here is a closure
-		// passed to `background`, so returning from it is both the loop exit
-		// and the coroutine's end. That conflates two things, and it only
-		// works at all because the loop is the closure's last statement.
+		// This used to read: the corpus has `while` and `for` and not one
+		// `break` or `continue`, so a SHUTDOWN arm had to stop this loop with
+		// `return` from the enclosing closure — which conflated the loop exit
+		// with the coroutine's end, and only worked because the loop is the
+		// closure's last statement. It also collided with the
+		// implicit-return question.
 		//
-		// It also interacts with the implicit-return question: if a closure's
-		// last expression is its value, a bare `return` inside one needs a
-		// meaning.
+		// `break` separates the two, and the SHUTDOWN arm below now uses it.
+		// What does **not** resolve is the half this gap was pointing at: the
+		// drain. Breaking still abandons whatever is queued behind the
+		// SHUTDOWN message, and fixing that means reading from a channel
+		// after deciding to stop. `break` makes that writable; channel
+		// shutdown is still undesigned, and it is the thing to design, not
+		// this.
 		for msg in inbox {
 			match msg {
 				.SUBMIT { job, reply } -> {
@@ -139,9 +142,9 @@ export fn Pool.start(workers int) -> Self {
 					//
 					// Draining `inbox` before exiting would fix it, and
 					// requires reading from a channel after deciding to
-					// stop — so the loop needs a second phase and `break`
-					// becomes unavoidable.
-					return
+					// stop — a second phase, which `break` now makes
+					// writable and channel shutdown still does not.
+					break
 				}
 			}
 		}

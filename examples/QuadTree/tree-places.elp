@@ -145,16 +145,13 @@ export fn QuadNode<T>.insert(&var self, bounds &Rect, at Point, value T) -> bool
 
 		.BRANCH { children } -> {
 			const quads = bounds.quadrants()
-			var i = 0
 
-			while i < 4 {
+			for i in 0..3 {
 				if quads[i].contains(&at) {
 					return children.update(i, fn (&var child) -> bool {
 						return child.insert(&quads[i], at, value)
 					})
 				}
-
-				i += 1
 			}
 
 			return false
@@ -184,9 +181,7 @@ fn QuadNode<T>.split(&var self, bounds &Rect) {
 			]
 
 			for entry in entries {
-				var i = 0
-
-				while i < 4 {
+				for i in 0..3 {
 					if quads[i].contains(&entry.at) {
 						// `tree.elp` wrote this as a `match` on `children[i]`
 						// binding `bucket` and appending to it — the same
@@ -200,10 +195,8 @@ fn QuadNode<T>.split(&var self, bounds &Rect) {
 							}
 						})
 
-						i = 4
+						break
 					}
-
-					i += 1
 				}
 			}
 
@@ -241,9 +234,8 @@ fn QuadNode<T>.collect(&self, bounds &Rect, area &Rect, out &var [Entry<T>]) {
 
 		.BRANCH { children } -> {
 			const quads = bounds.quadrants()
-			var i = 0
 
-			while i < 4 {
+			for i in 0..3 {
 				// FINDING 5 — the READ side has its own hole, and copy-on-write
 				// is what fills it. This is the finding that was not expected.
 				//
@@ -269,7 +261,6 @@ fn QuadNode<T>.collect(&self, bounds &Rect, area &Rect, out &var [Entry<T>]) {
 				// as a complement to `.update`; this is a second, unrelated
 				// reason to want it, and it is the stronger one.
 				self.childAt(i).collect(&quads[i], area, out)
-				i += 1
 			}
 		}
 	}

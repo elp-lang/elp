@@ -72,7 +72,14 @@ tower.
 **`Hashable` still has no definition**, and `Map` needs one — see the
 collections section below.
 
-## 2. Conditional loops
+## 2. ~~Conditional loops~~ — resolved
+
+**Resolved** in `control-flow.md`: `while`, `break` and `continue` exist;
+`loop` and labels do not, with the costs of each absence stated. The three
+sub-items below are answered too — a range is an iterable *and* a pattern
+(`collections.md`, "same token, two constructs"), `for` takes a pattern so
+multiple bindings are record destructuring (`patterns.md`), and `break` has
+its evidence at last in `examples/LruCache` FINDING 3. The original entry:
 
 `grammar-script-notes.md` has this open as gap #2. **Boyer-Moore settles
 whether it is needed**: the outer loop advances `offset` by a computed

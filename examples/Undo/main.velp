@@ -32,12 +32,16 @@ component App {
 	// document" or "indent block" command is. See GAP 3 in types/edit.elp:
 	// `steps` is captured by two closures at once.
 	fn clearAll() {
+		// MIGRATED — `var i = length - 1` and `while i >= 0` with `i -= 1`.
+		// This is the one corpus loop that wants both an index and reverse
+		// order, so it is the evidence for `indices()` as stdlib surface:
+		// `reversed()` alone would hand back lines and lose the `i` that
+		// `Edit.delete` records. A descending range is not a thing
+		// (`control-flow.md`), and this is why that costs nothing.
 		var steps [Edit] = []
-		var i = document.lines.length() - 1
 
-		while i >= 0 {
+		for i in document.lines.indices().reversed() {
 			steps.append(Edit.delete(i, document.lines[i]))
-			i -= 1
 		}
 
 		history.push(&var document, Edit.composite("clear all", steps))

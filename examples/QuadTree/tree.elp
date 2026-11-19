@@ -105,14 +105,14 @@ fn insertInto<T>(node &var QuadNode<T>, bounds &Rect, at Point, value T) -> bool
 
 		.BRANCH { children } -> {
 			const quads = bounds.quadrants()
-			var i = 0
 
-			while i < 4 {
+			// MIGRATED — `var i = 0; while i < 4 { … i += 1 }`. The index is
+			// still wanted here, to reach the matching child, so this is the
+			// one counter in the corpus that keeps its binding.
+			for i in 0..3 {
 				if quads[i].contains(&at) {
 					return insertInto<T>(&var children[i], &quads[i], at, value)
 				}
-
-				i += 1
 			}
 
 			// Unreachable while the quadrants tile `bounds` exactly, which is
@@ -141,20 +141,21 @@ fn split<T>(node &var QuadNode<T>, bounds &Rect) {
 				.LEAF { entries = [] },
 			]
 
+			// MIGRATED, and this loop is the clearest evidence in the corpus
+			// for `break`: `i = 4` followed by `i += 1` is a hand-rolled one,
+			// written because the language had no word for it. It also reads
+			// as a bug on first encounter, which is the cost of not having
+			// the word.
 			for entry in entries {
-				var i = 0
-
-				while i < 4 {
+				for i in 0..3 {
 					if quads[i].contains(&entry.at) {
 						match children[i] {
 							.LEAF { entries as bucket } -> bucket.append(entry)
 							_ -> nil
 						}
 
-						i = 4
+						break
 					}
-
-					i += 1
 				}
 			}
 
@@ -198,11 +199,9 @@ fn collect<T>(node &QuadNode<T>, bounds &Rect, area &Rect, out &var [Entry<T>]) 
 
 		.BRANCH { children } -> {
 			const quads = bounds.quadrants()
-			var i = 0
 
-			while i < 4 {
+			for i in 0..3 {
 				collect<T>(&children[i], &quads[i], area, &var out)
-				i += 1
 			}
 		}
 	}

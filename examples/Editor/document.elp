@@ -102,14 +102,35 @@ export fn Document.replace(&var self, at int, line Line) -> Line {
 // rather than through user code.
 export fn Document.reflow(&var self, width int) {
 	self.lines.update(fn (&var lines) {
-		var i = 0
-
-		while i < lines.length() {
-			lines[i] = Line { text = wrap(lines[i].text, width) }
-			i += 1
+		for i in lines.indices() {
+			lines.update(i, fn (&var line) {
+				line = Line { text = wrap(line.text, width) }
+			})
 		}
 	})
 }
+
+// FINDING 6 — NEW, from the loop migration, and it is the first site in the
+// corpus where `a[i] = v`'s absence costs something visible.
+//
+// This loop was `var i = 0; while i < lines.length() { lines[i] = … }`, and
+// `lines[i] = …` is an **open question** (`operators.md`: *"`Index` only
+// reads"*). `[T]` has no `set` either — `collections.md`'s array surface is
+// `append`, `prepend`, `map` and friends — so the only spelling that exists
+// is the nested `update`, which is what is written above.
+//
+// Two things worth separating. The outer `for` is *correct* and reads fine:
+// `indices()` returns a `Range`, which is a **value**, so it holds no borrow
+// of `lines` and mutating elements inside the loop is legal. That is the
+// difference between `for i in xs.indices()` and `for x in xs`, and it is
+// why `indices()` earns its place beyond ergonomics.
+//
+// The inner one is the cost. A per-element rewrite is a transform inside a
+// transform, two closures deep, for what every other language writes as an
+// assignment. `lines = lines.map(…)` is clearer and allocates a second array
+// per keystroke, which is exactly what this file exists to avoid. So this is
+// evidence *for* an assignable index rather than against it, and it is the
+// first the corpus has produced.
 
 // ─────────────────────────────────────────────────────────────────────────────
 // FINDING 5 — and undo is where copy-on-write turns out **not** to be enough,
