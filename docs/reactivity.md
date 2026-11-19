@@ -129,6 +129,16 @@ annotated accordingly.
 
 ### Notation: inferred for ordinary borrows, explicit in prop position
 
+**Amended — this section won a wider argument than it made.** It reasons
+that inference costs local readability, and that the cost is acceptable
+for a scoped call and not in prop position. `memory-model.md` Finding 4's
+third amendment now applies the same reasoning *everywhere*: `&var x` is
+written at an argument as well as at a declaration. So the heading's
+contrast no longer holds for mutation — explicit is the rule, not the
+prop-position exception — and what survives here is the separate and
+still-correct point that a prop is a **shared handle rather than a
+borrow**, which is a different claim about a different thing.
+
 Finding 4 established one ref spelling with mutability inferred from
 callee usage, and a hard error when a `const` reaches a mutating
 position. The safety property is not in question — a `const` can never

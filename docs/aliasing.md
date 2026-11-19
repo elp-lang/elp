@@ -109,8 +109,13 @@ nothing does.
 And **yield points are invisible** (`operators.md`, "The amendment: a
 call ends the turn"). A lock *guard* object could therefore be held
 across a call that yields, and deadlock with nothing in the source
-marking the boundary. elp also has no RAII and no `&mut` spelling, so
-there was never a good way to express a guard anyway.
+marking the boundary. elp also has no RAII, so there was never a good way
+to express a guard anyway.
+
+*(This sentence used to add "and no `&mut` spelling". That is no longer
+true — `memory-model.md` Finding 4's third amendment ratifies `&var T` —
+and it is worth noting that the guard rejection does **not** depend on it.
+The reason is the invisible yield point, which a spelling does not fix.)*
 
 **Still true after scoped release.** `memory-model.md` adds
 `with ... as x { }`, which binds a resource to a block and releases it at
@@ -662,6 +667,14 @@ Neither property holds generally. Kept in place rather than rewritten, because
 what the reversal turns on is which premise failed.
 
 ### And the loosening is already indicated, from a different direction
+
+**Superseded in its conclusion's favour.** Everything below argues for
+giving `Confined<T>` an `.update`, against the narrower
+`update(fn (T) -> T)` signature that was on the table at the time. It got
+one, in the wider `fn (&var T) -> R` form — see "The transform closure,
+ratified", above. The reasoning is kept because the *pricing* in it is
+still the argument, and because the fork it spends most of its length on
+turned out not to be a fork.
 
 That last sentence turned out to be a prediction with a date on it.
 `examples/Recalc/internal/handles.elp` re-ran the probe against one proposed
@@ -1676,6 +1689,11 @@ while `.copy()` would have had one that looked identical in both cases.
 - **Can a type be `Copy` and `Duplicate` both?** It should not need to
   be, and overlapping tiers should be a diagnostic rather than a silent
   precedence rule.
-- **`Protected<T>` is not a peer of these three.** It is a
-  compiler-enforced access restriction, not duplication semantics, and
-  the tables above should not be read as including it.
+- **`Protected<T>` is not a peer of these three** — it is a
+  compiler-enforced access restriction, not duplication semantics, and the
+  tables above should not be read as including it. **And that is the only
+  thing any doc says about it.** It appears in `memory-model.md`'s worked
+  example, in `functions.md`'s signatures, in `generics.md`'s evidence
+  table and in the original corpus, and what it restricts and how is
+  written down nowhere. Recorded in `open-questions.md` as one of three
+  load-bearing things with no design.

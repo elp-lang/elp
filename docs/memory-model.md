@@ -500,11 +500,13 @@ by example:
   same opt-in already required everywhere else `Copy` matters. See
   Finding 6 for the syntax this needs when the argument is itself a
   reference rather than an owned value.
-- **References into parameters can only ever be `&T`.** Falls straight
-  out of Finding 4: a parameter is `const`-for-the-body, so any `&ident`
-  into it elaborates to `&T`, never `&mut T`. A `pure fn` body that would
-  otherwise need `&mut` access to a parameter is a compile error, for
-  the same reason passing `const` into a mutating function already is.
+- **References into parameters can only ever be `&T`.** This used to fall
+  out of Finding 4's inference — a parameter is `const`-for-the-body, so
+  any `&ident` into it elaborated to `&T`. Under the third amendment it is
+  a rule rather than a consequence: a `pure fn` may not declare `&var` on
+  a parameter, and may not pass one of its own parameters to a `&var`
+  argument. Same outcome, stated directly, and better — it is now visible
+  in the signature instead of emerging from the body.
 - **"Long-lived borrows" (the roadmap's original phrasing) were already
   impossible, purity or not.** Finding 3 already says a closure can't
   capture anything that isn't `Copy`/`Move`, and a bare `&T` isn't either

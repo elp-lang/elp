@@ -870,21 +870,27 @@ import `elp.*` freely. Under this rule all three are valid.
 
 - **Routing resolution.** Path patterns to screen files, parameter
   extraction, and what `[postId]` binds to. Named above, not designed.
-- **Core expression language.** The `condition` argument above is the
-  first thing in the design to need an operator that the corpus does
-  not contain. See `docs/core-language.md` once it exists; until then,
-  the gap is: operators and precedence, `Map`, array/collection
-  surface, indexing, optional chaining, and whether value-level `+` is
-  interface-driven (recorded as unratified in `generics.md`).
+- ~~**Core expression language.**~~ **Mostly resolved, and the doc it
+  pointed at never existed.** This bullet named `docs/core-language.md`,
+  which was never written; the work happened in `operators.md`,
+  `collections.md` and `core-language-probes.md` instead. Of the gap it
+  listed: operators and precedence, `Map`, the collection surface and
+  indexing are all decided, and value-level `+` **is** interface-driven
+  (`operators.md`; `generics.md`'s Open says so too, and this bullet was
+  never updated). What is genuinely still open is **optional chaining**,
+  which no doc owns.
 - **Stdlib module layout.** The corpus imports `Text` from
   `elp.components`, `elp.ui`, `elp.ui.elements` *and*
   `elp.app.ui.elements` — four roots for what is apparently one set of
   components. This is a stdlib organisation question, not a resolution
   one, but it must be settled before the corpus can be made consistent.
-- **Does a dialect constrain what a module may contain?** Nothing yet
-  says a `.selp` file may only hold styles, or that a `.velp` file may
-  hold a non-component. Resolution treats all three identically, which
-  may or may not be the final answer.
+- **Does a dialect constrain what a module may contain?** Half answered
+  elsewhere and never reflected here: `grammar-script-notes.md` decides
+  that a `.selp` holds **imports and named styles only**, and that
+  `component` is `.velp`-only. What is still open is the other direction
+  — whether a `.velp` may hold a non-component — and whether resolution,
+  which treats all three dialects identically, should know any of this at
+  all.
 
 ## Corpus migration backlog
 

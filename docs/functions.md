@@ -316,7 +316,7 @@ dialect exactly as `@external(.C, ...)` has it.
 @abi(.C)
 fn onAudio(state Opaque<Synchronized<Playhead>>, frames int, output &Buffer<float>) -> int {
 	render(output, frames)
-	state.update(pure fn (p Playhead) -> Playhead { return p.advanced(frames) })
+	state.update(fn (&var p) { p.advance(frames) })
 	return 0
 }
 ```
@@ -380,11 +380,13 @@ Two directions want two markers.
 - **Collection combinators on `Array<T>`** — `map`, `filter`,
   `reduce`, `groupBy`. The corpus's stated gap, and stdlib design
   rather than language design.
-- **Function values.** `*fn` callback props exist (`memory-model.md`,
-  `dispatch.md`), and closures appear as
-  `rows.sorted(fn (a, b) { ... })`, but the type spelling, capture
-  rules and whether a method reference is a value are undesigned.
-  Probe gap #7.
+- ~~**Function values.**~~ **Resolved**, and this bullet outlived its
+  subject — "Function values" above answers all three parts (the type
+  spelling is `fn(T1, T2) -> R`, captures are governed by `Copy`/`Move`,
+  and a bound method is not a value), and `core-language-probes.md` §7
+  marks the probe gap resolved. What is still open from that round is
+  narrower and lives there: a capture that outlives its frame, and one
+  value captured by two closures at once.
 - **Whether a callback's thread affinity may be declared.** `@abi(.C)`
   bodies are checked for an unknown thread unconditionally, because the C
   ABI does not say. The alternative is for the `@external` declaration

@@ -17,9 +17,17 @@ spelling, so the gaps can be read rather than listed.
 | `examples/Sheet` | a spreadsheet with shared cell styles | field-wise `Copy` over four levels; mixed duplication ("copy the values, share the styles") is a domain operation and **a derive cannot close it** |
 | `examples/Pipeline` | a static-site build fanning out to background workers | the **immutable** half: `Shared<T>` as `Copy` for any `T` and `Sendable` when `T` is, `Synchronized<T>`'s `update`/`with` surface, and a `Confined` refused at a thread boundary |
 | `examples/SqliteBinding` | a library binding to libsqlite3 | the **FFI boundary**: an opaque handle with no declarable duplication semantics, a thread discipline that is a runtime value, no exactly-once release, borrows invalidated by unrelated calls |
+| `examples/VulkanTriangle` | a Vulkan/GLFW triangle | **system resources**: scoped release and teardown order, native linking as an allow-list, count-then-fill, an external struct's layout |
+| `examples/Playhead` | a real-time audio playhead, ported from a closed-source app and **held locally** | a deadline thread: `Atomic<T>`, `Ring<T>`, `Opaque<T>`, `@abi(.C, realtime)`, and where a deadline body's private state lives |
+| `examples/Recalc` | a spreadsheet recalculation graph | **reference cycles** — which cells can be an edge in one, and why an arena dissolves a dependency graph |
+| `examples/Interpreter` | a tree-walking interpreter for seven expression forms | **recursive value types** with no array to hide the indirection, and `let rec` making a cycle that is in the semantics |
+| `examples/LruCache` | an LRU cache over an insertion-ordered `Map` | the canonical `weak var` site, and why it needs none of it |
+| `examples/Editor` | a line editor with an undo stack | the **cell write surface**, priced per keystroke |
 
-None of them parse today, which is expected — the corpus parse test
-treats non-parsing as the default and they are not in `expect_success`.
+None of them parse today, and nothing checks that — the hand-written front
+end and its corpus parse test were removed (`docs/README.md`), so "the
+examples and the docs never disagree" is a manual discipline until there is
+a compiler again.
 
 ## Why these exist
 
@@ -315,8 +323,10 @@ the depth and no projection syntax is needed. **It holds**, and the gaps move:
 - **GAP 2 reframes.** The corpus already relies on receiver-position
   projection, in every file, undeclared — `self.nodes.set(at, node)` is a
   mutating method on a field, so it needs `&var self.nodes`. The language has
-  projection in one position; Finding 4 forbids the *parameter* spelling of
-  what receiver syntax already does.
+  projection in one position; Finding 4 forbade the *parameter* spelling of
+  what receiver syntax already does. **Both halves have since moved:** the
+  parameter spelling is ratified, and projection through a field is granted
+  in either position (Finding 4's third amendment, rule 6).
 - **GAP 4 resolves by precedent.** With the function as a method on the node,
   the spelling is `self = .BRANCH { … }`. Rust permits `*self = …` with
   `&mut self`, Swift permits `self = …` in a `mutating` method. It only looked
@@ -445,11 +455,13 @@ cell confinement"* arriving as a concrete bug rather than a note.
 
 ### Two questions the probes raise about existing decisions
 
-**Does a `{ }` match arm produce a value?** `LinkShortener`'s router has
-expression arms; `store.elp` has block arms used purely for effect.
-`History.undo` needs a block arm to *produce a bool*. That is the same
-question as implicit return in a closure body, and the two should be
-answered together rather than separately.
+**~~Does a `{ }` match arm produce a value?~~** **Resolved** by
+`patterns.md`, "`match` is an expression, and an arm produces a value" — a
+block arm's value is its final expression, and `History.undo` is the worked
+example there. The paired question, implicit return in a closure body, was
+answered the other way: `return` is required in a closure that produces a
+value (`functions.md`), and `patterns.md` explains why the asymmetry is
+forced rather than chosen. This entry was never updated.
 
 **May an expression span a line break?** The lexer emits a `Newline`
 token, so this is significant:
@@ -620,12 +632,15 @@ does.
    *lifetime* is still open, and it has to answer to the same "a call
    ends the turn" rule as narrowing.
 3. **`Synchronized<T>`'s surface is two closures, not one.**
-   `aliasing.md` proposed `.with(fn (v &var T) { ... })`, which needs a
+   `aliasing.md` proposed `.with(fn (v &var T) { ... })`, which needed a
    `&var T` parameter spelling that `memory-model.md` Finding 4
    deliberately rejected, plus whole-value assignment through a
    reference, which is `QuadTree`'s GAP 4. Splitting it by direction —
-   `update(fn (T) -> T)` and `with(fn (&T) -> R) -> R` — needs neither,
-   cannot forget to write back, and makes the critical section total.
+   `update(fn (T) -> T)` and `with(fn (&T) -> R) -> R` — needed neither,
+   could not forget to write back, and made the critical section total.
+   **Both blockers are now gone**, so `update` has been widened to
+   `fn (&var T) -> R` and the split survives for a different reason: a
+   `Synchronized<T>` has no `.get()`, so `with` is its read.
 4. **`background` has no join.** The fan-out loop never collects anything
    to wait on, so `snapshot()` reads before the workers finish.
    `reactivity.md` says `background` blocks its caller, which works for
@@ -685,8 +700,9 @@ cannot answer **even in principle**.
    shape, a resource borrowed for one block, arrived at independently.
 4. **A borrow invalidated by an unrelated call cannot be typed.**
    `sqlite3_column_text` returns a pointer killed by the next `step` on
-   the same statement. Finding 4 infers borrows from usage *inside one
-   call* and cannot express a constraint spanning two. Rust needs a
+   the same statement. elp's borrows are scoped to a single call — whether
+   inferred, as Finding 4 originally had it, or declared, as its third
+   amendment now has it — and neither can express a constraint spanning two. Rust needs a
    hand-written lifetime; elp has no lifetime parameters, which also
    means `Statement` cannot be tied to its `Connection`.
 5. **A C callback cannot be an elp closure**, because elp closures
@@ -1008,10 +1024,17 @@ a mutable reference to a `Sqlite3` that does not exist yet. It is
 **emptiness**, and `Optional<T>` is already a slot that may be empty —
 niche-optimised to a nullable pointer, so `&db` *is* `sqlite3**`.
 
-What made it legal needed one sentence: **Finding 4 infers mutability from
-the callee's body, and at an `@external` declaration the callee is C.** So
-at that boundary `&T` is read-write, conservatively, because there is
-nothing to infer from. An `Out<T>` slot type was considered and dropped as
+What made it legal needed one sentence: `Optional<T>` is a slot that may be
+empty, and `&db` *is* `sqlite3**` at the ABI.
+
+**Amended.** The original reasoning here was *"Finding 4 infers mutability
+from the callee's body, and at an `@external` declaration the callee is C,
+so at that boundary `&T` is read-write, conservatively."* Finding 4's third
+amendment replaces that conservative blanket: a C `const T*` is `&T` and a
+writable `T*` is `&var T`, read off the header. The `out` resolution is
+unaffected — it was always about emptiness, not direction — but every
+`@external` out-parameter in the corpus now wants `&var`, which is a
+migration item rather than a design one. An `Out<T>` slot type was considered and dropped as
 `&Optional<T>` with extra vocabulary — and because its closest relative,
 `Binding<T>`, is a refcounted reactive cell tied to the cell thread, which
 is machinery that has no business near `sqlite3_open`.
