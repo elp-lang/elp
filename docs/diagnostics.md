@@ -195,6 +195,24 @@ separately, "making the drift unrepresentable rather than lintable".
 That is the preferred move whenever it is available — a lint is what you
 reach for when the design cannot make the mistake impossible.
 
+## Where the messages are
+
+This document names lints and sets their register; it contains almost no
+**messages**. `examples/Rejected` does: sixteen wrong programs, each carrying
+what the compiler should print, written against the principle above that the
+diagnostic is the teaching.
+
+It is worth reading before writing any diagnostic, and it produced one result
+that belongs here rather than there. **A rule whose message cannot be written
+is a rule that is not finished.** Five of its sixteen cases failed exactly
+that way — the message would have had to name a borrow duration, an
+allocates-or-not property, a body-position mechanism, a choice between three
+error kinds, or the outcome of a conformance the fields deny, and none of
+those is decided.
+
+That is a mechanical test for an unfinished rule, available with no compiler,
+and it is cheaper than any amount of rereading.
+
 ## Open
 
 - **Default level of each lint**, which can only really be set once

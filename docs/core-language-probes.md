@@ -2175,32 +2175,55 @@ Sixteen programs that are all supposed to be refused, which is the corpus's
 only **safety** probe. It was written expecting to be a regression suite and
 it is not.
 
+**Each case carries four things the design documents do not**, because they
+are about the wrong program rather than the right one: what the author
+**wanted**, **why** the refusal is worth its cost, what the compiler should
+**say**, and what to write **instead**.
+
+**Writing the message turned out to be the test.** A rule whose diagnostic
+cannot be written is a rule that is not finished — it is naming a mechanism,
+a duration or a property nobody has decided — and that is a mechanical
+criterion where rereading the rule and wondering is not. It sorted the file
+by itself, and the verdicts below are its output rather than a judgement:
+**refused** means the message is writable, **unfinished** means it is not,
+**uncaught** means there is no rule to write one for.
+
 **Seven are refused cleanly**, by rules that name the shape: a `Confined<T>`
 captured by a `background` body, two `&var` arguments to one call, a field
 holding a borrow, a write through an `indirect` field, a `pure fn` reading a
 cell or declaring `&var`, and a `const` where mutation is required.
 
-**Five are UNCLEAR, and they are all the same shape** — a rule exists, is
-correct, and **names a mechanism that does not exist yet.** Mutating a
-collection while iterating needs a borrow *duration* nothing states, so
-`control-flow.md`'s claim that it "needs no rule of its own" rests on an
-assumption that is not written down. Allocating in a realtime body needs the
-allocates-or-not property `functions.md` costed and nobody built, so that
-rule cannot currently fire on anything. A transform reaching a second lock
-needs the by-position restriction that lost `pure` as its candidate.
-Assigning through an index is refused by nothing in particular. A `Copy`
-conformance over a `Confined` field is refused field-wise, with no stated
-diagnostic for a declaration asserting what the fields deny.
+**Five are unfinished, and they all failed the message test for the same
+reason** — the diagnostic would have to name something nobody has decided.
+Mutating a collection while iterating needs a borrow *duration* nothing
+states, so `control-flow.md`'s claim that it "needs no rule of its own"
+rests on an assumption that is not written down. Allocating in a realtime
+body needs the allocates-or-not property `functions.md` costed and nobody
+built, so that rule cannot currently fire on anything. A transform reaching
+a second lock needs the by-position restriction that lost `pure` as its
+candidate. Assigning through an index has three plausible messages — a parse
+error, an unknown method, an unimplemented feature — and the record picks
+none. A `Copy` conformance the fields deny has no stated outcome at all.
 
 Those five are not holes in the design; they are **the distance between a
 decision and a checker** — and a project with no compiler cannot tell the
 two apart, which is the argument for writing this file now rather than after
 one exists.
 
-**Four are NOT REFUSED, and all four are composition failures**, three of
-them from §19 an hour earlier: cancellation unwinding a transform, a lock on
-the cell thread, a `background` body outliving its component, and a macro
-that does not terminate.
+**Four are uncaught, and the four split three ways**, which only became
+visible once each had an INSTEAD line. Cancellation unwinding a transform
+**has no correct spelling at all** — it is unsound and it is the shortest
+fuse in the record. A lock on the cell thread and a coroutine outliving its
+component are **lints rather than errors**, because the same call is correct
+in another context, and both need the thread-affinity body property to have
+something to name. A non-terminating macro is already designed in shape and
+missing only a number.
+
+**And one refused case is worth revisiting rather than celebrating.** A
+`pure fn` may not take an accumulator, and an accumulator is not impure in
+any interesting sense — `examples/Json`'s writer is exactly that shape and
+simply does not say `pure`. The rule is defensible and may be stricter than
+it needs to be, which is the kind of thing only a wrong program surfaces.
 
 The number worth keeping: **of sixteen ways to write something wrong, nine
 are not currently caught**, and not one of the nine is caught by accident. A
