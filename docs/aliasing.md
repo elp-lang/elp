@@ -610,10 +610,20 @@ to find what the language needs, and sometimes the answer is nothing.
 ## Reference cycles, and why three of the four cells cannot form one
 
 elp reclaims memory by **reference counting**. There is no tracing
-collector anywhere in the design, and `memory-model.md` has no destructors,
-no `defer` and nothing at scope exit. So a cycle of handles is never
-collected, and there is no `Weak<T>` or `unowned` spelling — which was never
-a decision, just an absence.
+collector anywhere in the design and no destructors, so a cycle of handles is
+never collected, and `Weak<T>` was for a long time not a decision but an
+absence.
+
+**Corrected — this paragraph twice said "no `defer`, nothing at scope exit",
+and both halves are wrong.** `reactivity.md` designs `defer` in full and
+states that it is *"a general language feature rather than an effect
+feature"*; `memory-model.md` adds `with ... as x { }` and `Scoped`. So the
+language has **three** scope-exit constructs and this file was arguing from
+having none. The conclusion survives — a `defer` or a `with` releases what
+you tell it to and a cycle is precisely what nobody tells it about — but the
+premise was never checked, and the second instance of it is load-bearing for
+an Open item below. `examples/Json` found it, in a parser that uses `defer`
+to decrement a depth counter.
 
 `examples/Recalc` was written to find where the corpus leaks one. The answer
 is narrower than "refcounting leaks cycles" and wider than "it cannot
@@ -1512,7 +1522,7 @@ rules — the same trust, scoped to the marked surface.
 |---|---|
 | is duplicating the handle independent, aliasing, or illegal? | the **conformance**: `Copy`, `Duplicate`, `Move` already mean exactly those three |
 | may it cross a thread? | **`Sendable`**, declared rather than derived |
-| who releases it, and is exactly-once guaranteed? | **open** — elp has no destructors, no `defer`, nothing at scope exit |
+| who releases it, and is exactly-once guaranteed? | **open** — but not for the reason first given; see below |
 
 So two of the three need no new syntax, which retires a strawman
 `examples/SqliteBinding` was carrying:
@@ -1762,7 +1772,16 @@ while `.copy()` would have had one that looked identical in both cases.
   `Atomic<T>` all want and none of them can currently ask for.
 - **Exactly-once release for a foreign handle.** `Move` gives at most
   once and never at least once, so a dropped handle leaks with nothing to
-  notice. The candidates are a `Drop`-shaped interface, a scoped `with ...
+  notice. **The premise has been corrected**: this item used to rest on elp
+  having *"no destructors, no `defer`, nothing at scope exit"*, and it has
+  three scope-exit constructs — `defer` (`reactivity.md`), `with ... as x
+  { }` and `Scoped` (`memory-model.md`). None of them closes the item,
+  because all three are at-most-once-if-you-write-it, which is what `Move`
+  already gives. What the correction changes is the shape of the question:
+  it is not "elp needs a scope-exit mechanism", it is "elp has three and
+  none of them is mandatory", and whether a fourth should be or one of the
+  three should become so. The candidates are a `Drop`-shaped interface, a
+  scoped `with ...
   as x { }` form, or lint-only. Narrowed from the old "what arguments
   `@external` carries", the rest of which is now answered by ordinary
   conformances. Worse, SQLite's thread

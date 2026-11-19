@@ -1,6 +1,6 @@
 # Core language probes
 
-Sixteen programs written to put pressure on the parts of elp the original
+Seventeen programs written to put pressure on the parts of elp the original
 corpus never exercised, plus §16, a scan of the whole corpus run once the
 write-surface round had landed. They are **design probes, not specimens** — they
 use constructs the language does not have, written in the most plausible
@@ -24,6 +24,7 @@ spelling, so the gaps can be read rather than listed.
 | `examples/Interpreter` | a tree-walking interpreter for seven expression forms | **recursive value types** with no array to hide the indirection, and `let rec` making a cycle that is in the semantics |
 | `examples/LruCache` | an LRU cache over an insertion-ordered `Map` | the canonical `weak var` site, and why it needs none of it |
 | `examples/Editor` | a line editor with an undo stack | the **cell write surface**, priced per keystroke |
+| `examples/Json` | a JSON value, lexer, parser, writer, and the `@CodeGen` macro written in elp | the **macro engine** — and that an AST has no literal syntax — plus `Set`, `continue`, `Index`, `Iterable`, `char` ranges, and building a `string` |
 
 None of them parse today, and nothing checks that — the hand-written front
 end and its corpus parse test were removed (`docs/README.md`), so "the
@@ -1854,6 +1855,167 @@ definition `functions.md` gives, which was already true before the rule
 existed. No `string` treated as `Duplicate`. No cycle that `Weak<T>` would
 have to break outside `examples/Interpreter`. And no second `realtime`
 helper beyond the one already marked.
+
+## 17. The last core-language probe — `examples/Json`
+
+A JSON value, a hand-written lexer, a recursive-descent parser, a serialiser,
+and **the `@CodeGen(Codec<JSON>)` macro written in elp**. Chosen as the final
+non-reactivity entry because it is the most-cited missing type in these docs
+— `memory-model.md` names a JSON value as one of the four recursive shapes,
+and four corpus files already write `@CodeGen(Codec<JSON>)` against a type
+that did not exist — and because it touches the widest band of untested
+surface in one coherent program.
+
+Twenty-seven findings. The macro is the one that matters.
+
+### The macro: there is no way to write a literal AST
+
+`macros.md` claims *"elp data (incl. interfaces/types) is uniformly
+first-class"* and rests the whole compile-time evaluator on it. Writing the
+first macro body in the corpus shows that claim is **true of what a macro
+reads and false of what it writes**: there is no literal syntax for the one
+kind of data a macro exists to produce.
+
+`codec.elp` generates twelve lines of elp in ninety, and halfway through it
+collapses — every `Statement.call(...)` and `MatchArm.of(...)` it builds
+takes **strings**, because there is no way to write an expression as data.
+So the builder API is not an alternative to source-text construction; it *is*
+source-text construction with extra steps.
+
+Every macro system that works in practice has a quoting form: Lisp's
+backquote, Rust's `quote!` crate (so load-bearing it is effectively part of
+the language), Swift's string-interpolated syntax nodes. Three shapes are
+available here and none is designed — quasi-quoting (`quote { … }` plus a
+splice form and a hygiene decision nobody has discussed), source text
+(trivially expressible today, and it discards the first-class-data claim), or
+builder calls (needs nothing new, unusable at scale). `macros.md`'s open
+question 1 asks what reflection *exposes*; this is the other half and the
+larger one.
+
+Three more came with it:
+
+- **A macro has no diagnostic channel.** `@CodeGen(Default)` and
+  `@CodeGen(ToJSON)` are both used in the corpus and unimplemented here; the
+  honest response is to reject the unknown name at the attachment site, and a
+  `pure fn` cannot emit a diagnostic at all. Returning nothing silently is
+  the only option available and the worst of the three. `macros.md` lists
+  macro diagnostics as *"not discussed at all yet"*; this is their shape.
+- **The Go-style field tags were the macro's input, not a duplicate of it.**
+  `examples/BlogStyle` GAP 2 dropped them on the grounds that naming a JSON
+  key *"is exactly what `@CodeGen(Codec<JSON>)` is for"*. Writing the macro
+  shows the key is now whatever policy the macro hardcodes, so a field named
+  `displayName` cannot serialise as `display_name`. What replaces them is
+  undecided: a field-level attribute (needing attributes on fields, and one
+  macro able to read another's), or a naming-policy argument that handles the
+  common case and not the exception.
+- **The decode direction wants conformance as data.** `fromJSON` has to ask
+  *"does this field's type conform to `Codec<JSON>`?"* so the recursion
+  bottoms out, and *"is it `Optional<T>`?"* so a missing key is nil. That is
+  a bigger reflection ask than reading a field list.
+
+### What it tested about things already ratified
+
+- **`indirect` is not needed for recursion here, and is needed anyway.** Both
+  containers hold a `Map` or a `[T]`, so the indirection is already present
+  and the size equation terminates — which is `memory-model.md`'s
+  claim-to-test confirmed by a program rather than by a sweep. But without
+  the marker `JSON` is `Duplicate`, and then every nested read deep-copies a
+  subtree. With it the box is immutable, `JSON` is `Copy`, and a read is a
+  pointer copy. **The tier is the stronger reason to have the marker**: the
+  recursion case has an escape in every container type and the tier case does
+  not. That doc half-anticipated it as a layout convenience and never
+  connected it to conformance.
+- **`pure` survives its most demanding customer unchanged.** A macro body
+  allocates heavily, recurses and mutates locals, all of which are pure under
+  `functions.md`'s closed set — which is why allocation was deliberately left
+  out of it. It also confirms the termination point: the body loops over an
+  unbounded field list and nothing proves it halts.
+- **`break` and `continue` both have evidence now.** `continue` gets its
+  first corpus use skipping insignificant whitespace, which is the canonical
+  one; `break` ends a number scan.
+- **`&var T` as an accumulator parameter**, declared and written at every
+  call site, through a recursive emitter. The first non-trivial use outside
+  the probe that argued for it.
+- **`Set<char>` is the corpus's first `Set`**, and `collections.md` said it
+  had *"no evidence to design against beyond consistency"*. A lexer's
+  delimiter test is the evidence.
+- **The `(a, b)` match-scrutinee form** does real work outside a router for
+  the first time: `JSON.equals` is seven arms that way and thirty-six nested.
+
+### New gaps, and one is large
+
+1. **Building a `string` has no spelling.** A serialiser appends; `string` is
+   immutable, so `out = out + part` is O(n²) over the document, and there is
+   no builder, no `append`, no reserve. `aliasing.md` named this cost
+   precisely when it ratified the tier — *"a cheap implicit copy and an
+   expensive explicit build, which is exactly where a program loops without
+   noticing"* — and this is that program. The decision still holds, because a
+   mutable `string` would cost the tier and the tier carries most of the
+   corpus. What it argues for is stdlib surface: `[char].joined()`, used
+   twice here, and a `Buffer<uint8>`-backed writer for the streaming case.
+2. **`Index<K, V>` silently requires `V: Copy`.** `operators.md` has
+   `fn at(&self, key &K) -> V`, returning by value out of a borrow. For a
+   `Duplicate` payload there is no implementation — it cannot move out and it
+   cannot copy without a deep copy nobody asked for at a `[]`. Either the
+   interface carries the bound or the payload needs a cheap tier.
+3. **A type iterable two ways cannot conform to `Iterable<T>`.** A `JSON` is
+   an array of values and an object of entries; one `iterator()` and no
+   overloading on return type means named view methods instead. The rule
+   worth stating: `Iterable` is for a type with **one obvious traversal**.
+4. **Range patterns over `char`.** `'0'..'9'` is how every scanner spells
+   this and nothing says whether `..` is int-only. The iterable side probably
+   should *not* generalise — iterating `'a'..'z'` is a Unicode trap — which
+   would make this the first case where the pattern form and the expression
+   form legitimately differ.
+5. **The numeric tower, forced from outside the program.** A JSON number is
+   an arbitrary decimal: `int` loses `1.5` and a float loses integer identity
+   past 2^53. The value type splits `INTEGER` and `DECIMAL` rather than
+   guessing. And an overflowing integer literal arrives from **input** rather
+   than from source, so it cannot be a compile error, which is the first time
+   `operators.md`'s open *"widths, literal defaulting, overflow"* has a
+   runtime face.
+6. **Cross-numeric `==` has no answer.** `1` and `1.0` are equal in JSON's
+   model and are different cases here; comparing them needs a widening
+   conversion and `operators.md` forbids implicit numeric conversion. Left
+   `false` with the cost stated.
+
+### A doc contradiction, and it is load-bearing
+
+**`defer` exists, and `aliasing.md` says it does not — twice.**
+`reactivity.md` designs it in full (scope-scoped rather than
+function-scoped, both forms, LIFO, running on normal exit, cancellation
+unwind and panic unwind) and states explicitly that it is *"a general
+language feature rather than an effect feature"*. `aliasing.md` then argues
+twice from *"elp has no `defer`, nothing at scope exit"*: once concluding a
+cycle of handles is never broken, and once in the exactly-once-release open
+item, whose premise is therefore wrong.
+
+It does not close that item — `defer` is at-most-once-if-you-write-it, the
+same as `with` — but the language now has **three scope-exit constructs**
+(`defer`, `with ... as x { }`, `Scoped`) across two documents that each
+reason as if one of the others did not exist. The parser uses `defer` to
+decrement a depth counter, which is the shape that makes the overlap obvious.
+
+### Two decisions vindicated, and one dissent
+
+**Insertion-ordered `Map` makes parse-then-write preserve key order**, which
+no other language's JSON library gives without a second structure.
+`collections.md` ordered `Map` so a compile-time macro could emit identical
+code every build; `strings.md` then leaned on that for scalar-wise
+comparison. Third unrelated payoff from one decision.
+
+**`char` as a scalar value removes the bug every UTF-16 JSON escaper has** —
+no surrogate pair to reassemble, no half-character state. What it does not
+cover is `\uXXXX` output, which needs a scalar-to-integer conversion
+`strings.md` does not give; not needed here, since elp's output is UTF-8 and
+conforming parsers accept it, but a strict-ASCII mode could not be written.
+
+**And `loop` was refused one decision ago; this file wants it three times.**
+Recorded as weak evidence and written as `loop` deliberately, so the refusal
+has a dissenting site rather than a silent one. It is a readability
+preference at the place a reader asks how a loop terminates, not a program
+that cannot be written — the refusal's stated costs, no divergence
+information and no `break value`, are still unpaid by anything here.
 
 ## Suggested order
 

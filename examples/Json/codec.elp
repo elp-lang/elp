@@ -1,0 +1,201 @@
+// The macro four corpus files already use, written for the first time.
+//
+// `examples/BlogStyle`, `examples/SocialFeed` and `examples/ChatRoom` all
+// write `@CodeGen(Codec<JSON>)` on an object, and `macros.md` rests the whole
+// compile-time evaluator on *"a macro is an ordinary `pure fn`, tagged to run
+// at compile time against the AST of whatever it's attached to"*. No macro
+// body exists anywhere in the corpus. This is one, and it is the file that
+// found the most.
+
+import { Interface, Declaration, Field, Statement, MatchArm } from elp.macros
+import { JSON } from .types.value
+
+// FINDING 21 — `pure` holds, and that is the first thing worth checking.
+//
+// `functions.md` specifies `pure` as a declared bit over a closed set: no
+// `@external` call, no spawning, no channel traffic, no read or write of a
+// mutable cell. A macro body allocates heavily (every `Declaration` it
+// builds), recurses, and mutates locals — all of which are **pure** under
+// that definition, which is why allocation was deliberately left out of the
+// set. The definition survives its most demanding customer unchanged.
+//
+// It also confirms the termination point: this body loops over a field list
+// of unbounded length and nothing proves it halts, which is exactly why
+// `macros.md` needs a step budget rather than a proof.
+@macro
+export pure fn CodeGen(
+	interfaces [Interface],
+	node       Declaration,
+) -> [Declaration] {
+	var out [Declaration] = []
+
+	for face in interfaces {
+		match face.name() {
+			"Codec" -> {
+				out.append(encodeFor(node))
+				out.append(decodeFor(node))
+			}
+
+			// FINDING 22 — a macro cannot report a good error, and
+			// `diagnostics.md` has no story for one.
+			//
+			// `@CodeGen(Default)` and `@CodeGen(ToJSON)` are both used in the
+			// corpus and neither is implemented here. The honest thing is to
+			// reject the unknown name with a message naming the attachment
+			// site — and a `pure fn` has no way to emit a diagnostic at all.
+			// Returning an empty list silently generates nothing, which is
+			// the worst of the three options and the only one available.
+			//
+			// `macros.md` lists *"diagnostics when macro evaluation fails"*
+			// as **not discussed at all yet**. This is the shape it takes:
+			// not a panic inside the evaluator, but a macro that wants to say
+			// "I do not know how to do that, here" and has no channel.
+			_ -> nil
+		}
+	}
+
+	return out
+}
+
+// FINDING 23 — THE finding. There is no way to write a literal AST, so a
+// macro has to construct one by hand, and that does not scale past a toy.
+//
+// Everything below builds `Declaration` values with constructor calls. What
+// it is trying to express is six lines of elp:
+//
+//     export fn Content.toJSON(&self) -> JSON {
+//         var fields Map<string, JSON> = .new()
+//         fields.set("id", self.id.toJSON())
+//         fields.set("title", self.title.toJSON())
+//         return JSON.OBJECT { of = fields }
+//     }
+//
+// Every macro system that works in practice has a **quoting** form for this.
+// Lisp has backquote and comma; Rust's `quote!` crate is so load-bearing it
+// is effectively part of the language; Swift's macros build syntax from
+// string interpolation of source text. `macros.md` has *"elp data (incl.
+// interfaces/types) is uniformly first-class"* and **no literal syntax for
+// the one kind of data a macro exists to produce**.
+//
+// That is a hole rather than an inconvenience, and it is the reason this
+// file is 90 lines to generate 12. Three shapes are available and none is
+// designed:
+//
+//   1. **Quasi-quoting** — `quote { export fn ... }` with an escape for
+//      interpolating computed names. Reads as elp, which is the whole appeal.
+//      Needs a splice form and a decision about hygiene, which the language
+//      has not discussed.
+//   2. **Source-text construction**, Swift's answer: a macro returns a
+//      string that is parsed. Trivially expressible today, and it throws away
+//      the one property `macros.md` claims — that the AST is first-class data
+//      rather than text.
+//   3. **Builder calls**, below. Expressible with nothing new, which is why
+//      it is what this file uses, and unusable at scale.
+//
+// `macros.md`'s open question 1 asks what the reflection API exposes. This is
+// the other half and the larger one: what it *accepts*.
+pure fn encodeFor(node Declaration) -> Declaration {
+	var body [Statement] = []
+
+	body.append(Statement.declare(
+		"fields",
+		"Map<string, JSON>",
+		"Map<string, JSON>.new()",
+	))
+
+	// FINDING 24 — the JSON key has to come from somewhere, and dropping
+	// Go-style field tags left nothing.
+	//
+	// `examples/BlogStyle/internal/api.elp` GAP 2 recorded that the old
+	// corpus used `` `json: "id"` `` tags, that `macros.md` does not mention
+	// them, and that *"its stated job here, naming the JSON key, is also
+	// exactly what `@CodeGen(Codec<JSON>)` is for, so nothing is lost by
+	// dropping them."*
+	//
+	// Writing the macro shows what was lost: the key is now whatever **policy
+	// this function hardcodes**, and a field named `displayName` serialises as
+	// `displayName` whether or not the server calls it `display_name`. Every
+	// real codec needs a per-field override, which is what the tags were.
+	//
+	// So the tags were not redundant with the macro — they were its *input*.
+	// What replaces them is a decision nobody has made: a second attribute on
+	// the field (`@json("display_name")`), which needs attributes on fields
+	// and a way for one macro to read another's; or a naming-policy argument
+	// to `@CodeGen`, which handles the common case and not the exception.
+	for field in node.fields() {
+		body.append(Statement.call(
+			"fields.set",
+			["\"{field.name()}\"", "self.{field.name()}.toJSON()"],
+		))
+	}
+
+	body.append(Statement.returning("JSON.OBJECT { of = fields }"))
+
+	return Declaration.method(
+		receiver = node.name(),
+		name     = "toJSON",
+		receives = .BORROW,
+		returns  = "JSON",
+		body,
+	)
+}
+
+// FINDING 25 — the decode direction needs a type the macro cannot see.
+//
+// `fromJSON` has to turn a `JSON` back into a field's declared type, so the
+// generated body needs `field.type()` to be more than a name: it needs to
+// know whether the type itself conforms to `Codec<JSON>`, so the recursion
+// bottoms out, and whether it is `Optional<T>`, so a missing key is nil
+// rather than an error.
+//
+// `macros.md` says what is *settled* about reflection — that it is
+// compile-time only, which *"bounds the question: the API has to be rich
+// enough to read a type's structure and has no obligation to be cheap"* —
+// and leaves the shape open. This is the demand, stated concretely: a macro
+// needs to ask **"does this type conform to this interface?"** at compile
+// time, which is conformance checking exposed as data, and that is a bigger
+// ask than reading a field list.
+pure fn decodeFor(node Declaration) -> Declaration {
+	var arms [MatchArm] = []
+
+	for field in node.fields() {
+		arms.append(MatchArm.of(
+			"\"{field.name()}\"",
+			"{field.name()} = {field.type()}.fromJSON(value)?",
+		))
+	}
+
+	return Declaration.method(
+		receiver = node.name(),
+		name     = "fromJSON",
+		receives = .STATIC,
+		returns  = "Either<Self, Error>",
+		[Statement.returning("Self { " + joinArms(arms) + " }")],
+	)
+}
+
+// FINDING 26 — and here the file gives up honestly.
+//
+// `joinArms` wants to build source text out of AST fragments, which means
+// the builder route has collapsed into the source-text route (option 2
+// above) halfway through the first real macro. That is the finding: the
+// builder API is not a different answer from string construction, it is
+// string construction with extra steps, because a `Statement` whose
+// arguments are strings was never AST in the first place.
+//
+// Every `Statement.call(...)` and `MatchArm.of(...)` above takes **strings**.
+// They had to, because there is no way to write an expression as data. So
+// `macros.md`'s claim that the AST is first-class is currently true of what a
+// macro *reads* and false of what it *writes*, and nothing in the corpus had
+// gone looking.
+pure fn joinArms(arms [MatchArm]) -> string {
+	var parts [string] = []
+
+	for arm in arms {
+		parts.append(arm.toString())
+	}
+
+	return parts.joined(", ")
+}
+
+// vim: ft=kotlin

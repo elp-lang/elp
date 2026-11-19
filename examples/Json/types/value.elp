@@ -1,0 +1,162 @@
+// The JSON value, and it answers three questions the corpus could not reach.
+//
+// `memory-model.md` names a JSON value as one of the four shapes every
+// recursive type question is about, `core-language-probes.md` records that
+// *"`BlogStyle` already wants a JSON type"*, and four corpus files write
+// `@CodeGen(Codec<JSON>)` against a type that does not exist. This is it.
+
+import { Ordering } from elp.types
+
+// FINDING 1 — `indirect` is NOT needed for recursion here, which confirms
+// the claim `memory-model.md` asked the scan to test, from a program rather
+// than from a sweep.
+//
+// `OBJECT` holds a `Map<string, JSON>` and `ARRAY` holds a `[JSON]`. Both are
+// growable heap structures, so the indirection is already present and the
+// size equation terminates — exactly the reason `examples/QuadTree` turned
+// out not to be evidence for GAP 1. The only corpus type that genuinely
+// needs the marker is still `examples/Interpreter`'s `Expr`, which holds two
+// `Expr` directly.
+//
+// FINDING 2 — and yet it needs `indirect` anyway, for a reason the
+// ratification did not anticipate: **tier**.
+//
+// Without a marker, `JSON` is `Duplicate` and not `Copy`, because
+// `Map<string, JSON>` is. That is fine until you try to implement `Index`
+// (FINDING 3) or return a `JSON` out of a borrow, at which point every read
+// of a nested value deep-copies a subtree. With `indirect` on the two
+// container payloads the box is immutable, so `JSON` is `Copy` by the same
+// argument that makes `Shared<T>` `Copy` for any `T`, and a read is a pointer
+// copy and a retain.
+//
+// `memory-model.md` half-anticipated this — *"it may be written where it is
+// not required, to move a large payload out of line"* — but filed it as a
+// layout convenience and never connected it to conformance. It is the
+// stronger reason to have the marker: the recursion case has an escape in
+// every container type, and the tier case does not.
+export enum JSON {
+	NULL,
+	BOOL { of bool },
+
+	// FINDING 4 — a JSON number is the case that forces the numeric tower.
+	//
+	// JSON has one number type and it is an arbitrary decimal. `int` loses
+	// `1.5`; a float loses integer identity past 2^53, which is how every
+	// JavaScript JSON library ends up with a `BigInt` escape hatch. Neither
+	// is right and `operators.md` lists *"numeric tower: widths, literal
+	// defaulting, overflow"* as open.
+	//
+	// Split here rather than guessed, which is the honest spelling and also
+	// what Rust's `serde_json` does (`Number` is an enum over three cases).
+	// It makes the undesigned decision visible instead of picking for it.
+	INTEGER { of int },
+	DECIMAL { of float },
+
+	STRING { of string },
+
+	indirect ARRAY { of [JSON] },
+	indirect OBJECT { of Map<string, JSON> },
+}
+
+// `Copy` by FINDING 2: every field is `Copy` once the two containers are
+// behind immutable boxes. `string` is `Copy` (`aliasing.md`), `int`, `float`
+// and `bool` are primitives.
+JSON implements Copy + Equatable
+
+export fn JSON.equals(&self, other &Self) -> bool {
+	// FINDING 5 — a two-scrutinee `match` is the only readable spelling, and
+	// `patterns.md` grants exactly this form and no more.
+	//
+	// `(a, b)` is a **match-scrutinee form only**, not a tuple type, which is
+	// the decision that let elp drop tuples without losing this. Written as
+	// nested matches it is 36 arms; written this way it is seven. This is the
+	// first corpus program that needs it for something other than a router.
+	return match (self, other) {
+		(.NULL, .NULL)                   -> true
+		(.BOOL(a), .BOOL(b))             -> a == b
+		(.INTEGER(a), .INTEGER(b))       -> a == b
+		(.DECIMAL(a), .DECIMAL(b))       -> a == b
+		(.STRING(a), .STRING(b))         -> a == b
+		(.ARRAY(a), .ARRAY(b))           -> a == b
+		(.OBJECT(a), .OBJECT(b))         -> a == b
+
+		// FINDING 6 — the cross-numeric arm has no good answer, and that is a
+		// *language* finding rather than a JSON one.
+		//
+		// `1` and `1.0` are equal in JSON's data model and are different
+		// cases here. Comparing them needs a widening conversion, and
+		// `operators.md` forbids implicit numeric conversion outright — which
+		// is right, and leaves this arm writing the conversion by hand in
+		// whatever the numeric tower eventually calls it. Left false, with
+		// the cost stated, rather than inventing a coercion.
+		_ -> false
+	}
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FINDING 3 — `Index<K, V>` cannot be implemented for a non-`Copy` payload,
+// and this is the first type to try.
+//
+// `operators.md` defines `a[i]` as `Index<K, V>` with
+// `fn at(&self, key &K) -> V`: the value comes back **by value**, out of a
+// `&self`. For `[int]` that is fine because `int` is `Copy`. For a payload
+// that is `Duplicate`, `at` has no implementation — it cannot move out of a
+// borrow and it cannot copy without being a deep copy nobody asked for at a
+// `[]`.
+//
+// So `Index` silently requires `V: Copy` and says so nowhere. Two ways out
+// and the second is better: constrain the interface (`interface Index<K, V:
+// Copy>`), or stop making the problem by giving the payload a tier that
+// copies cheaply — which is FINDING 2's `indirect`. The constraint should
+// still be written, because the next type to try this will not have a
+// container to box.
+JSON implements Index<string, JSON>
+
+// Traps on a missing key, like every other `[]` (`collections.md`), and like
+// every other collection it has an `Optional`-returning sibling. For JSON the
+// sibling is the one callers want, because a missing key is the normal case
+// rather than a proven-absent one — which is the clearest instance yet of why
+// `collections.md` keeps both spellings.
+export fn JSON.at(&self, key &string) -> JSON {
+	return match self {
+		.OBJECT(fields) -> fields[key]
+		_               -> JSON.NULL
+	}
+}
+
+export fn JSON.get(&self, key string) -> Optional<JSON> {
+	return match self {
+		.OBJECT(fields) -> fields.get(key)
+		_               -> nil
+	}
+}
+
+// FINDING 7 — a type that is iterable in two different ways cannot conform to
+// `Iterable<T>`, and nothing said so.
+//
+// A `JSON` is iterable as an array of values *and* as an object of entries.
+// `collections.md` gives `Iterable<T>` one method, `iterator()`, and
+// `generics.md` resolves overloads on parameter types and names — so two
+// conformances differing only in their associated type and return type are
+// not distinguishable. There is no overloading on return type anywhere in
+// this language, deliberately.
+//
+// So the answer is named view methods rather than a conformance, and the
+// general rule worth stating is: **`Iterable` is for a type with one
+// obvious traversal.** A type with two has to name them, which is better
+// anyway — `for x in json` would never have said which one it meant.
+export fn JSON.values(&self) -> [JSON] {
+	return match self {
+		.ARRAY(items) -> items
+		_             -> []
+	}
+}
+
+export fn JSON.entries(&self) -> Map<string, JSON> {
+	return match self {
+		.OBJECT(fields) -> fields
+		_               -> .new()
+	}
+}
+
+// vim: ft=kotlin

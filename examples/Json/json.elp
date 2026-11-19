@@ -1,0 +1,34 @@
+// The public surface. Three functions, and the package's whole argument is
+// in the files they call.
+
+import { Error } from elp.types
+import { JSON } from .types.value
+import { Parser } from .internal.parser
+import { write } from .internal.writer
+
+export fn parse(source string) -> Either<JSON, Error> {
+	var parser = Parser.over(source)
+
+	return parser.parse()
+}
+
+export fn stringify(value &JSON) -> string {
+	return write(value)
+}
+
+// FINDING 27 — the round trip is where `Copy` on a recursive value earns its
+// place, and it is worth one line.
+//
+// `parse` builds a tree, `stringify` walks it, and nothing between them
+// copies a subtree, because `types/value.elp` FINDING 2 made `JSON` `Copy`
+// over immutable boxes. Without the marker every `&JSON` handed to `emit`
+// would have been a `Duplicate` whose only safe read is a deep copy — the
+// same quadratic read-side hole `examples/QuadTree`'s `tree-places.elp`
+// FINDING 5 found, in a program where the depth is attacker-controlled.
+export fn roundTrip(source string) -> Either<string, Error> {
+	const value = parse(source)?
+
+	return Ok(stringify(&value))
+}
+
+// vim: ft=kotlin

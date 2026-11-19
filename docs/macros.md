@@ -383,6 +383,34 @@ and because a small, low-stakes, `pure`-scoped evaluator is a reasonable
 place to learn what embedded execution in this codebase looks like,
 without it being load-bearing for anything else yet.
 
+## The hole `examples/Json` found
+
+**An AST has no literal syntax, so a macro cannot write one.** This document
+claims elp data including interfaces and types is *uniformly first-class*,
+and that is true of what a macro **reads** and false of what it **writes**.
+`examples/Json/codec.elp` is the first macro body in the corpus; it generates
+twelve lines of elp in ninety, and every `Statement` and `MatchArm` it builds
+takes **strings**, because there is no way to write an expression as data. So
+the builder route is not an alternative to source-text construction; it is
+source-text construction with extra steps.
+
+Every macro system that works in practice has a quoting form — Lisp's
+backquote, Rust's `quote!`, Swift's string-interpolated syntax nodes. Three
+shapes are available and none is designed:
+
+1. **Quasi-quoting**, `quote { export fn … }` with a splice for computed
+   names. It reads as elp, which is the whole appeal, and it needs a splice
+   form plus a hygiene decision this language has not discussed.
+2. **Source text**, Swift's answer: return a string and parse it.
+   Expressible today, and it discards the first-class-data claim entirely.
+3. **Builder calls.** Needs nothing new, which is why `codec.elp` uses them,
+   and unusable past a toy.
+
+Open question 1 below asks what reflection *exposes*. This is the other half
+and the larger one: what it **accepts**. Nothing in this document can be
+implemented until it is answered, which makes it the first thing to settle
+whenever the macro engine is next opened.
+
 ## Open questions
 
 1. **The reflection API's exact shape.** "Interfaces are inspectable

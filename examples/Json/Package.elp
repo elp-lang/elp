@@ -1,0 +1,14 @@
+import { Package, Version } from elp.package
+
+@Package(
+	name = "json",
+	version = .new(0, 1, 0, 0),
+	entry = "json.elp",
+	kind = .Library,
+	targets = [.iOS, .Android, .Web, .macOS, .Linux],
+	dependencies = [
+		.stdlib("1.0.0"),
+	],
+)
+
+// vim: ft=kotlin

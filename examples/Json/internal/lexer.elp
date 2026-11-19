@@ -1,0 +1,214 @@
+// Scanning JSON source into tokens, and this is where the control-flow and
+// string decisions get their first real workout.
+
+import { Error } from elp.types
+
+export enum Token {
+	BRACE_OPEN,
+	BRACE_CLOSE,
+	BRACKET_OPEN,
+	BRACKET_CLOSE,
+	COLON,
+	COMMA,
+	TRUE,
+	FALSE,
+	NULL,
+	NUMBER { of string },
+	TEXT { of string },
+}
+
+Token implements Copy
+
+export object Lexer {
+	const source [char],
+	var   at     int,
+}
+
+// FINDING 8 — `Set<char>` is the corpus's first `Set`, and it earns its place
+// in the one way `collections.md` could not predict.
+//
+// That file notes *"nothing in the corpus uses one yet, so there is no
+// evidence to design against beyond consistency"*. A lexer is the evidence: a
+// delimiter test is a membership question over a fixed small set, asked once
+// per character, and writing it as a chain of `||` is both slower and
+// unreadable at six delimiters.
+//
+// It also exercises the hashing requirement on a primitive — `Set<T: Hashable>`
+// over `char` — which nothing else has.
+const DELIMITERS = Set<char>.of(['{', '}', '[', ']', ':', ',']);
+
+export fn Lexer.over(source string) -> Self {
+	return Self { source = source.chars(), at = 0 }
+}
+
+// FINDING 9 — `continue` has its first corpus use, and it is the shape the
+// gap log predicted it would be.
+//
+// `core-language-probes.md` §2 recorded that *"`break` and `continue` appear
+// nowhere, in the old corpus or the new. Both probes were writable without
+// them, which is weak evidence they can wait."* `break` got its evidence from
+// `examples/LruCache`. This is `continue`'s: skipping insignificant
+// whitespace is the canonical use, and the alternative is an `if` wrapping
+// the entire rest of a long loop body.
+export fn Lexer.next(&var self) -> Optional<Either<Token, Error>> {
+	while self.at < self.source.length() {
+		const c = self.source[self.at]
+
+		if c == ' ' || c == '\t' || c == '\n' || c == '\r' {
+			self.at += 1
+			continue
+		}
+
+		if DELIMITERS.contains(c) {
+			self.at += 1
+			return .SOME(Ok(delimiter(c)))
+		}
+
+		if c == '"' {
+			return .SOME(self.text())
+		}
+
+		// FINDING 10 — a range pattern over `char`, and nothing says whether
+		// `..` is int-only.
+		//
+		// `control-flow.md` decides `a..b` includes both ends and
+		// `collections.md` makes `0..n` a `Range` that is `Iterable<int>`.
+		// Neither says anything about a `char` range, and a lexer is the
+		// program that wants one: `'0'..'9'` is how every scanner in every
+		// language spells this, and the alternative is
+		// `c >= '0' && c <= '9'`, which needs `char` to be `Comparable` and
+		// is three times as wide.
+		//
+		// The iterable side probably should *not* generalise — iterating
+		// `'a'..'z'` is a Unicode trap — so this may be a case where the
+		// pattern form and the expression form legitimately differ, which
+		// would be the first.
+		return match c {
+			'-' | '0'..'9' -> .SOME(self.number())
+			't'            -> .SOME(self.keyword("true", .TRUE))
+			'f'            -> .SOME(self.keyword("false", .FALSE))
+			'n'            -> .SOME(self.keyword("null", .NULL))
+			_              -> .SOME(Err(LexError.UNEXPECTED { at = self.at, found = c }))
+		}
+	}
+
+	return nil
+}
+
+pure fn delimiter(c char) -> Token {
+	return match c {
+		'{' -> .BRACE_OPEN
+		'}' -> .BRACE_CLOSE
+		'[' -> .BRACKET_OPEN
+		']' -> .BRACKET_CLOSE
+		':' -> .COLON
+		_   -> .COMMA
+	}
+}
+
+// FINDING 11 — building a `string` character by character has no spelling,
+// and this is the first program in the corpus that has to.
+//
+// `strings.md` makes `string` an **immutable** sequence and `aliasing.md`
+// ratified it `Copy` for exactly that reason, noting that *"concatenation is
+// not a copy, and that is where the cost went — `a + b` allocates and walks
+// both operands, O(n)"*. A scanner appending one character at a time is
+// therefore O(n²), and there is no `StringBuilder`, no `string.append`, and
+// no reserve.
+//
+// The workaround below is the honest one: accumulate `[char]` and join once.
+// It is correct, it is O(n), and it is three lines where every other language
+// writes one — which is the clearest statement of what the immutability
+// decision costs. What it argues for is stdlib surface (`[char].joined()` is
+// named in `strings.md` already as `.chars()`'s inverse), not a language
+// change, so the decision holds and the gap is a stdlib one.
+fn Lexer.text(&var self) -> Either<Token, Error> {
+	self.at += 1
+	var out [char] = []
+
+	while self.at < self.source.length() {
+		const c = self.source[self.at]
+
+		if c == '"' {
+			self.at += 1
+			return Ok(Token.TEXT { of = out.joined() })
+		}
+
+		if c == '\\' {
+			self.at += 1
+
+			if self.at >= self.source.length() {
+				return Err(LexError.UNTERMINATED { at = self.at })
+			}
+
+			out.append(unescape(self.source[self.at]))
+			self.at += 1
+			continue
+		}
+
+		out.append(c)
+		self.at += 1
+	}
+
+	return Err(LexError.UNTERMINATED { at = self.at })
+}
+
+pure fn unescape(c char) -> char {
+	return match c {
+		'n' -> '\n'
+		't' -> '\t'
+		'r' -> '\r'
+		_   -> c
+	}
+}
+
+fn Lexer.number(&var self) -> Either<Token, Error> {
+	const start = self.at
+
+	while self.at < self.source.length() {
+		const c = self.source[self.at]
+
+		if DELIMITERS.contains(c) || c == ' ' || c == '\n' {
+			break
+		}
+
+		self.at += 1
+	}
+
+	// `slice` over a `[char]`, then `joined` — the same FINDING 11 shape, and
+	// the reason a lexer wants a view over the source rather than a copy of
+	// it. `memory-model.md` reserves views (`Span<T>`, borrow-shaped) and
+	// leaves them undesigned, and this is the second program to want one.
+	return Ok(Token.NUMBER { of = self.source.slice(start, self.at - 1).joined() })
+}
+
+fn Lexer.keyword(&var self, word string, token Token) -> Either<Token, Error> {
+	const letters = word.chars()
+	const start = self.at
+
+	for i in letters.indices() {
+		const here = start + i
+
+		if here >= self.source.length() || self.source[here] != letters[i] {
+			return Err(LexError.UNEXPECTED { at = here, found = self.source[start] })
+		}
+	}
+
+	self.at = start + letters.length()
+
+	return Ok(token)
+}
+
+export enum LexError implements Error {
+	UNEXPECTED { at int, found char },
+	UNTERMINATED { at int },
+}
+
+export fn LexError.toString(&self) -> string {
+	return match self {
+		.UNEXPECTED { at, found }  -> "unexpected '{found}' at {at}"
+		.UNTERMINATED { at }       -> "unterminated string at {at}"
+	}
+}
+
+// vim: ft=kotlin

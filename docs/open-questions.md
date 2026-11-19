@@ -12,6 +12,30 @@ Written after a scan of `docs/` on 2026-11-19, which found eleven stale
 entries, five questions recorded in more than one place with no owner, and
 three load-bearing things with no design at all.
 
+## What `examples/Json` opened
+
+The last core-language probe, and the biggest thing it found is in the one
+mechanism nothing had exercised.
+
+| | |
+|---|---|
+| **An AST has no literal syntax** | `macros.md` claims the AST is first-class data. True of what a macro *reads*, false of what it *writes* — the first macro body in the corpus collapses into string construction halfway through. Quasi-quoting, source text, or builders; none designed. **The largest open item in the language.** |
+| A macro has no diagnostic channel | `macros.md` — a `pure fn` cannot say "I do not know how to do that, here" |
+| What names a serialised field | `macros.md` — the dropped Go-style tags were the macro's *input*, not a duplicate of it |
+| Conformance as compile-time data | `macros.md` — decode needs "does this type conform to `Codec<JSON>`?" |
+| Building a `string` has no spelling | `strings.md` / `collections.md` — stdlib surface: `[char].joined()` and a `Buffer`-backed writer |
+| `Index<K, V>` silently requires `V: Copy` | `operators.md` |
+| A type iterable two ways cannot conform to `Iterable<T>` | `collections.md` — the rule is one obvious traversal |
+| Range patterns over `char` | `patterns.md` — and the pattern form may legitimately differ from the expression form |
+| An overflowing numeric literal arriving from **input** | `operators.md` — the numeric tower's first runtime face |
+| Cross-numeric `==` | `operators.md` — `1` and `1.0`, with implicit conversion forbidden |
+
+And one correction it forced: **`aliasing.md` twice argued from "elp has no
+`defer`, nothing at scope exit"**, and the language has three scope-exit
+constructs. Fixed there; the exactly-once-release item survives with a
+different shape — not "elp needs a mechanism" but "elp has three and none is
+mandatory".
+
 ## The three with no design at all — all three now designed
 
 These were not "open" in the ordinary sense. They were depended on by

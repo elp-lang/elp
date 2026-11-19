@@ -1,0 +1,242 @@
+// Recursive descent over the token stream.
+
+import { Error } from elp.types
+import { JSON } from .types.value
+import { Lexer, Token, LexError } from .internal.lexer
+
+export object Parser {
+	var lexer   Lexer,
+	var ahead   Optional<Token>,
+	var depth   int,
+}
+
+const MAX_DEPTH = 128
+
+export fn Parser.over(source string) -> Self {
+	return Self { lexer = Lexer.over(source), ahead = nil, depth = 0 }
+}
+
+// FINDING 12 — `?` is wanted at every single line of this file, and its
+// absence is the largest single cost in the package.
+//
+// `error-handling.md` lists `?` as *"still not decided"* and
+// `memory-model.md` records it as *"a dependency for ergonomics, not for
+// correctness"*. A recursive-descent parser is the program that prices it:
+// every production reads a token, propagates a lex error, reads another, and
+// propagates again. Written with `match` at each step, `parseValue` below is
+// four nested matches deep before it does anything.
+//
+// The corpus has used `?` informally in `examples/VulkanTriangle` and
+// `examples/Recalc` on the grounds that it is *"the intended shape"*. This
+// file does the same, and says plainly that it is the one undesigned
+// construct the package cannot be written honestly without.
+export fn Parser.parse(&var self) -> Either<JSON, Error> {
+	const value = self.parseValue()?
+
+	// Trailing content is an error, and noticing it needs one more token.
+	return match self.take()? {
+		nil -> Ok(value)
+		_   -> Err(ParseError.TRAILING)
+	}
+}
+
+fn Parser.parseValue(&var self) -> Either<JSON, Error> {
+	// FINDING 13 — recursion depth is the parser's own problem, and that is
+	// the right answer rather than a gap.
+	//
+	// `macros.md` leaves *"fixed-point loop termination"* open and
+	// `functions.md` now states that `pure` does not imply termination, so
+	// the compile-time evaluator needs a step budget. A parser needs the same
+	// thing for the same reason and gets it the same way: a counter it checks
+	// itself. Nothing in the language should be doing this for it, and
+	// recording that is worth as much as a gap would be.
+	if self.depth >= MAX_DEPTH {
+		return Err(ParseError.TOO_DEEP)
+	}
+
+	const token = self.take()? ?? return Err(ParseError.UNEXPECTED_END)
+
+	return match token {
+		.NULL          -> Ok(.NULL)
+		.TRUE          -> Ok(.BOOL { of = true })
+		.FALSE         -> Ok(.BOOL { of = false })
+		.TEXT(s)       -> Ok(.STRING { of = s })
+		.NUMBER(raw)   -> number(raw)
+		.BRACKET_OPEN  -> self.parseArray()
+		.BRACE_OPEN    -> self.parseObject()
+		_              -> Err(ParseError.UNEXPECTED_TOKEN)
+	}
+}
+
+fn Parser.parseArray(&var self) -> Either<JSON, Error> {
+	self.depth += 1
+	defer { self.depth -= 1 }
+
+	var items [JSON] = []
+
+	// FINDING 14 — `defer` exists and `aliasing.md` says it does not, twice.
+	//
+	// `reactivity.md` designs `defer` in full — scope-scoped rather than
+	// function-scoped, both forms, LIFO, running on normal exit, cancellation
+	// unwind and panic unwind — and states explicitly that it is *"a general
+	// language feature rather than an effect feature"*. `aliasing.md` then
+	// argues twice from *"elp has no `defer`, nothing at scope exit"*: once
+	// to conclude a cycle of handles is never broken, and once in the
+	// exactly-once-release open item.
+	//
+	// The second is the one that matters, because `defer handle.close()` **is**
+	// a scope-exit mechanism and the open item's premise is wrong. It does not
+	// close the item — `defer` is at-most-once-if-you-write-it, same as `with`
+	// — but it does mean the language now has *three* scope-exit constructs
+	// (`defer`, `with ... as x { }`, `Scoped`) across two documents that each
+	// reason as if one of the others did not exist.
+	loop {
+		const next = self.peek()? ?? return Err(ParseError.UNEXPECTED_END)
+
+		if next == .BRACKET_CLOSE {
+			self.take()?
+			return Ok(.ARRAY { of = items })
+		}
+
+		items.append(self.parseValue()?)
+
+		match self.peek()? {
+			.SOME(.COMMA) -> self.take()?
+			_             -> nil
+		}
+	}
+}
+
+fn Parser.parseObject(&var self) -> Either<JSON, Error> {
+	self.depth += 1
+	defer { self.depth -= 1 }
+
+	var fields Map<string, JSON> = .new()
+
+	loop {
+		const next = self.peek()? ?? return Err(ParseError.UNEXPECTED_END)
+
+		if next == .BRACE_CLOSE {
+			self.take()?
+			return Ok(.OBJECT { of = fields })
+		}
+
+		const key = match self.take()? {
+			.SOME(.TEXT(s)) -> s
+			_               -> return Err(ParseError.EXPECTED_KEY)
+		}
+
+		match self.take()? {
+			.SOME(.COLON) -> nil
+			_             -> return Err(ParseError.EXPECTED_COLON)
+		}
+
+		// FINDING 15 — a duplicate key in the source, and `collections.md`'s
+		// unstated re-insertion order decides what happens.
+		//
+		// `{"a": 1, "a": 2}` is legal JSON and every implementation keeps the
+		// last. `examples/LruCache` FINDING 2 found that *"`Map.set` on an
+		// existing key has no stated effect on order"* and that both readings
+		// are defensible. This program needs the *value* overwritten, which
+		// both readings give, and is indifferent to the position — so it is
+		// the first site that cares about one half of that question and not
+		// the other, which is useful: the two sub-questions are separable and
+		// the gap was recorded as one.
+		fields.set(key, self.parseValue()?)
+
+		match self.peek()? {
+			.SOME(.COMMA) -> self.take()?
+			_             -> nil
+		}
+	}
+}
+
+// FINDING 16 — `loop` was refused and this file wants it three times.
+//
+// `control-flow.md` refused `loop`, on the grounds that `while true` is one
+// more character and that *"no corpus function ends in an infinite loop"*.
+// Both parse loops above are `loop`, and the honest alternative is
+// `while true`, which reads worse at exactly the place a reader is asking
+// "how does this terminate?" — the answer being the `return`s inside it.
+//
+// This is weak evidence and it is recorded as weak: it is a readability
+// preference, not a program that cannot be written. The refusal's actual cost
+// — no divergence information, no `break value` — is still unpaid by anything
+// here. Written as `loop` deliberately, so the decision has a dissenting site
+// rather than a silent one.
+
+fn Parser.take(&var self) -> Either<Optional<Token>, Error> {
+	match self.ahead {
+		nil -> nil
+		held -> {
+			self.ahead = nil
+			return Ok(.SOME(held))
+		}
+	}
+
+	return match self.lexer.next() {
+		nil      -> Ok(nil)
+		.SOME(r) -> Ok(.SOME(r?))
+	}
+}
+
+fn Parser.peek(&var self) -> Either<Optional<Token>, Error> {
+	match self.ahead {
+		nil -> nil
+		held -> return Ok(.SOME(held))
+	}
+
+	const token = self.take()?
+	self.ahead = token
+
+	return Ok(token)
+}
+
+// FINDING 17 — parsing a number needs the numeric tower, and there is no
+// honest placeholder.
+//
+// `value.elp` FINDING 4 split `JSON` into `INTEGER` and `DECIMAL` to avoid
+// guessing. Deciding which one a token is needs to know whether the text
+// contains `.`, `e` or `E`, and converting needs `string.toInt()` and a
+// `toFloat()` that `strings.md` does not list. Overflow on a long integer
+// literal has no answer at all: `operators.md` lists *"widths, literal
+// defaulting, overflow"* as open, and this is the first program where an
+// overflowing literal arrives from **outside** the program and cannot be a
+// compile error.
+pure fn number(raw string) -> Either<JSON, Error> {
+	if raw.contains(".") || raw.contains("e") || raw.contains("E") {
+		return match raw.toFloat() {
+			nil -> Err(ParseError.BAD_NUMBER { raw })
+			f   -> Ok(.DECIMAL { of = f })
+		}
+	}
+
+	return match raw.toInt() {
+		nil -> Err(ParseError.BAD_NUMBER { raw })
+		i   -> Ok(.INTEGER { of = i })
+	}
+}
+
+export enum ParseError implements Error {
+	UNEXPECTED_END,
+	UNEXPECTED_TOKEN,
+	EXPECTED_KEY,
+	EXPECTED_COLON,
+	TRAILING,
+	TOO_DEEP,
+	BAD_NUMBER { raw string },
+}
+
+export fn ParseError.toString(&self) -> string {
+	return match self {
+		.UNEXPECTED_END      -> "unexpected end of input"
+		.UNEXPECTED_TOKEN    -> "unexpected token"
+		.EXPECTED_KEY        -> "expected a string key"
+		.EXPECTED_COLON      -> "expected ':'"
+		.TRAILING            -> "trailing content after the top-level value"
+		.TOO_DEEP            -> "nesting deeper than {MAX_DEPTH}"
+		.BAD_NUMBER { raw }  -> "'{raw}' is not a number"
+	}
+}
+
+// vim: ft=kotlin

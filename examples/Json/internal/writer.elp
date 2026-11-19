@@ -1,0 +1,139 @@
+// Serialising a JSON value back to text, and the file where `string` being
+// immutable is paid for in full.
+
+import { JSON } from .types.value
+
+// FINDING 18 — this is the finding the package was worth writing for, and it
+// is not about JSON.
+//
+// A serialiser is a function from a tree to one `string`, and every language
+// writes it by appending to a buffer. elp cannot: `string` is **immutable**
+// (`strings.md`), so `out = out + part` allocates and copies the whole
+// accumulated text at every step — O(n²) over the document — and there is no
+// `string.append`, no builder, no reserve, and no mutable string of any kind.
+//
+// `aliasing.md` ratified `string` as `Copy` *because* it is immutable, and
+// named the cost precisely: *"concatenation is not a copy, and that is where
+// the cost went — `a + b` allocates and walks both operands, O(n). So
+// `string` has a cheap implicit copy and an expensive explicit build, which
+// is the right way round and is exactly where a program loops without
+// noticing."*
+//
+// This is that program. The decision is still right — a mutable `string`
+// would have cost the tier, and the tier is load-bearing for most of the
+// corpus — so what this argues for is **stdlib surface**, in two parts:
+//
+//   1. `[char].joined()`, used here and in `internal/lexer.elp`, which is
+//      `.chars()`'s inverse and is the O(n) accumulate-then-join route;
+//   2. a `Buffer<uint8>`-backed writer for the streaming case, which is
+//      `memory-model.md`'s contiguous storage doing the job it exists for and
+//      is what a real serialiser would use for a large document.
+//
+// Written with (1), because it is the one that needs no undesigned numeric
+// width. The lint `aliasing.md` wants for a loop that concatenates would fire
+// on the version of this file that does not exist, which is the right place
+// for it.
+export fn write(value &JSON) -> string {
+	var out [char] = []
+	emit(value, &var out)
+
+	return out.joined()
+}
+
+// `&var [char]` as a non-receiver parameter, written at the declaration and
+// at every call site — `memory-model.md` Finding 4's third amendment, and the
+// recursion is what makes the accumulator a parameter rather than a return.
+fn emit(value &JSON, out &var [char]) {
+	match value {
+		.NULL         -> push(&var out, "null")
+		.BOOL(b)      -> push(&var out, if b { "true" } else { "false" })
+		.INTEGER(i)   -> push(&var out, i.toString())
+		.DECIMAL(f)   -> push(&var out, f.toString())
+		.STRING(s)    -> quote(s, &var out)
+
+		.ARRAY(items) -> {
+			out.append('[')
+
+			for i in items.indices() {
+				if i > 0 {
+					out.append(',')
+				}
+
+				emit(&items[i], &var out)
+			}
+
+			out.append(']')
+		}
+
+		// FINDING 19 — insertion-ordered `Map` makes round-tripping stable,
+		// and that was decided for a different reason entirely.
+		//
+		// `collections.md` ordered `Map` so that a compile-time macro *"must
+		// emit identical code every build across all three targets"*, which
+		// `strings.md` then used as the decisive argument for scalar-wise
+		// string comparison. Neither had a serialiser in mind.
+		//
+		// The consequence here is that parse-then-write preserves key order,
+		// which no other language's JSON library gives you without a second
+		// ordered structure. It is the third unrelated thing that one
+		// decision has bought, and worth recording as evidence that it was
+		// the right one.
+		.OBJECT(fields) -> {
+			out.append('{')
+			var first = true
+
+			for { key, value as held } in fields {
+				if !first {
+					out.append(',')
+				}
+
+				first = false
+
+				quote(key, &var out)
+				out.append(':')
+				emit(&held, &var out)
+			}
+
+			out.append('}')
+		}
+	}
+}
+
+fn push(out &var [char], text string) {
+	for c in text.chars() {
+		out.append(c)
+	}
+}
+
+// FINDING 20 — escaping is where `char` being a scalar value rather than a
+// code unit pays off, and where the one thing it does not cover shows up.
+//
+// `strings.md` makes `char` *"one Unicode scalar value — a code point
+// excluding surrogates, so a `char` is always validly encodable"*. That is
+// exactly right for this loop: there is no surrogate pair to reassemble and
+// no half-character state to carry, which is the bug every JSON escaper
+// written against UTF-16 has.
+//
+// What it does not cover is `\uXXXX`. Emitting one requires the scalar's
+// numeric value and splitting it into two surrogates above U+FFFF, and
+// `strings.md` gives `char` no conversion to an integer at all. Not needed
+// here, because elp's output is UTF-8 by definition and a conforming JSON
+// parser accepts raw UTF-8 — but a strict-ASCII mode could not be written.
+fn quote(text string, out &var [char]) {
+	out.append('"')
+
+	for c in text.chars() {
+		match c {
+			'"'  -> push(&var out, "\\\"")
+			'\\' -> push(&var out, "\\\\")
+			'\n' -> push(&var out, "\\n")
+			'\t' -> push(&var out, "\\t")
+			'\r' -> push(&var out, "\\r")
+			_    -> out.append(c)
+		}
+	}
+
+	out.append('"')
+}
+
+// vim: ft=kotlin
