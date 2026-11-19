@@ -54,7 +54,8 @@ genuinely undecided thing — that `a..b` includes both ends.
 | May an expression span a line break? | `grammar-script-notes.md` — `QuadTree/types/geometry.elp` depends on the answer |
 | An exclusive range form, if `0..n - 1` reads badly after migration | `control-flow.md` |
 | A labelled `break`; a diverging `while true` | `control-flow.md` — both additive, neither wanted by a probe |
-| `xs.indices` and `reversed()` | `collections.md` — stdlib surface |
+| `indices()`, `reversed()` and `enumerated()` | `collections.md` — stdlib surface; `enumerated()` yields a record, not a pair |
+| A compound reconciliation key allocates, because there are no tuples | `control-flow.md` — first place the no-tuple decision is felt in a hot path |
 | Are `from` and `as` reserved or contextual? | `grammar-script-notes.md` |
 | Float vs range lexing — `.5` is currently illegal by accident | `grammar-script-notes.md` |
 | Destructured params do not parse | `grammar-script-notes.md` |

@@ -253,6 +253,64 @@ itself position identity, so a list of equal values gets exactly the
 fragile behaviour that keyed reconciliation was introduced to avoid, with
 nothing at the use site saying so.
 
+### A composite key is legal, and an index in one defeats the point
+
+`by` takes an **arbitrary expression** — the grammar is `'by' expr` — and
+that is deliberate, because a natural identity is often a compound:
+
+```elp
+for post in posts by "{post.authorId}-{post.slug}"
+```
+
+That is a real claim and `identity_by_value` stays silent on it, correctly.
+
+**But a key that depends on position is worse than no key at all**, and the
+shape that invites it is the one every framework's Stack Overflow answers
+recommend:
+
+```elp
+for { index, value as line } in lines.enumerated() by "{index}-{line}"
+```
+
+It stops the trap firing, and it destroys reconciliation doing it. Insert
+one line at the top and **every** subsequent key changes, so every row is a
+new row: per-row state is discarded, `animationIn` re-fires on the whole
+list, and a `lazy` column rebuilds everything it had materialised. That is
+position identity with extra steps and a string allocation per row per
+render.
+
+It is also strictly worse than the (expression, occurrence index) answer
+rejected above, which is worth noticing because the two look related. That
+one perturbs identity *only within runs of equal values* and leaves distinct
+values stable; an index in the key perturbs **all** of them. The clever
+answer was refused for being silent; this one is loud and still wrong.
+
+**So the rule is: a `by` key must not depend on position.** It is not
+statically checkable in general — the compiler cannot tell which of an
+iterator's fields is an index — so it is prose rather than a third
+mechanism, and the trap plus `identity_by_value` remain the only two
+enforcements. Stated here because the index-composite workaround is what a
+reader arrives with.
+
+**Two smaller things fall out.**
+
+`for index, line in lines` is not a form. Multi-binding `for` is **record
+destructuring** (`patterns.md`), so it is `for { index, value as line } in …`
+over an iterator that yields a record with both fields — which means an
+`enumerated()` is wanted beside `indices()` and `reversed()` as stdlib
+surface. Three now, all named by this file and designed in
+`collections.md`.
+
+And **having no tuple type costs something here that it has not cost
+before.** A compound key has to be either an interpolated `string`, which
+allocates once per row per render in the hottest construct in the language,
+or a declared `Hashable` object, which is allocation-free when `Copy` and
+three lines of declaration for a key used once. Swift and Compose both reach
+for a tuple or a data class at this exact spot. `patterns.md` decided
+against tuples for good reasons and this is the first place the decision is
+felt in a hot path; it is a point for the stdlib round rather than a reason
+to reopen it.
+
 **What elp has over all three** is worth stating, because it is the larger
 half of the problem. `by` is **mandatory**, so the common failure — no key
 at all, or `id: \.self` as a default — cannot happen here. React's `key`
@@ -307,11 +365,14 @@ this one.
 
 ## Open
 
-- **`indices()` and `reversed()`** are named here and are stdlib surface,
-  designed with the rest of it (`collections.md`). `examples/Undo` is the
-  evidence for wanting both at once — it walks a document backwards and
-  records the index of each line it deletes, so `reversed()` alone would
-  hand back lines and lose the index.
+- **`indices()`, `reversed()` and `enumerated()`** are named here and are
+  stdlib surface, designed with the rest of it (`collections.md`).
+  `examples/Undo` is the evidence for wanting the first two at once — it
+  walks a document backwards and records the index of each line it deletes,
+  so `reversed()` alone would hand back lines and lose the index. The third
+  is wanted by the composite-key discussion above, and `enumerated()` has
+  to yield a **record** with named fields rather than a pair, because there
+  are no tuples.
 - **An exclusive range form.** Only if the corpus still reads badly after
   the migration above. Kotlin's `until` is the shape.
 - **A labelled `break`.** Additive, and no corpus program wants one.

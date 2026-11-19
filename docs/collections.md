@@ -186,8 +186,12 @@ returns `nil`. One protocol covers arrays, `Map`, ranges and channels.
 
 The loop *statements* built on this — `while`, `break`, `continue`, and
 why there is no `loop` and no labels — are in `control-flow.md`. Two
-pieces of surface it names as wanted and leaves here: `indices()`, and
-`reversed()` on an iterable. `examples/Undo` wants both at once.
+pieces of surface it names as wanted and leaves here: `indices()`,
+`reversed()` and `enumerated()`. `examples/Undo` wants the first two at
+once. The third must yield a **record** with named fields, not a pair,
+because there are no tuples (`patterns.md`) — which is also why a compound
+reconciliation key has to be an interpolated `string` or a declared
+`Hashable` object, and that cost is written up in `control-flow.md`.
 
 ### Channels fall out of it
 
