@@ -21,27 +21,32 @@ import { Expr } from .types.expr
 export enum Value {
 	NUMBER { of int },
 
-	// FINDING 3 — a closure value cannot own its body, and the fix is a cell
-	// the probe did not expect to need.
+	// FINDING 3 — DISSOLVED by ratifying `indirect`, and this is what the
+	// finding looked like before it went.
 	//
 	// `evaluate` receives `&Expr` — it must, since the AST is evaluated many
 	// times and a tree-walking interpreter never consumes its input. So in the
 	// `LAMBDA` arm, `body` binds a **borrow**, and `Value.CLOSURE` needs to
 	// outlive the call. A borrow cannot be stored (`memory-model.md`: a field
-	// may not hold a borrow) and an `Expr` cannot be moved out of a `&Expr`.
+	// may not hold a borrow).
 	//
-	// `Shared<Expr>` is the only form that works: immutable, refcounted, `Copy`
-	// for any `T`. Which means **the AST must be built into cells up front**,
-	// not parsed into a plain value and then borrowed — a representation
-	// decision forced on the parser by one arm of the evaluator, and not
-	// visible from the parser's side at all.
+	// The reading at the time was that `Shared<Expr>` is the only form that
+	// works, and therefore that **the AST must be built into cells up front** —
+	// a representation decision forced on the parser by one arm of the
+	// evaluator, invisible from the parser's side.
 	//
-	// Worth noting what this does *not* need: `Shared<T>` has no `.set`, so the
-	// AST is immutable and this introduces no cycle on its own. The cycle in
-	// FINDING 4 comes from the environment, not from here.
+	// It was an artifact of `Expr` having no tier. With `indirect` ratified as
+	// an *immutable* box, `Expr` is `Copy`, so this field is a plain `Expr`,
+	// the copy out of the borrow is a pointer copy and a retain, and the parser
+	// may hand over whatever shape it likes. Kept on the page because the
+	// finding was real evidence for which half of the `indirect` decision
+	// mattered: a mutable box would have left this exactly as it was.
+	//
+	// Still true, and still why this introduces no cycle: the AST is immutable.
+	// The cycle in FINDING 7 comes from the environment, not from here.
 	CLOSURE {
 		parameter string,
-		body      Shared<Expr>,
+		body      Expr,
 		captured  Confined<Env>,
 	},
 }

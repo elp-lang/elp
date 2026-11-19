@@ -991,16 +991,22 @@ indirection. An AST is the most common recursive type any language compiles,
 and `examples/Editor` then found a second blocked program — an undo stack needs
 path-copying, which is a rope, which is this.
 
-**The proposal is a field marker, not a type.** Swift's precedent is one
-keyword: `indirect enum Expr { case binary(Expr, Expr) }`, where the marked
-case's payload is stored behind a heap allocation and the enum's own size
-becomes a pointer. The box is invisible: a pattern match binds an `Expr`, not
-a `Box<Expr>`, and there is no deref at any use site.
+**Ratified: a field marker, not a type.** Swift's precedent is one keyword:
+`indirect enum Expr { case binary(Expr, Expr) }`, where the marked case's
+payload is stored behind a heap allocation and the enum's own size becomes a
+pointer. The box is invisible: a pattern match binds an `Expr`, not a
+`Box<Expr>`, and there is no deref at any use site.
+
+### The rule
+
+`indirect` is a modifier on a **field declaration**. An enum case's payload
+entries are fields, so one rule covers both declaration forms and reads the
+same in each:
 
 ```elp
 export enum Expr {
 	LITERAL { of int },
-	indirect BINARY { op Operator, left Expr, right Expr },
+	BINARY { op Operator, indirect left Expr, indirect right Expr },
 }
 
 export object ListNode {
@@ -1008,6 +1014,50 @@ export object ListNode {
 	indirect var next Optional<ListNode>,
 }
 ```
+
+1. **It is a layout instruction, and the field's type is unchanged.** The
+   field is stored behind one allocation. A pattern match binds an `Expr`, a
+   field read yields an `Expr`, and there is no deref at any use site. The
+   marker appears in the declaration and nowhere else — not in a signature,
+   not at a call, not in a pattern.
+2. **It is required, never inferred.** A declaration whose layout does not
+   terminate is an error, `recursive_layout`, and the message names the
+   fields that would break the cycle. Inferring the box would hide an
+   allocation, and this language spells cost out: `.copy()` is explicit and
+   `Buffer<T>` is deliberately not atmospheric.
+3. **It may be written where it is not required.** On a non-recursive field
+   it moves a large payload out of line. That is not a special case; it is
+   the same instruction with no cycle to break.
+4. **The box is immutable: an indirect field may be replaced, never written
+   through.** `node.next = .SOME(other)` rebinds the field and is allowed —
+   it swaps which box this value points at, and no other holder observes it.
+   `node.next.value = 5`, and any `&var` method call on a path that passes
+   through an indirect field, is an error: `write_through_indirect`. This is
+   `Shared<T>`'s rule and it is here for `Shared<T>`'s reason.
+5. **The marker does not change the containing type's tier.** `Copy` stays
+   field-wise: an indirect field is `Copy` when its type is, because under
+   rule 4 an immutable alias is observationally identical to a copy
+   (`aliasing.md`). `.copy()` on an indirect field copies the pointer, for
+   the same reason — which answers one case of that file's open *"how deep
+   is `.copy()`"* question. If the field's type is `Move` the containing
+   type is `Move`, field-wise, and that case turns out to be the interesting
+   one: see the consequences below.
+6. **`==` compares pointees.** The box is invisible and `operators.md` has
+   no `===`, so structural comparison is the only answer consistent with the
+   rest of the marker. The implementation may short-circuit on pointer
+   equality; that is an optimisation, not a semantic.
+
+**One cost, accepted.** Swift's case-level marker boxes a whole payload once;
+a field-level marker boxes each marked field, so `BINARY` is two allocations
+where Swift's is one. The field-level rule is kept because it is one rule
+rather than two, and because a case-level form can be added later as sugar
+for "mark every field of this case" without changing what any program means
+— the same additive argument "Collections hold values, not places" uses
+above. Migrating `examples/Interpreter` priced it (that probe's finding 10:
+eight allocations for a three-node expression, against Swift's three) and
+also supplied the better answer: coalescing one case's indirect fields into a
+single allocation is invisible under rule 1, so it is a codegen choice rather
+than a second piece of syntax.
 
 ### Why a marker rather than a `Boxed<T>`
 
@@ -1076,11 +1126,19 @@ the thing it falsifies.
   cost visible — `.copy()` is explicit, `Buffer<T>` is not atmospheric. The
   diagnostic on the unmarked version is what teaches it, which is what
   `examples/Interpreter`'s FINDING 1 asks for.
-- **A copy retains, so an indirect value is unfit for a realtime body.**
-  `@abi(.C, realtime)` forbids a refcount decrement reaching zero, so an AST
-  cannot be walked on the audio thread. The same is already true of
-  `Shared<T>`, so this adds no rule — but it is worth knowing an interpreter
-  cannot be embedded in a realtime callback.
+- **Copying retains; borrowing does not.** `@abi(.C, realtime)` forbids a
+  refcount decrement reaching zero, so an indirect value may be *walked*
+  through a borrow in a realtime body but not copied into one or dropped
+  there. The same is already true of `Shared<T>`, so this adds no rule. It
+  does mean an interpreter cannot build or discard an AST on the audio
+  thread, which is the realistic version of the restriction.
+- **A `Move` chain needs no refcount at all.** Rule 5 makes a recursive type
+  whose field type is `Move` itself `Move`, so the box has exactly one owner
+  and can be a unique allocation rather than a shared one. Rule 4 still
+  applies — immutability is about the write surface, not about sharing — but
+  the realtime consequence above softens to the allocator alone, and the
+  implementation has a cheaper representation available without a second
+  marker to select it.
 - **Layout interaction.** An indirect field is pointer-sized, so a recursive
   type could satisfy `Atomic<T>`'s eight-byte requirement. Harmless, and worth
   noting so it is not mistaken for a bug when the layout pass reports it.

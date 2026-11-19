@@ -28,24 +28,44 @@ Operator implements Copy
 // making the recursive case a `class`, C++ uses a pointer, and OCaml and
 // Haskell box everything so the question never arises.
 //
-// Written without a marker — the version a person reaches for first, and the
-// one the compiler has to reject with a diagnostic that teaches the fix.
+// RESOLVED — `indirect` is ratified in `memory-model.md`, and this is the
+// migrated form. The marker is on the *field*, not on the case: an enum case's
+// payload entries are fields, so one rule covers `enum` and `object` alike,
+// at the cost of one allocation per marked field where Swift's case-level
+// marker would make one per case.
+//
+// The box is immutable, which is the load-bearing half. It leaves `Expr`
+// `Copy` — a pointer copy and a retain — and that is what dissolves FINDING 3
+// over in `runtime.elp`.
 export enum Expr {
 	LITERAL { of int },
 	NAME { of string },
 
-	BINARY { op Operator, left Expr, right Expr },
+	BINARY { op Operator, indirect left Expr, indirect right Expr },
 
 	// `LET` binds and does not permit the bound name inside its own value.
 	// `LETREC` does. Keeping them separate is what makes FINDING 4 provable
 	// rather than a matter of how the evaluator happens to be written.
-	LET { name string, value Expr, body Expr },
-	LETREC { name string, value Expr, body Expr },
+	LET { name string, indirect value Expr, indirect body Expr },
+	LETREC { name string, indirect value Expr, indirect body Expr },
 
-	LAMBDA { parameter string, body Expr },
-	CALL { callee Expr, argument Expr },
+	LAMBDA { parameter string, indirect body Expr },
+	CALL { indirect callee Expr, indirect argument Expr },
 
-	IF { condition Expr, then Expr, otherwise Expr },
+	IF {
+		indirect condition Expr,
+		indirect then Expr,
+		indirect otherwise Expr,
+	},
 }
+
+// FINDING 10 — NEW, and produced by the migration.
+//
+// Every case but two is entirely indirect, which is eight allocations for a
+// three-node expression. Swift's case-level marker would make three. The
+// field-level rule is still right — it is one rule rather than two — but this
+// file is the evidence for the sugar `memory-model.md` parks as additive, and
+// a compiler that coalesces a case's indirect fields into one allocation would
+// be invisible under rule 1 and is the better answer than new syntax.
 
 // vim: ft=kotlin

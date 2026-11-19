@@ -18,7 +18,15 @@ export object Entry<T> {
 	const value T,
 }
 
-// GAP 1 — a recursive value type has no size.
+// GAP 1, RESOLVED — and this file turned out not to be its evidence.
+//
+// `indirect` is ratified in `memory-model.md`: a field-level marker over an
+// immutable box, required and never inferred. Nothing changes *here*, because
+// `tree-places.elp` FINDING 1 found that `QuadNode<T>` lays out fine without
+// it — both variants hold an array, an array is a growable heap buffer, so
+// the indirection is already present. The gap was real; this was the wrong
+// program to raise it against, and `examples/Interpreter`'s `Expr` is the one
+// that actually has no escape. The original text is kept below.
 //
 // A node is either a leaf holding entries or a branch holding four more
 // nodes. Written as a value type this is infinite: a BRANCH contains four

@@ -994,7 +994,16 @@ any type holding one is not `Copy` either, transitively, all the way up.
 `examples/Sheet` has four levels of it — `Style` → `Cell` → `Row` →
 `Sheet` — and no rule says so four times. One rule applies four times.
 
-Four precisions, because each one catches somebody:
+Five precisions, because each one catches somebody:
+
+**An `indirect` field is read through to its type.** The marker is a layout
+instruction, not a type (`memory-model.md`), so field-wise sees the field's
+declared type and nothing else: `indirect left Expr` is `Copy` exactly when
+`Expr` is. It is only sound because that file ratified the box as
+**immutable** — a mutable box would be `Confined`-shaped and would have to
+block `Copy` like any other cell. This is the same argument that makes
+`Shared<T>` `Copy` for any `T`, arriving a second time from a different
+direction, which is some evidence it is the right argument.
 
 **A field may not hold a borrow.** `&T` is unconditionally `Copy`
 (`memory-model.md` Finding 6), which is harmless inside a call and not
@@ -1465,7 +1474,12 @@ while `.copy()` would have had one that looked identical in both cases.
   and unproven.
 - **How deep is `.copy()`?** Conditional conformance gives the rule
   (`[T]` is `Duplicate` when `T` is `Copy` or `Duplicate`), but whether a
-  nested structure duplicates at every level or one needs stating.
+  nested structure duplicates at every level or one needs stating. One case
+  is now answered: an `indirect` field copies the pointer and stops, because
+  `memory-model.md` ratified the box as immutable and an immutable alias is
+  observationally identical to a copy — the same argument that makes
+  `Shared<T>` `Copy` for any `T`. That is the whole of the recursive case,
+  which was the hard one.
 - **Can a type be `Copy` and `Duplicate` both?** It should not need to
   be, and overlapping tiers should be a diagnostic rather than a silent
   precedence rule.

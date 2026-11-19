@@ -100,11 +100,13 @@ export fn evaluate(expr &Expr, env &Confined<Env>) -> Either<Value, EvalError> {
 			evaluate(body, &scope)
 		}
 
-		// FINDING 3's consequence at the site that forces it: `body` is
-		// borrowed out of `expr`, and `Value.CLOSURE` must outlive this call.
+		// This was FINDING 3's cost site: `body` is borrowed out of `expr` and
+		// `Value.CLOSURE` must outlive the call, which used to force
+		// `Shared<Expr>.new(body)` here and a cell-built AST everywhere else.
+		// With `indirect` ratified it is a field initialiser and nothing more.
 		.LAMBDA { parameter, body } -> Ok(Value.CLOSURE {
 			parameter,
-			body     = Shared<Expr>.new(body),
+			body,
 			captured = env.alias(),
 		})
 

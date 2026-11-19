@@ -254,10 +254,20 @@ deep generics all target a compiler that does not exist; they belong in
 requires an `examples/` file to *fail* parsing, so they would assert
 nothing here.
 
-### Recursive value types have no spelling
+### ~~Recursive value types have no spelling~~ — resolved
 
 The largest hole any probe has found, and it was not on the suggested
 list.
+
+**Resolved** in `memory-model.md`, "A recursive value type needs an
+indirection, not a box": `indirect` is a modifier on a field declaration,
+required and never inferred, and the box is immutable — so the field's type
+is unchanged, the containing type's tier is unchanged, and no type is added
+to the language. Two corrections the probe below made to this entry before
+it was closed: `QuadNode<T>` is **not** evidence for the gap (both variants
+hold an array, so the indirection is already there), and the evidence that
+closed it is `examples/Interpreter`'s `Expr`, which holds two `Expr`
+directly.
 
 ```elp
 export enum QuadNode<T> {
@@ -1464,14 +1474,16 @@ an intent either way. `nil` is used here.
 
 A tree-walking interpreter for a seven-form expression language, written to
 decide the question §12 recommended closing. **It reverses that
-recommendation.** Nine findings:
+recommendation.** Nine findings, plus a tenth from migrating it onto
+`indirect`:
 
 1. **GAP 1's real evidence, at last.** `Expr.BINARY` holds two `Expr`
    *directly*, so `size(Expr) = tag + 2 * size(Expr)` has no finite solution
    and there is no array anywhere to supply the indirection. §7b's recursive
    value type was raised against `examples/QuadTree`, whose enum lays out fine
    (`tree-places.elp` FINDING 1). An AST is the most common recursive type any
-   language compiles.
+   language compiles. **Ratified** as `indirect`, a field-level marker over an
+   immutable box (`memory-model.md`).
 
 2. **Mutually recursive types force one module.** `Value.CLOSURE` holds a
    `Confined<Env>` and `Env` holds a `Map<string, Value>`, so the no-cycles
@@ -1486,7 +1498,10 @@ recommendation.** Nine findings:
    borrow, and a field may not hold one. `Shared<Expr>` is the only form that
    works, which means **the AST must be built into cells up front**: a
    representation decision forced on the parser by one arm of the evaluator,
-   invisible from the parser's side.
+   invisible from the parser's side. **Dissolved by finding 1's ratification.**
+   An immutable `indirect` leaves `Expr` `Copy`, so `CLOSURE { body Expr }`
+   stores a copy of a borrow's referent and the parser is left alone. One
+   decision closed two findings, which is the argument for taking it first.
 
 4. **A non-recursive `let` needs no mutation at all**, which is what makes the
    rest decisive rather than an artifact. `LET` evaluates its value in the
@@ -1533,6 +1548,14 @@ recommendation.** Nine findings:
    and recovering them means walking reachability over indices, i.e. a tracing
    GC hand-written inside the interpreter. CPython refcounts *and* ships a
    cycle collector for exactly this shape; Lua, Ruby and the JVM trace.
+
+10. **Field-level `indirect` is allocation-heavy on an AST**, found while
+    migrating this probe onto the ratified marker. Every `Expr` case but two
+    is entirely indirect, so a three-node expression is eight allocations
+    where Swift's case-level marker makes three. The field-level rule stands
+    — one rule rather than two — but the fix is a compiler that coalesces one
+    case's indirect fields into a single allocation, which rule 1 makes
+    invisible, rather than the case-level sugar `memory-model.md` parks.
 
 **Verdict: `Weak<T>` is mandatory.** §12's reasoning was sound and its evidence
 too narrow — a spreadsheet graph's ownership is a tree once handles are
@@ -1627,6 +1650,9 @@ A text document with undo, on a payload where the difference is one keystroke.
    read-only descent non-quadratic), but it is **not** the answer to the
    `Duplicate` row for a value that is deliberately snapshotted. An undo stack
    needs GAP 1 answered, and GAP 1 is now blocking two unrelated programs.
+   **GAP 1 is now answered** (`indirect`), so the rope is writable — and rule 4
+   of that answer, the immutable box, is exactly what a persistent structure
+   wants, since path-copying never writes through a shared node.
 
 ## Suggested order
 

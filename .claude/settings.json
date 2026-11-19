@@ -1,0 +1,6 @@
+{
+  "enabledPlugins": {
+    "engineering-skills@claude-code-skills": true,
+    "rust-skills@rust-skills": true
+  }
+}
