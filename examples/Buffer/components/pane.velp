@@ -41,9 +41,9 @@ component Pane {
 		// `.get()` is written explicitly because the handle is not a
 		// collection and `for` needs a materialised one with a `by`
 		// identity.
-		// Same hazard as `examples/Undo/main.velp`: `by line` over a
-		// `[string]` collapses duplicate lines. Kept, flagged, and it is the
-		// second sighting.
+		// Same as `examples/Undo/main.velp`: `by line` over a `[string]`, so
+		// `identity_by_value` warns here and a duplicate line traps at
+		// runtime (`control-flow.md`). Second sighting, kept as evidence.
 		for line in view.buffer.lines.get() by line {
 			Text(line)
 		}

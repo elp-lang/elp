@@ -124,6 +124,28 @@ error, so a new variant can only ever arrive through a deliberate
 upgrade. The break is visible and informative at the moment you choose
 it. A lint flags the exposure; it does not forbid it.
 
+### `identity_by_value` — warn by default
+
+A markup `for` whose `by` expression is the loop binding itself, with no
+projection: `for line in lines by line`.
+
+`by` asserts that the key is unique within the list, and keying on the
+value asserts that no two elements are equal — which for a `[string]` is
+usually false and silently collapses two rows into one. A duplicate key
+**traps** at runtime (`control-flow.md`), and this is the compile-time half:
+the shape that is almost always a false claim is statically visible even
+though uniqueness is not.
+
+Narrow by construction — it cannot fire on `by post.id` or `by
+row.category`, which are projections and therefore real claims — and a lint
+rather than an error because the claim is occasionally true, as for a list
+of distinct tags keyed by the tag.
+
+Two corpus sites make the false claim today (`examples/Undo`,
+`examples/Buffer`), and in both the real fix is a stable line identity
+rather than a different key, which is why the lint points at a
+representation problem rather than a typo.
+
 ### Not a lint
 
 An exhaustive match with no catch-all over your own enum is correct
@@ -139,6 +161,7 @@ Scattered through the other docs, collected here so they have a home:
 |---|---|---|
 | extra fields in a structural projection are truncated | `generics.md`, and a comment in `ChatRoom/main.velp` | lint — `truncated_projection` |
 | a turn exceeds the frame budget | `reactivity.md` | runtime diagnostic |
+| a duplicate `by` key in a markup `for` | `control-flow.md` | **trap** — the same register as an out-of-bounds `[]` |
 
 `grammar-script-notes.md` also contains a deliberate *rejection* of a
 lint: accessibility state is derived from props rather than passed

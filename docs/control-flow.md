@@ -198,6 +198,74 @@ Rejected, for four reasons that stack:
    React's `key` is optional and therefore forgotten; a derived key would be
    automatic and therefore wrong without a line to point at.
 
+### What happens when a `by` key repeats
+
+Found by the corpus sweep, which turned up two programs claiming
+`for line in lines by line` over a `[string]` — so two blank lines are one
+row. Worth settling by looking at the two frameworks this model is drawn
+from, because they took opposite answers and neither is quite right.
+
+| | what it does on a duplicate key |
+|---|---|
+| **SwiftUI** | `ForEach(data, id: \.self)` logs a runtime warning naming the duplicated ID and saying *results will be undefined*. It does not crash. Rows look identical and per-row state attaches to whichever one the diff happened to match. |
+| **Jetpack Compose** | `LazyColumn` throws `IllegalArgumentException: Key "x" was already used`. One duplicate crashes the list. |
+| **React** | a console warning, and the same undefined association as SwiftUI. |
+
+Neither can check it statically, and neither can elp: uniqueness is a
+property of the data, not of the expression.
+
+**Decided: a duplicate key traps**, in the same register as an
+out-of-bounds `[]` or an `update` on a missing key. That is Compose's
+answer, and it is the only one compatible with a language that refuses
+undefined results anywhere else. `by` is an **assertion of uniqueness**;
+the assertion is checkable at exactly the moment it matters; and a false
+assertion is a defect rather than a degraded mode. SwiftUI's warning is
+the register this design rejects — it makes the program keep running while
+quietly attaching state to the wrong row, which is the hardest class of UI
+bug to find.
+
+**Plus a lint, `identity_by_value`, warn by default.** The trap is the
+soundness floor and it fires at runtime; the shape that is *almost always*
+a false claim is statically visible, so it gets a compile-time diagnostic
+too:
+
+```elp
+for line in lines by line        // identity_by_value — the key is the value
+for name in names by name        // same
+for post in posts by post.id     // silent
+for row in rows by row.category  // silent — a projection, and a real claim
+```
+
+The lint fires when the `by` expression is the loop binding itself, with
+no projection. That is narrow by construction and it catches both corpus
+sites at compile time. It is a lint rather than an error because the claim
+is occasionally true — a list of distinct tags keyed by the tag is fine —
+and `diagnostics.md` keeps "correct today, risky in general" in exactly
+this register.
+
+**And one clever answer, rejected deliberately**, because somebody will
+propose it: make duplicates *well-defined* by keying on the pair
+(expression, occurrence index), so equal values are disambiguated by order.
+It works, it costs one counter in the reconciler, and no framework does it.
+It is refused because it makes a **false claim silently succeed**, which is
+the one property `by` exists to deny — and because the disambiguation is
+itself position identity, so a list of equal values gets exactly the
+fragile behaviour that keyed reconciliation was introduced to avoid, with
+nothing at the use site saying so.
+
+**What elp has over all three** is worth stating, because it is the larger
+half of the problem. `by` is **mandatory**, so the common failure — no key
+at all, or `id: \.self` as a default — cannot happen here. React's `key`
+is optional, Compose's is optional, and SwiftUI's `\.self` overload is the
+path of least resistance. The duplicate case is what is left *after* that
+is fixed, and it is the smaller one.
+
+**And the corpus sites are kept**, flagged, rather than contorted. Both
+want a line identity that survives editing, which is a rope's node
+identity — `examples/Editor` FINDING 5, now with a third program pointing
+at it. Writing `by index` instead would be a different false claim, since
+an index moves when a line above it is deleted.
+
 So `by` stays, mandatory, in markup context only. What the question does
 land on correctly is that `by` is *noise in the common case* — and the
 cheapest honest answer to that is the one already available: `by` takes any

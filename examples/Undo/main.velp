@@ -77,8 +77,19 @@ component App {
 
 		TextInput(&draft, placeholder = "New line", onSubmit = addLine)
 
-		// GAP — keying by the value, and `control-flow.md` argues this exact
-		// case against deriving identity from a type. `document.lines` is
+		// GAP, RESOLVED as a diagnostic rather than as code — and this site
+		// is why the diagnostic exists.
+		//
+		// `control-flow.md` now settles what happens when a `by` key repeats:
+		// it **traps**, the way Compose crashes a `LazyColumn` on a duplicate
+		// key rather than the way SwiftUI warns and carries on with undefined
+		// row identity. And `diagnostics.md` adds `identity_by_value`, which
+		// fires on exactly this shape — a `by` expression that is the loop
+		// binding with no projection — so this line is a compile-time warning
+		// and a runtime trap the first time a document holds two equal lines.
+		//
+		// Kept rather than contorted, because the honest fix is not a
+		// different key. `document.lines` is
 		// `[string]`, so two identical lines collapse into one row: the
 		// reconciler cannot tell them apart, and an editor is the program
 		// most likely to contain two blank lines.

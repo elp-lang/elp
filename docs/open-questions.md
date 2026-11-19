@@ -176,12 +176,13 @@ surface list.
   field, readable by macros, used by the old corpus and absent from
   `macros.md`. Its stated job is what `@CodeGen(Codec<JSON>)` does. Owner:
   `macros.md`.
-- **Keying a markup `for` by the element's own value.** `by line` over a
-  `[string]` collapses duplicates, and `examples/Undo` and
-  `examples/Buffer` both do it. Not a language gap — the claim is explicit
-  and wrong, which is what `control-flow.md` says `by` is for — but it is
-  the first case where the corpus makes a false one. Owner:
-  `core-language-probes.md`, with `examples/Editor` FINDING 5.
+- ~~**Keying a markup `for` by the element's own value.**~~ **Decided** in
+  `control-flow.md`, after looking at what SwiftUI and Compose do: a
+  duplicate key **traps**, which is Compose's answer and the only one
+  compatible with refusing undefined results, plus a new lint
+  `identity_by_value` for the statically visible shape. The two corpus
+  sites are kept as evidence; their real fix is a rope's node identity
+  (`examples/Editor` FINDING 5, third program).
 - **Objective-C interop.** `@external(.OBJC)` was used and only `.C` is
   designed. Owner: `functions.md`.
 
