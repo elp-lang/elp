@@ -12,15 +12,22 @@ Written after a scan of `docs/` on 2026-11-19, which found eleven stale
 entries, five questions recorded in more than one place with no owner, and
 three load-bearing things with no design at all.
 
-## The three with no design at all
+## The three with no design at all — all three now designed
 
-These are not "open" in the ordinary sense. They are depended on by decided
-work and have nothing written down.
+These were not "open" in the ordinary sense. They were depended on by
+decided work and had nothing written down. All three are closed; the rows
+are kept because the shape of the gap is worth recognising next time.
+
+Two of the three were assumed to need more machinery than they did. `pure`
+was assumed to need an effect system and needs a checked bit;
+`Protected<T>` was assumed to be compiler-enforced and is a short
+conformance list. Loops were the opposite — mostly already decided, in
+three other files, and never gathered.
 
 | | depended on by | state |
 |---|---|---|
 | ~~**`pure`**~~ | — | **Designed**, in `functions.md`, "`pure`, and the two body properties". A declared bit, checked against a closed set of operations, propagated call-wise — no effect system, by the same pattern that makes `Copy` field-wise. What it left behind is smaller and listed below. |
-| **`Protected<T>`** | `memory-model.md`'s worked example, `functions.md`'s signatures, `generics.md`'s evidence table, the original corpus | `aliasing.md` says only what it is *not* ("not a peer of these three, it is a compiler-enforced access restriction"). What it restricts, and how, is nowhere. |
+| ~~**`Protected<T>`**~~ | — | **Designed**, in `aliasing.md`, and it needs no privilege: every leak is closed by an absent conformance, so it is plain elp. `Duplicate`, never `Copy`; `.expose()` is the one way out and the one thing to grep for. |
 | ~~**Loops**~~ | — | **Designed**, and they have an owner at last: `control-flow.md`. `while`, `break` and `continue` exist; `loop` and labels do not. `a..b` includes both ends, which was never decided either. |
 
 `Protected<T>` is the one left. `pure` was taken first, for the reason given
@@ -123,6 +130,19 @@ genuinely undecided thing — that `a..b` includes both ends.
   and cannot be declared so. Revisit when a corpus program wants it.
 - **The evaluator's step budget** — a number and a diagnostic, now that
   `pure` is known not to imply termination. Owner: `macros.md`.
+
+## What `Protected<T>` being designed left open
+
+- **A diagnostic attribute on a declaration**, so a library can say what a
+  missing conformance *means* — Rust's `#[diagnostic::on_unimplemented]`.
+  `Protected<T>` is the first customer and `stdlib-boundary.md` notes it is
+  the bucket-1 feature that keeps two types out of bucket 2. Unowned.
+- **What string interpolation accepts.** The corpus interpolates primitives
+  directly and calls `.toString()` for everything else, consistently, and
+  `strings.md` does not say so. `Protected<T>`'s first leak row depends on
+  it. Owner: `strings.md`.
+- **`expose_protected`** is a named lint and wants a default level, which
+  is `diagnostics.md`'s standing open item arriving with a customer.
 
 ## Migration backlog created by the write-surface round
 

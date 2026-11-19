@@ -54,9 +54,14 @@ export fn LoginForm -> Component {
 		// an `isNil()` test: a call between the test and the use would end
 		// the turn and another turn could clear it (operators.md, "The
 		// amendment: a call ends the turn").
+		// MIGRATED — `callback(email, password)`. `aliasing.md` makes
+		// `Protected<T>` **`Duplicate`, never `Copy`**, so handing the secret
+		// to a callback is an explicit `.copy()`: a second copy of a password
+		// is a decision, and this is the site that makes it. `email` is
+		// `Optional<string>` and `string` is `Copy`, so it needs nothing.
 		return match onSubmit {
 			nil      -> throw LoginError.NO_HANDLER
-			callback -> callback(email, password)
+			callback -> callback(email, password.copy())
 		}
 	}
 

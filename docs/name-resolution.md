@@ -205,7 +205,7 @@ name meaningful to you.
 | `Copy`, `Move`, `Sendable` | the compiler enforces conformance and reports failure by name |
 | `Equatable`, `Comparable`, `Add`, `Sub`, `Mul`, `Div`, `Rem`, `Neg`, `Index` | what `==`, `<`, `+`, `-`, `*`, `/`, `%`, unary `-` and `a[i]` desugar to (`operators.md`) |
 | `Ordering` | what `compareTo` returns, so `<` lowers through it |
-| `Protected` | compiler-enforced secrecy, not a library wrapper |
+| `Protected` | the compiler names it in the conformance error that *is* its secrecy (`aliasing.md`) |
 | `Component` | "a component returns `Component` or nil" is a compiler rule |
 | `StyleSheet` | what a `stylesheet { }` block evaluates to |
 | `PureFn`, `ImpureFn` | the types `fn` and `pure fn` introduce |

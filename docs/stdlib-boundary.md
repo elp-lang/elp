@@ -120,6 +120,23 @@ this file, because the two candidate answers sit in different buckets.
 The second is smaller *and* barer, and the fact that it is a language feature
 is the reason. That is the rule working.
 
+**And it worked twice.** `Protected<T>` was recorded in two documents as
+compiler-enforced, which put it in bucket 2 by assumption rather than by
+argument. Walking the threat list showed every leak is closed by a
+conformance that is simply *absent* — no renderer, no `Codec`, no
+`Hashable`, no `Equatable`, not `Copy` — so it is bucket 3, ordinary elp,
+competing with nothing. See `aliasing.md`, "`Protected<T>` — secrecy, and it
+needs no privilege at all".
+
+What it does want is a **better message** than "no conformance `Codec` for
+`Protected<string>`" when someone tries to serialise a password. That is not
+a privilege: Rust solves it with `#[diagnostic::on_unimplemented]`, an
+attribute any library may write. So the pattern to notice is that the two
+candidates for bucket 2 this session both dissolved into bucket 3 plus a
+small bucket-1 feature — `indirect` for one, a diagnostic attribute for the
+other. The bucket-1 feature is additive and unowned; it is recorded in
+`open-questions.md` rather than designed here.
+
 Designed in `memory-model.md`, "A recursive value type needs an indirection,
 not a box".
 

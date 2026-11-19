@@ -1070,7 +1070,7 @@ runtime.
 | | duplication | independence | examples |
 |---|---|---|---|
 | `Copy` | implicit | independent | primitives, **`string`**, `Cursor`, `Money`, `Point`, `JobId`, `Value`, **`Shared<T>` for any `T`**, a type with an `indirect` field |
-| `Duplicate` | explicit, via `.copy()` | independent, possibly deep | `[T]`, `Row`, `Sheet` |
+| `Duplicate` | explicit, via `.copy()` | independent, possibly deep | `[T]`, `Row`, `Sheet`, **`Protected<T>`** |
 | `Move` | exclusive transfer — the source is dead | | everything else that opts in, **`Confined<T>`**, **`Synchronized<T>`** |
 
 `Duplicate` is the row the first draft missed, and the corpus had been
@@ -1259,6 +1259,100 @@ const b = self.lines.alias()     // two handles, one cell
 
 Which is `examples/Undo`'s GAP 3 with an answer rather than a gap, and
 the `.alias()` calls are where the sharing gets written down.
+
+## `Protected<T>` — secrecy, and it needs no privilege at all
+
+This document said only what `Protected<T>` is *not*: *"a compiler-enforced
+access restriction, not duplication semantics, and the tables above should
+not be read as including it."* That was four documents' worth of use resting
+on a sentence about what it isn't, and `open-questions.md` listed it as one
+of three load-bearing things with no design.
+
+Its one corpus use is `examples/ChatRoom`'s login form, which holds
+`var password Protected<string>` and passes it to a submit callback typed
+`fn(string, Protected<string>)`. The threat is ordinary and the corpus is
+the right shape for it: a password that must not end up in a log, a crash
+report, a URL, a cache key or an analytics payload.
+
+### The finding: it is plain elp
+
+`name-resolution.md` calls it *"compiler-enforced secrecy, not a library
+wrapper"*, and that turns out to be wrong in the useful direction. Go
+through what a secret has to survive, and every one is closed by a
+**conformance that is simply absent**:
+
+| leak | what stops it |
+|---|---|
+| `log(password)`, `"{password}"` | no conformance that renders a value, and no `toString` method |
+| `encode(credentials)` | no `Codec`/`To` conformance, so a `@CodeGen` derive over a record containing one fails at compile time |
+| `map.set(password, …)` | no `Hashable` |
+| `if password == guess` | no `Equatable` — `.constantTimeEquals(&Self) -> bool` is the method, and it is better anyway |
+| silent duplication | not `Copy` |
+
+None of that needs a compiler. `aliasing.md`'s own rule is that `Copy` is
+**declared**, with field-wise eligibility as a necessary condition rather
+than a sufficient one, so a type that never declares it never gets it. The
+rest is a small method surface and a short conformance list.
+
+So `Protected<T>` is **bucket 3** in `stdlib-boundary.md`'s terms: ordinary
+elp, writable by anyone, competing with nothing. That is the second time
+this session a thing assumed to need privilege did not — `indirect` was the
+first — and it is the file's rule working twice.
+
+### The surface
+
+```elp
+export object Protected<T> {
+	const value T,
+}
+
+fn Protected<T>.of(value T) -> Self
+fn Protected<T>.expose(&self) -> &T
+fn Protected<T>.constantTimeEquals(&self, other &Self) -> bool
+```
+
+1. **`Duplicate`, never `Copy`**, conditional on `T` being `Copy` or
+   `Duplicate`. This is `.copy()`/`.alias()`'s argument applied to secrecy:
+   *"what is refused is silent duplication, not duplication."* Every
+   additional copy of a secret is a decision somebody wrote down.
+2. **`Sendable` when `T` is**, and `Move` when `T` is. Field-wise, no new
+   rule.
+3. **`.expose()` is the only way out, and it is named to be greppable.**
+   Rust's `secrecy` crate reached the same conclusion with
+   `expose_secret()`. One name, one audit.
+4. **`expose_protected` is a lint**, allow by default, so a package that
+   must never expose can set it to `deny` in its manifest — which is
+   exactly the configurability `diagnostics.md` was designed for, used for
+   the first time by something real.
+
+### What it does not promise
+
+- **No zeroing on drop.** It is `Duplicate`, so copies exist and zeroing
+  one proves nothing; elp has no destructor, and `Scoped` is bound to a
+  block while a secret in a reactive cell is not. A type that genuinely
+  wanted zeroing would be `Move` plus `Scoped`, which is a different type
+  with a worse API, and no corpus program has asked for it.
+- **Nothing about a debugger, a core dump or the allocator.** Those are
+  outside any language-level mechanism and saying so is better than
+  implying otherwise.
+
+### Two dependencies, one of them undocumented
+
+**It stays in the prelude, for a different reason than recorded.**
+`name-resolution.md`'s criterion is *"a type is atmospheric if the compiler
+can name it in a diagnostic without your help"*, and the row's stated reason
+— compiler-enforced secrecy — is now false. It passes anyway: the compiler
+names it in the conformance error it produces for every row of the leak
+table. The outcome survives; the justification is replaced.
+
+**And the first row of that table rests on something no document states.**
+The corpus interpolates primitives directly (`"task-{i}"`) and calls
+`.toString()` explicitly for everything else (`"{e.toString()}"`,
+`"{row.total.toString()}"`), consistently, across every file. If
+interpolation ever accepts an arbitrary value through a conformance, a
+`Protected<T>` must not satisfy it. Recorded here because this type is the
+first thing whose correctness depends on that rule, and `strings.md` does
+not state it.
 
 ## `Sendable`, and the premise under conditional conformance
 
@@ -1693,11 +1787,9 @@ while `.copy()` would have had one that looked identical in both cases.
 - **Can a type be `Copy` and `Duplicate` both?** It should not need to
   be, and overlapping tiers should be a diagnostic rather than a silent
   precedence rule.
-- **`Protected<T>` is not a peer of these three** — it is a
-  compiler-enforced access restriction, not duplication semantics, and the
-  tables above should not be read as including it. **And that is the only
-  thing any doc says about it.** It appears in `memory-model.md`'s worked
-  example, in `functions.md`'s signatures, in `generics.md`'s evidence
-  table and in the original corpus, and what it restricts and how is
-  written down nowhere. Recorded in `open-questions.md` as one of three
-  load-bearing things with no design.
+- ~~**`Protected<T>` is not a peer of these three.**~~ It is still not a
+  peer — it is an access restriction rather than duplication semantics —
+  but it is **designed** now, above, and the "compiler-enforced" half of
+  the old sentence was wrong: it is ordinary elp, and its secrecy is a
+  short conformance list rather than a compiler rule. It does have a tier,
+  `Duplicate`, which is the one thing the tables above should include.
