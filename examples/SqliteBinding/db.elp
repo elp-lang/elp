@@ -73,18 +73,27 @@ Connection implements Move
 // Three candidates were on the table: a `Drop`-shaped interface, which
 // reaches well past FFI and needs liveness tracking on every path;
 // `@MustUse`-style linting, which catches the common case and nothing else;
-// and the scoped form, which won.
+// and a scoped form, which won and was then deleted.
 //
-//   with Connection.open(path)? as db {
-//       db.prepare("select 1")
-//   }
+// MIGRATED — the scoped form was `with Connection.open(path)? as db { }`,
+// and `memory-model.md` deleted it on 2026-11-20. `release` takes `&self`,
+// and release is:
 //
-// `memory-model.md` records why it is affordable: release is tied to a brace
-// in the source rather than to a value's lifetime, so there are no drop
-// flags, no moved-out analysis and no drop glue — a value not bound by a
-// `with` is simply never released. `examples/VulkanTriangle` is what made it
-// urgent, because its five-deep handle tree needs release *ordering* and
-// reverse-order release gives that for free.
+//   const db = Connection.open(path)?
+//   defer db.release()
+//
+// `defer` already ran on normal exit, cancellation unwind and panic unwind,
+// and already ran LIFO. The whole keyword rested on `release` taking `self`
+// by value, which a `defer` cannot schedule without liveness tracking —
+// and by-value release was what the keyword was *for*.
+//
+// So of the three original candidates the one that survives is the second:
+// at-least-once release is a **lint**, not a guarantee. That was rejected
+// in November as *"catches the common case and nothing else"*, and it is
+// now the only candidate — with the observation that a `Scoped` type never
+// bound by a `with` was never released either, so nothing was ever
+// guaranteed. This package is the evidence: it declared the conformance for
+// eleven days with no call site at all.
 export fn Connection.open(path string) -> Either<Self, DbError> {
 	// GAP 2, RESOLVED — there is no `unsafe` marker, because `@external` is
 	// the marker.
@@ -121,50 +130,53 @@ export fn Connection.open(path string) -> Either<Self, DbError> {
 	}
 }
 
-// `Scoped` is what `with` calls at every exit from a block, so GAP 1 below
-// is answered: a `Connection` acquired by a `with` is released on every path
-// out of it, including the error paths.
+// `Scoped` is a **marker** since the keyword was deleted: it names the
+// obligation and gives the at-least-once lint something to key on, and
+// nothing calls it for you. GAP 1 below is answered by the `defer` in
+// `execute`, which runs on every path out — including the three `?`.
 Connection implements Scoped
 
 // FIXED — `Connection implements Scoped` had **no construction site
-// anywhere in the corpus**, so by scoped release's own rule (*"a value not
-// bound by a `with` is never released"*) nothing in this package could ever
-// release a connection. Not a leak in running code, because nothing ran:
-// an unexercised conformance, which is worse in a design corpus than a leak
-// would be in a program.
-//
-// Five types declare `Scoped` and, before this, exactly one `with` block
-// existed — in `examples/VulkanTriangle/main.elp`, binding three of them.
-// This package was one of the three probes that asked for the construct.
+// anywhere in the corpus** for eleven days, which is how a ratified-looking
+// construct came to have five conformances and one call site. Not a leak in
+// running code, because nothing ran: an unexercised conformance, which in a
+// design corpus is worse than a leak would be in a program.
 //
 // `execute` is the smallest honest consumer: sqlite's own `sqlite3_exec` in
-// elp's shape. It is also the first corpus code where `with` and `?` appear
-// together, which is the combination `memory-model.md` says the construct
-// depends on for ergonomics.
+// elp's shape. It is also the first corpus code where release and `?` meet,
+// and the deletion of `with` makes that a non-question — `defer` is
+// specified to run on every exit, and a `?` is an early return, so the
+// three `?` below each release the connection on the way out. Under the
+// keyword this needed a rule; now it needs none.
 export fn execute(path string, sql string) -> Either<bool, DbError> {
-	with Connection.open(path)? as db {
-		// GAP — `?` inside a `with` block, and nothing says what happens.
-		//
-		// `memory-model.md`'s open item reads *"early `return` out of a
-		// `with` block releases and then returns, which is the intent"*, and
-		// `?` is an early return the reader cannot see (`error-handling.md`).
-		// So the release has to run on the `?` path too. It should, by the
-		// same rule, and the rule was written before `?` existed — this is
-		// the first site where the two meet.
-		var statement = db.prepare(sql)?
-		const stepped = statement.step()?
-		statement.finalize()?
+	const db = Connection.open(path)?
+	defer db.release()
 
-		return Ok(stepped)
-	}
+	var statement = db.prepare(sql)?
+
+	// GAP — two ways to finish a statement, and `defer` makes the choice
+	// visible rather than making it for you.
+	//
+	// `finalize` returns `Either` and `release` returns nothing, which is
+	// the open *"whether `release` may fail"* question arriving in code.
+	// Written with the fallible one, because a caller of `execute` wants to
+	// know. A `defer statement.release()` would be the other answer and
+	// would silently drop the status — which is precisely the thing a
+	// construct calling `release` for you would have done invisibly.
+	const stepped = statement.step()?
+	statement.finalize()?
+
+	return Ok(stepped)
 }
 
-export fn Connection.release(self) {
+export fn Connection.release(&self) {
 	// GAP — `release` returns nothing and `sqlite3_close` returns a status,
 	// so a failing close is silently dropped. That is Rust's problem with
 	// `Drop` too, and it is why `close` below still exists returning
-	// `Either`. Whether both may coexist, and which one `with` calls, is the
-	// open question in `memory-model.md`'s scoped-release section.
+	// `Either`. The question *"which one does the construct call"* is gone
+	// with the construct: the author now picks one at the call site, which
+	// is the one improvement the deletion makes to this question rather
+	// than to the mechanism.
 	sqlite3_close(self.handle)
 }
 

@@ -710,9 +710,12 @@ cannot answer **even in principle**.
 3. **`Move` gives at-most-once release, never at-least-once.** A dropped
    `Connection` leaks the C allocation and nothing notices. elp has no
    destructors, no `defer`, nothing at scope exit. The smallest candidate
-   is a scoped form (`with Connection.open(path) as db { ... }`) — and it
-   is worth noting that `Synchronized<T>`'s `update`/`read` are the same
-   shape, a resource borrowed for one block, arrived at independently.
+   is a scoped form — and it is worth noting that `Synchronized<T>`'s
+   `update`/`read` are the same shape, a resource borrowed for one block,
+   arrived at independently. **Answered**, and with less than this probe
+   assumed: `defer db.release()`, where `release` takes `&self`. A
+   statement form was designed and then deleted; `memory-model.md`,
+   "Release".
 4. **A borrow invalidated by an unrelated call cannot be typed.**
    `sqlite3_column_text` returns a pointer killed by the next `step` on
    the same statement. elp's borrows are scoped to a single call — whether
@@ -987,12 +990,18 @@ A scoped form was reached for independently by `SqliteBinding`
 handle-less `init`/`terminate`), and noted in `aliasing.md` as the same
 shape as `Synchronized<T>`'s `update`/`read`.
 
-**Designed** in `memory-model.md`, "Scoped release": `with expr as x { }`,
-with multiple bindings released in reverse, and a `Scoped` interface whose
-`release(self)` the compiler calls at every exit. It is scoped release
-rather than RAII — release is tied to a brace in the source, not to a
+**Answered** in `memory-model.md`, "Release", and the answer went through
+a construct on the way to not needing one. `with expr as x { }` was
+designed — multiple bindings released in reverse, a `Scoped` interface
+whose `release(self)` the compiler called at every exit — and deleted
+eleven days later, because the whole keyword rested on `release` taking
+`self` by value. With `release(&self)`, `defer x.release()` is the answer
+and `defer` already existed. It is release at a brace rather than RAII —
+release is tied to a statement in the source, not to a
 value's lifetime, so there are no drop flags, no moved-out analysis and no
-drop glue, and a value not bound by a `with` is simply never released.
+drop glue, and a value whose `release` nobody calls is simply never
+released — which is the hole that outlived the construct, and is why
+at-least-once is now a lint.
 
 Three things it settled that were not the headline:
 
@@ -1021,7 +1030,7 @@ And three it did not:
   permutation.
 - **Borrowed handles derived from a released resource.**
   `Glfw.release` invalidates every `Monitor`, which are `Copy` and were
-  never bound by a `with`. `aliasing.md`'s validity gap, seen from the
+  whose `release` nobody calls. `aliasing.md`'s validity gap, seen from the
   release side.
 
 ### The `out` keyword was never a design — it was my placeholder
@@ -2052,7 +2061,8 @@ item, whose premise is therefore wrong.
 
 It does not close that item — `defer` is at-most-once-if-you-write-it, the
 same as `with` — but the language now has **three scope-exit constructs**
-(`defer`, `with ... as x { }`, `Scoped`) across two documents that each
+(`defer`, the since-deleted `with ... as x { }`, and `Scoped`) across two
+documents that each
 reason as if one of the others did not exist. The parser uses `defer` to
 decrement a depth counter, which is the shape that makes the overlap obvious.
 

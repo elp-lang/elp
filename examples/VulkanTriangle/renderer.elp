@@ -152,13 +152,17 @@ export fn Renderer.new(window &Window) -> Either<Self, RenderError> {
 	//   3. The handles must still **leave on success**, because they are
 	//      being assembled for a caller.
 	//
-	// `with ... as x { }` gives (1) and (2) today and cannot give (3): its
-	// binding is a borrow by design, so nothing bound by a `with` can
-	// escape the block. That is the whole of what is missing, and GAP 4's
-	// own guess — *"assembly itself belongs in a `with`, with the handles
-	// moved out on success … which needs a way to cancel the release"* —
-	// was right about the shape and wrong about the blocker. A consuming
-	// binding needs nothing cancelled: the move out *is* the cancellation.
+	// `defer x.release()` gives (1) and (2) and cannot give (3): a `defer`
+	// runs on **success** too, and on the success path these five handles
+	// must leave with the returned `Self`. A `with ... as x { }` block was
+	// designed for this and deleted (`memory-model.md`, "Release"), and it
+	// could not give (3) either — its binding was a borrow by design, so
+	// nothing bound by one could escape the block.
+	//
+	// So after two mechanisms and a deletion the gap is unchanged and the
+	// candidate list is down to one: `defer (exit) { … }`, a `defer` whose
+	// block can see how the scope ended. One grammar rule on a keyword that
+	// exists.
 	//
 	// Left as the ladder, written out, because that is what the language
 	// has. Four comments mark where the releases would attach.
@@ -253,9 +257,10 @@ export fn Renderer.new(window &Window) -> Either<Self, RenderError> {
 	// And the case that would decide against every candidate, recorded
 	// here because this is the file that would hit it first: a resource
 	// acquired in a **loop**. A `for` creating n command buffers that fails
-	// at item k wants n−1 releases. A `with` cannot bind a variable number
-	// of resources, and a per-acquisition cleanup inside the body is scoped
-	// to the body. Nothing in this corpus does it yet; a real renderer does
+	// at item k wants n−1 releases. A `defer` in the loop body runs at the
+	// body's exit, which is right for a per-iteration resource and wrong
+	// for n handles that must survive the loop. Nothing in this corpus does
+	// it yet; a real renderer does
 	// it on the next line after this one.
 	//
 	// CLEANUP 4 — vkDestroyCommandPool(device, pool, null)
@@ -290,18 +295,18 @@ Renderer implements Scoped
 // the driver; the types permit every permutation. `Move` guarantees each
 // handle is destroyed at most once and imposes no order at all.
 //
-// What `Scoped` adds is that it is *called*, on every path out of the `with`
-// block in `main.elp`, including the error paths. What it does not add is any
-// opinion about the order of the lines inside it — reverse-order release
-// orders `with` bindings relative to each other, and the five handles here
-// are one binding.
+// What the `defer` in `main.elp` adds is that this is *called*, on every
+// path out of `main`, including the error paths. What nothing adds is an
+// opinion about the order of the lines inside it — LIFO `defer` orders
+// several resources relative to each other, and the five handles here are
+// one resource.
 //
 // So the ordering gap shrinks rather than closes: across resources it is
 // answered, within an aggregate it is not. The fix for the inside of this
-// function is to not have an aggregate — five nested `with` bindings in
-// `main.elp` instead of one `Renderer` — which is correct and gives up the
-// type that makes the renderer a thing you can pass around.
-export fn Renderer.release(self) {
+// function is to not have an aggregate — five acquisitions and five
+// `defer`s in `main.elp` instead of one `Renderer` — which is correct and
+// gives up the type that makes the renderer a thing you can pass around.
+export fn Renderer.release(&self) {
 	// Must come first: the queue may still be executing work that references
 	// everything below.
 	vkDeviceWaitIdle(self.device)

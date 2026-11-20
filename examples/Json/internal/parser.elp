@@ -86,7 +86,8 @@ fn Parser.parseArray(&var self) -> Either<JSON, ParseError> {
 	//
 	// The second is the one that matters, because `defer handle.close()` **is**
 	// a scope-exit mechanism and the open item's premise is wrong. It does not
-	// close the item — `defer` is at-most-once-if-you-write-it, same as `with`
+	// close the item — `defer` is at-most-once-if-you-write-it, which is the
+	// observation that eventually deleted `with`
 	// — but it does mean the language now has *three* scope-exit constructs
 	// (`defer`, `with ... as x { }`, `Scoped`) across two documents that each
 	// reason as if one of the others did not exist.

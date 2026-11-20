@@ -178,6 +178,42 @@ code and says nothing. `Category.label` and `PatternError.toString` are
 silent, and the day a sixth variant is added they are a hard error —
 which is the whole point.
 
+### `unreleased_resource` — proposed, warn by default
+
+**The lint the release decision makes load-bearing.** `memory-model.md`
+deleted `with ... as x { }` in favour of `defer x.release()`, and with it
+the last candidate for a *guaranteed* release. Forgetting the `defer`
+leaks — exactly as a `Scoped` type never bound by a `with` was never
+released, so this is the same hole made visible rather than a new one.
+
+It was considered and rejected in November as *"`@MustUse`-style linting,
+which catches the common case and nothing else"*. It is now the only
+candidate, and the common case is the whole of what the corpus does:
+
+```
+warning: this `Connection` is never released
+  --> db.elp:171
+   |  const db = Connection.open(path)?
+   |        ^^ `Connection` is `Scoped`, and nothing in this scope calls
+   |           `db.release()`
+   = help: add `defer db.release()` on the next line
+   = note: a value moved out of this scope is not reported
+```
+
+**What it keys on** is the `Scoped` marker, which is what that interface is
+*for* now that nothing calls it. **What it cannot see** is a resource
+returned to a caller (`VulkanTriangle`'s `Renderer.new`) or handed to a
+platform runtime (`examples/Playhead`), so both are the "moved out" note
+above rather than warnings — which is also why this is a lint and not a
+rule.
+
+A second one is wanted by the same decision and is **not** proposed here
+because its shape is unclear: `release` taking `&self` makes **double
+release spellable**, and `sqlite3_close` twice is undefined behaviour. The
+two candidates are a lint for `release` called outside a `defer`, and the
+type guarding itself with one `bool` and `&var self`. The second is not a
+diagnostic at all, which is why this file does not claim the question.
+
 ### `existential_error` — warn by default
 
 An `export fn` whose error type is the **interface** `Error` rather than a

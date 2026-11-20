@@ -356,8 +356,8 @@ The key is the ordered sequence, hashed component-wise, so `by a, b` and
 `by b, a` are different keys — the same order-matters reading styles already
 have in `base + emphasis`. Nothing is allocated, no tuple type is needed,
 and no type is added: this is a **syntactic list in a declaration position**,
-exactly like `implements Copy + Add`, the `: A + B` on a named style, and
-the several bindings of a `with` block. The grammar needs one change,
+exactly like `implements Copy + Add` and the `: A + B` on a named style.
+The grammar needs one change,
 `'by' expr (',' expr)*`, and it parses for the reason the others do — the
 list is terminated by the block's `{`.
 

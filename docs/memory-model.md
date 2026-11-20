@@ -870,226 +870,135 @@ field is writable only if that field says so, rather than a blanket
 grant that would launder past visibility. See `reactivity.md`, "Bind
 the field, not the object".
 
-## Scoped release — `with ... as x { }`
+## Release — `defer x.release()`, and no keyword
 
 **`Move` gives at-most-once release and never at-least-once.** A dropped
-`Connection` leaks the C allocation and nothing notices; elp has no
-destructors, no `defer`, and nothing that runs at scope exit. Three
-unrelated probes reached independently for the same construct —
-`examples/SqliteBinding` for exactly-once release,
-`examples/VulkanTriangle` twice over, and `aliasing.md` noticing that
-`Synchronized<T>`'s `update`/`with` are already this shape — which is the
-strongest convergence in the corpus.
+`Connection` leaks the C allocation and nothing notices. Three unrelated
+probes reached for a construct here independently — `examples/SqliteBinding`
+for exactly-once release, `examples/VulkanTriangle` twice over, and
+`aliasing.md` noticing that `Synchronized<T>`'s two closures are the same
+shape — which is still the strongest convergence in the corpus and is
+about the **problem**, not about any answer to it.
+
+### The answer is two lines of ordinary code
 
 ```elp
-with Connection.open(path)? as db {
-	db.prepare("select 1")
-}
+const db = Connection.open(path)?
+defer db.release()
+
+db.prepare("select 1")
 ```
 
-### Three problems, and the third is the one that corrupts memory
+`defer` already exists (`reactivity.md`), already runs on **normal exit,
+cancellation unwind and panic unwind**, and already runs LIFO within a
+scope. `release` takes `&self`. There is nothing else.
 
-1. **A leak with no witness.** Nothing guarantees `close` runs.
-2. **A leak per early exit.** `examples/VulkanTriangle`'s construction
-   path holds five handles by the end, so every `throw` on it must tear
-   down everything built above — C's `goto fail` ladder, written out.
+### ~~`with ... as x { }`~~ — designed, never ratified, deleted
 
-   **Amended 2026-11-20: `with` answers this only where the resource dies
-   in the block, and the constructor case is exactly where it does not.**
-   `Renderer.new` assembles five handles *for a caller*, so each must
-   outlive the function and there is no block to bound them. The error
-   path still writes the ladder out by hand. See "What a consuming binding
-   would be for" below; a keyword for the error path (`errdefer`) was
-   proposed in `error-handling.md` and withdrawn in favour of staying
-   inside this construct.
-3. **Release *order* is unexpressed.** `vkDeviceWaitIdle` before
-   everything, swapchain before device, device before instance, renderer
-   before window across two files and two libraries. `Move` imposes no
-   order at all, and getting it wrong corrupts memory rather than merely
-   leaking.
+A statement form was designed here on 9 November — `with expr as x { }`,
+multiple bindings released in reverse, and a `Scoped` interface whose
+`release(self)` the compiler called at every exit. **Deleted on
+2026-11-20, by the decision-maker, with the reasoning stated as: keep magic
+words low and let the engineer write explicit code to do explicit things.**
 
-**Multiple bindings release in reverse, which answers (3) for free:**
+It is worth recording how it survived eleven days, because the mechanism
+was not a bad idea and the process was the failure. It was introduced in
+the same commit that deleted a different keyword I had invented
+(`490a1b7`, *"Design scoped release, and delete the `out` keyword I
+invented"*), justified by the three probes above asking for the problem,
+and written up as a finished section rather than a proposal. Nobody
+ratified it; the record simply stopped asking. It was flagged by the
+decision-maker asking where it had come from, after seeing the unrelated
+`Synchronized.with` method six times in the corpus and the statement once.
 
-```elp
-with Window.open(800, 600, "triangle")? as window,
-     Renderer.new(&window)? as renderer {
-	loop(&window, &renderer)
-}
-```
+**What the comparison showed.** Eleven rows separate a `with` from a
+`defer` and exactly one of them was a difference in capability:
 
-The order `examples/VulkanTriangle/main.elp` currently has to get right by
-hand becomes a consequence of the order the resources were acquired in.
+> `with` was a `defer` that could **consume**. `defer db.release()` with
+> `release(self)` by value needs to know the value is still owned at scope
+> exit — drop flags and moved-out analysis, the cost this document refuses
+> for RAII. `with` dodged it by never giving the block ownership: the
+> binding was a borrow, so consuming at exit was unconditionally legal.
 
-### What release is
+Everything else `defer` already did, or neither did. So the whole keyword
+rested on `release` taking `self`, and `release` now takes `&self`.
 
-```elp
-interface Scoped {
-	fn release(self)
-}
-```
+### What that costs, stated rather than discovered later
 
-`with` requires the bound expression's type to implement `Scoped` and
-calls `release` at every exit from the block.
+`&self` is not free, and all three costs are the kind the engineer can see:
 
-### This is scoped release, not RAII
+| | |
+|---|---|
+| **At-least-once is a lint, not a guarantee** | Forgetting the `defer` leaks, exactly as forgetting the `with` did — a `Scoped` type never bound by a `with` was never released either, and nothing warned. `examples/Json/internal/parser.elp` had already said so in passing: *"`defer` is at-most-once-if-you-write-it, same as `with`."* So this is not a regression; it is the same hole, now visible. The candidate is the `@MustUse`-shaped lint rejected in November as *"catches the common case and nothing else"* — which is now the only candidate, and the common case is what the corpus has. |
+| **Double release becomes spellable** | By-value release made it *unspellable*; `&self` does not. `sqlite3_close` twice is undefined behaviour. Two mitigations, neither ratified: a lint for a `release` called outside a `defer`, or the type guarding itself with a `var released bool` and `&var self` — one field, no language surface, and the kind of explicit thing this decision prefers. |
+| **Ordering is the author's** | Reverse release across several `with` bindings is now LIFO across several `defer`s, which is the same guarantee from the same mechanism — but only for resources released in *one* scope. `VulkanTriangle`'s renderer-before-window ordering spanned two files, and it now holds because `main` writes two `defer`s in acquisition order rather than because the construct arranged it. |
 
-`aliasing.md` says plainly that **elp has no RAII**, and this does not add
-it. The difference is what makes it affordable:
+### What deleting it dissolved
 
-| | RAII / `Drop` | `with` |
-|---|---|---|
-| release point | wherever a value's lifetime ends | a brace in the source |
-| needs liveness tracking on every path | yes — drop flags, moved-out analysis | **no** |
-| recursive release of fields (drop glue) | yes | **no** |
-| applies to | every value of the type | only a value bound by `with` |
-| opt-in granularity | per type | **per use site** |
+Four open questions were about the construct and go with it:
 
-A value not bound by a `with` is never released, so there is nothing to
-track. That is the entire cost difference, and it is why Rust needs
-unwinding machinery for `Drop` soundness and this needs none.
+- ~~Whether a `with` block may yield.~~ `defer` has no block to yield inside.
+- ~~Early `return` out of a `with` block.~~ `defer` specifies all three exits.
+- ~~A `?` inside a `with` block.~~ Same answer, and it was opened an hour
+  before the deletion by `SqliteBinding`'s first real call site.
+- ~~A consuming binding.~~ The whole of it was in service of by-value
+  release.
 
-### How this differs from a `defer`, which is the question that decides it
+### What it leaves, which is less than it looks
 
-Asked directly, and it is the right question — `defer` already exists for
-`reactivity.md`, already runs at scope exit, and could hold a cleanup call.
-`examples/Json/internal/parser.elp` had already noticed half of the answer
-in passing: *"`defer` is at-most-once-if-you-write-it, same as `with`."*
+- **Whether `release` may fail.** Survives, unchanged: `sqlite3_close`
+  returns a status and `release` returns nothing, so a failing release is
+  dropped. `Connection.close(self)` still exists returning `Either`, and
+  the engineer now chooses between them at the call site rather than the
+  construct choosing. That is strictly better for this question.
+- **A resource assembled for a caller** (`VulkanTriangle` GAP 4) — and
+  deleting the keyword *narrows the candidates to one*. A plain `defer`
+  is wrong there because it runs on success too, and the handles must
+  leave with the returned value. The consuming binding is gone. What is
+  left is `defer` with an exit binding — `defer (exit) { … }`, one
+  grammar rule on a keyword that already exists, which is a smaller ask
+  than either deleted thing. Until then the error path is the `goto fail`
+  ladder written out, which is what the corpus has and what explicit
+  means here.
+- **A resource acquired in a loop.** A `defer` in a loop body runs at the
+  body's exit, which `reactivity.md` calls a footgun and which is in fact
+  exactly right for a per-iteration resource. The case that stays
+  unanswered is n handles that must *survive* the loop and be released on a
+  later failure.
+- **A resource owned by a platform runtime** (`examples/Playhead`'s
+  `AudioDriver`). Unchanged and unhelped: there is no scope to attach a
+  `defer` to either, so the platform's teardown callback calls `release`
+  by hand. This was never a construct question.
+- **`Scoped` survives as a marker, demoted.** It names the obligation and
+  gives the lint above something to key on; the compiler no longer calls
+  it. One thing is lost with the keyword: `release(self)` was
+  *"the second and harder witness for a by-value receiver"*, and that
+  witness is gone. `Connection.close(self)` is the remaining one, so
+  `functions.md`'s by-value receiver gap stands on one leg.
 
-| | `defer` | `with ... as x { }` |
-|---|---|---|
-| already in the language | **yes** | no — a keyword, a grammar form, `Scoped`, and a by-value receiver `functions.md` does not admit |
-| which exits it runs on | normal, cancellation unwind, panic unwind — **specified** | "every exit", and the open items below admit the panic path is unchecked |
-| ordering | LIFO within a scope | reverse of acquisition across bindings — **the same guarantee** |
-| can you forget it? | yes | **yes.** A `Scoped` type not bound by a `with` is never released, and nothing warns |
-| who writes the cleanup | the caller, at every acquisition site | the type's author, **once** |
-| double release | spellable — defer it *and* call it | **unspellable** |
-| can the handle escape | nothing stops stashing it | no: the binding is a borrow, and a field may not hold a borrow |
-| **can the cleanup consume the resource** | **no** | **yes** |
-| a resource assembled for a caller | no | no |
-| a resource acquired in a loop | body-scoped — `reactivity.md` calls this a footgun | cannot bind n resources |
-| a resource owned by a platform runtime | no scope to attach to | no brace to bind in |
-
-Eleven rows and **one** of them is a real difference in capability:
-
-> **`with` is a `defer` that can consume.** `defer db.release()`, where
-> `release` takes `self` by value, requires knowing the value is still
-> owned at scope exit — which is drop flags and moved-out analysis, the
-> exact cost the table above refuses for RAII. `with` dodges it by never
-> giving the block ownership: the binding is a borrow, the `with` itself
-> owns the value, so consuming it at exit is unconditionally legal.
-
-Everything else on that list `defer` either already does, or neither does.
-The two safety properties are consequences of that one choice rather than
-independent benefits.
-
-**So the question that decides whether this keyword survives is: may
-`release` take `&self`?**
-
-- **If yes**, `defer db.release()` covers the common case with no new
-  surface at all, and `with` is deletable. Note that it is *safe* by
-  construction for the shape that matters: the release runs at scope exit,
-  so there is no "afterwards" inside the block in which to use the handle.
-  What is given up is double-release being unspellable, and the cleanup
-  being written once on the type rather than at each site.
-- **If no**, the FFI evidence is the reason — `sqlite3_close(handle)` and
-  `delete_fluid_synth(synth)` consume the pointer, and a handle that is
-  still nameable after its release is a use-after-free waiting for the next
-  edit — and then the borrow-binding is the cheapest way to get by-value
-  release, and the keyword earns itself.
-
-My recommendation, recorded as mine: this is the decision to take before
-anything else in the release story, because the other three cases (assembly
-for a caller, a loop, a platform-owned lifetime) are all *additions* to
-whichever of the two survives, and designing additions to a construct that
-may be deleted is how this record got two mechanisms for one problem in two
-days.
-
-### Two rules make it safe, and both already exist
-
-**The binding is a borrow** (`&T`) for the block's extent, so it cannot
-escape — and "a field may not hold a borrow" (`aliasing.md`) is what stops
-it being stashed in an object that outlives the block.
-
-**You cannot call `release` yourself**, because it takes `self` by value
-and the binding is a borrow. Double release is not *prevented*; it is
-unspellable. Which also makes `Scoped` the primary witness for the
-by-value receiver gap — `functions.md` has `&self` and `&var self`, and
-`Connection.close(self)` and `Renderer.destroy(self)` both want
-`fn T.method(self)`.
-
-### Why this does not reopen the lock-guard question
+### Why none of this reopens the lock guard
 
 `aliasing.md` rejected a lock *guard* object because yield points are
 invisible, so a guard could be held across a yielding call and deadlock
-with nothing in the source marking the boundary. A `with` block's
-boundary is marked — but a yield *inside* it is still invisible, so for a
-lock this fixes nothing.
+with nothing in the source marking the boundary. A `defer` that releases a
+lock has exactly the same problem, and the `with` block's marked boundary
+never fixed it either — the yield *inside* was still invisible.
 
-**So `with` is for resources, not for locks.** A resource needs release
-exactly once and in order; it does not need exclusivity between
-statements. `Synchronized<T>` keeps its two closures for exactly the
-reason already recorded, and the two constructs stay distinct on purpose.
+**So release is for resources, not for locks.** A resource needs release
+once and in order; it does not need exclusivity between statements.
+`Synchronized<T>` keeps its two closures (`update` and `read`) for the
+reason already recorded.
 
-### It also covers the case with no handle at all
+### The handle-less case needs no construct either
 
 `examples/VulkanTriangle` found that `glfwInit`/`glfwTerminate` are
-process-global with nothing for a tier to describe. A token type fixes it
-without wrapping GLFW:
+process-global with nothing for a tier to describe. A token type still
+fixes it, and it needs no keyword:
 
 ```elp
-with Glfw.initialised() as _ {
-	...
-}
+const glfw = Glfw.initialised()?
+defer glfw.release()
 ```
-
-### What a consuming binding would be for
-
-**The piece scoped release is missing, with two customers.** Safety rule
-two above is that *"the binding is a borrow"*, which is what stops a
-resource escaping the block — and it is also what stops a resource
-*legitimately* leaving on the success path. So:
-
-- `Renderer.new` cannot assemble its five handles under a `with` and move
-  them into the returned `Self`, which is the only reason problem (2)
-  above is still open for constructors.
-- `examples/Recovery`'s outbox claim is the same shape without an FFI
-  handle: a claim whose `release` returns the item to `pending`, cancelled
-  by the success path taking the item back.
-
-A second binding form — one that **consumes** rather than borrows, so the
-value may be moved out before the block ends and the release then does not
-run — covers both, and the move out *is* the cancellation that GAP 4 said
-*"nothing proposes"*. It needs exactly one thing elp's cost table above
-refuses for RAII in general: knowing whether the value left on this path.
-That is the question to answer, and the difference from RAII is that it is
-asked **once per `with` binding** rather than for every value of every
-type.
-
-Related, and probably the same decision: **whether `release` may fail**,
-below, is the same tension about taking the resource back out.
-
-### Open within scoped release
-
-- **`?` is a dependency for ergonomics, not for correctness.**
-  `Connection.open` returns `Either<Self, Error>`, so until `?` exists
-  this is a `match` around the `with`. The examples above are written
-  with `?` because that is the intended shape.
-- **Whether `release` may fail.** `sqlite3_close` returns a status and
-  `Scoped.release(self)` returns nothing, so a failing release is
-  silently dropped — which is Rust's problem with `Drop` too, and the
-  reason `Connection.close` exists returning `Either`. Whether both can
-  coexist, and which one `with` calls, is undecided.
-- **Whether a `with` block can yield.** If it can, a `Scoped` resource is
-  held across an invisible boundary — harmless for an FFI handle,
-  and the exact hazard that keeps locks out of this construct. The rule
-  probably has to be stated rather than left to follow from "it is not a
-  lock".
-- **Early `return` out of a `with` block** releases and then returns,
-  which is the intent, but interacts with `error-handling.md`'s "a
-  failure is a value": the release has to run on the error path of a
-  `throw` too, and both are statically visible exits, so this should be
-  local — it has not been checked against the panic path, where
-  `RecoveryBoundary` means discard-and-reinit anyway.
 
 ## Summary for Phase 2
 

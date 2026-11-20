@@ -117,14 +117,15 @@ true — `memory-model.md` Finding 4's third amendment ratifies `&var T` —
 and it is worth noting that the guard rejection does **not** depend on it.
 The reason is the invisible yield point, which a spelling does not fix.)*
 
-**Still true after scoped release.** `memory-model.md` adds
-`with ... as x { }`, which binds a resource to a block and releases it at
-every exit — RAII-shaped, and not RAII, because release is tied to a brace
-rather than to a value's lifetime. It does not rehabilitate the guard: a
-`with` block's boundary is marked, but a yield *inside* it is still
-invisible, so a lock held across one deadlocks exactly as before. The line
-is that `with` is for **resources**, which need release once and in order,
-not for **locks**, which need exclusivity between statements.
+**Still true after release was designed, and after the construct for it
+was deleted.** `memory-model.md` first added `with ... as x { }` and then
+deleted it (2026-11-20): release is `defer x.release()`, with `release`
+taking `&self`, and no keyword. Neither version rehabilitates the guard,
+and for the same reason both times — a `defer` releasing a lock, or a
+`with` block's marked boundary, leaves the yield *inside* invisible, so a
+lock held across one deadlocks exactly as before. The line is that release
+is for **resources**, which need release once and in order, not for
+**locks**, which need exclusivity between statements.
 
 `update` originally took a **pure transform**, `fn (T) -> T`, which is
 what `examples/Pipeline` corrected it to and which is what `Confined<T>`
@@ -737,7 +738,7 @@ to find what the language needs, and sometimes the answer is nothing.
   registration in the `Confined<T>` the boundary form requires leaves its
   teardown unexpressible: `.get()` hands back a borrow, a `Move` field
   cannot leave one, and `.set(whole)` needs `Copy`. Three candidates — a
-  consuming `.take() -> T` on a uniquely-held cell, `Scoped` reaching
+  consuming `.take() -> T` on a uniquely-held cell, `release` reaching
   through a cell it is the last holder of, or keeping the `Move` resources
   *beside* the cell rather than inside it. The third is probably right and
   is an architectural claim: what a deadline thread must *read* and what the
@@ -763,9 +764,9 @@ absence.
 **Corrected — this paragraph twice said "no `defer`, nothing at scope exit",
 and both halves are wrong.** `reactivity.md` designs `defer` in full and
 states that it is *"a general language feature rather than an effect
-feature"*; `memory-model.md` adds `with ... as x { }` and `Scoped`. So the
+feature"*; `memory-model.md` adds `defer x.release()` and `Scoped`. So the
 language has **three** scope-exit constructs and this file was arguing from
-having none. The conclusion survives — a `defer` or a `with` releases what
+having none. The conclusion survives — a `defer` releases what
 you tell it to and a cycle is precisely what nobody tells it about — but the
 premise was never checked, and the second instance of it is load-bearing for
 an Open item below. `examples/Json` found it, in a parser that uses `defer`
@@ -1115,7 +1116,7 @@ above — `fn (&var T) -> T` keeps the payload in the cell, which is why
   language whose sharpest probe is an audio callback.
 - **`unowned`'s niche is already covered.** `examples/Playhead` FINDING 5 is
   shipped `unowned(unsafe)` used to dodge refcount traffic on the audio
-  thread, and `Opaque<Cell<T>>` plus no-retain plus `Scoped` ordering is the
+  thread, and `Opaque<Cell<T>>` plus no-retain plus release ordering is the
   designed replacement. If `Weak<T>` ever lands it needs no `unowned` sibling.
 - **`==` with no `===` becomes a cost rather than a convergence.** All three
   have reference identity (`Rc::ptr_eq`, `===`, pointer `==`) and all three
@@ -1497,7 +1498,7 @@ fn Protected<T>.constantTimeEquals(&self, other &Self) -> bool
 ### What it does not promise
 
 - **No zeroing on drop.** It is `Duplicate`, so copies exist and zeroing
-  one proves nothing; elp has no destructor, and `Scoped` is bound to a
+  one proves nothing; elp has no destructor, and `release` is called by a
   block while a secret in a reactive cell is not. A type that genuinely
   wanted zeroing would be `Move` plus `Scoped`, which is a different type
   with a worse API, and no corpus program has asked for it.
@@ -1933,8 +1934,10 @@ while `.copy()` would have had one that looked identical in both cases.
   once and never at least once, so a dropped handle leaks with nothing to
   notice. **The premise has been corrected**: this item used to rest on elp
   having *"no destructors, no `defer`, nothing at scope exit"*, and it has
-  three scope-exit constructs — `defer` (`reactivity.md`), `with ... as x
-  { }` and `Scoped` (`memory-model.md`). None of them closes the item,
+  three scope-exit constructs — and is now down to one, `defer`
+  (`reactivity.md`), since `with ... as x { }` was deleted and `Scoped` is
+  a marker rather than a mechanism (`memory-model.md`). It does not close
+  the item,
   because all three are at-most-once-if-you-write-it, which is what `Move`
   already gives. What the correction changes is the shape of the question:
   it is not "elp needs a scope-exit mechanism", it is "elp has three and

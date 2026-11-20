@@ -81,8 +81,11 @@ GLFWmonitor implements Copy
 //
 // The shapes that would work are a token type `glfwInit` returns that every
 // other call takes — which is not GLFW's API and would mean wrapping all of
-// it — or a scoped form, which is the same `with ... as x { }` candidate
-// `SqliteBinding` GAP 1 reached for. Two unrelated libraries asking for the
-// same construct is the strongest argument yet that it is the one to design.
+// it — or a scope-exit release, which is the same thing `SqliteBinding`
+// GAP 1 reached for. Two unrelated libraries asking for the same thing was
+// the strongest argument in the corpus, and what it turned out to argue for
+// was `defer x.release()` rather than a construct: a statement form was
+// designed from this evidence and then deleted, because `defer` already
+// did everything it did except consume.
 
 // vim: ft=kotlin

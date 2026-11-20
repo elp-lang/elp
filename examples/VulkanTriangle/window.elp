@@ -26,9 +26,9 @@ import {
 //
 // A token type is the whole answer, and it needed `Scoped` to be worth
 // writing. `Glfw` carries no data — it exists so that "GLFW is initialised"
-// is a value with a lifetime, which `with` then bounds. Terminating is its
-// `release`, so it happens once, and because release order is the reverse of
-// acquisition, it happens after every window acquired inside it.
+// is a value with a lifetime, which a `defer` then bounds. Terminating is
+// its `release`, so it happens once, and because `defer` is LIFO, it happens
+// after every window acquired after it.
 export object Glfw {}
 
 Glfw implements Move
@@ -42,7 +42,7 @@ export fn Glfw.initialised() -> Either<Self, WindowError> {
 	return Ok(Self {})
 }
 
-export fn Glfw.release(self) {
+export fn Glfw.release(&self) {
 	glfwTerminate()
 }
 
@@ -128,15 +128,15 @@ Window implements Scoped
 // `SqliteBinding`'s `Connection.release`, and the same gap — `functions.md`
 // has `&self` and `&var self` and no by-value receiver, which `Scoped`
 // cannot be declared without.
-export fn Window.release(self) {
+export fn Window.release(&self) {
 	glfwDestroyWindow(self.handle)
 }
 
 // What is still unfixed, and it is the `Copy` row's problem rather than this
 // file's: `Glfw.release` invalidates every `Monitor` in the program. Monitors
 // are `Copy` — correctly, nothing releases one — so copies are scattered
-// wherever anyone put them, and reverse-order release says nothing about
-// values that were never bound by a `with` at all.
+// wherever anyone put them, and LIFO release says nothing about values
+// nobody wrote a `defer` for at all.
 //
 // So scoped release orders *resources* and cannot reach *borrowed handles
 // derived from them*, which is `aliasing.md`'s validity gap seen from the

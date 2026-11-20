@@ -68,11 +68,12 @@ export object Syncer {
 // the rule "runs when the scope exits with an `Err`" is incomplete in a
 // language whose `defer` also runs on cancellation and panic unwind, and
 // this problem already has an owner. `memory-model.md` ratified
-// `with ... as x { }` as the answer to *"a leak per early exit"*, and what
-// it cannot do is let the resource **leave on success** — because its
-// binding is a borrow by design. A consuming binding is the missing piece,
-// and this file is its second customer: a claim whose release restores the
-// item, cancelled by the success path taking the item back.
+// `with ... as x { }` as the answer to *"a leak per early exit"* — and
+// then deleted it, because `release` takes `&self` and `defer x.release()`
+// does everything the keyword did except consume. What neither reaches is
+// a cleanup that must **not** run on success, which is what this function
+// needs. One candidate survives: `defer (exit) { … }`, a `defer` whose
+// block can see how the scope ended.
 export fn Syncer.sendOne(&var self, id string) -> Either<Receipt, SyncError> {
 	// `?` over an `OutboxError`, converted by the `From<OutboxError>`
 	// conformance in `types/errors.elp`. The outbox failing to hand over an
@@ -142,15 +143,13 @@ export fn Syncer.sendOne(&var self, id string) -> Either<Receipt, SyncError> {
 // So the three candidates in `error-handling.md` are not equivalent on this
 // file:
 //
-//   1. A **consuming `with` binding** gives the resource case and leaves
-//      this one needing the guard to be *conditionally* consumed, which is
-//      the same question one level along.
-//   2. **`defer` with an exit binding** — `defer (exit) { match exit { … } }`
+//   1. **`defer` with an exit binding** — `defer (exit) { match exit { … } }`
 //      — answers it directly, because the compensation can read which
 //      failure happened. One grammar rule on an existing keyword, and it is
 //      not a coincidence that it looks like a `match`: "what do I undo" has
 //      the same shape as "what do I report", which this file answers
 //      sixteen lines above.
+//   2. ~~A consuming `with` binding~~ went with the keyword.
 //   3. **RAII** is decided against (`memory-model.md` has the cost table).
 //
 // The five hand-written restores above are the honest cost until one of

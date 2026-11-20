@@ -227,31 +227,33 @@ run **on normal exit, on cancellation unwind, and on panic unwind**
 Vulkan handles under the rule as stated. The borrowed word brought a
 borrowed taxonomy that does not fit a language with three kinds of exit.
 
-**And the problem already has an owner.** `with ... as x { }` was ratified
-*as the answer to this problem*, with multiple bindings releasing in
-reverse — which is the ordered teardown `errdefer` does not give. What
-`with` does not cover is one narrow case, stated precisely:
+**And the problem already had an owner** — `with ... as x { }`, which was
+ratified *as the answer to this problem*, with multiple bindings releasing
+in reverse. **That construct was deleted on 2026-11-20** (`memory-model.md`,
+"Release"): `release` takes `&self`, release is `defer x.release()`, and
+there is no keyword. The decision-maker's reasoning was to keep magic words
+low and let the engineer write explicit code.
 
-> **`with` releases a resource used inside a block. Nothing releases a
-> resource being *assembled for a caller* when the assembly fails.**
-
-Four candidates, ranked:
+Which clarifies this section rather than undermining it, because the
+deletion **narrows the candidates to one.** What is left needs to cover a
+resource being *assembled for a caller*:
 
 | | |
 |---|---|
-| **A consuming `with` binding** — the leading one | GAP 4 guessed this (*"assembly itself belongs in a `with`, with the handles moved out on success"*) and said it *"needs a way to cancel the release"*. The real blocker is sharper: scoped release's second safety rule is that **the binding is a borrow**, so nothing bound by a `with` can leave the block at all. A second, consuming binding form would let it, and the move out *is* the cancellation — nothing to disarm. New surface on an existing construct, and it has a second customer already: the open item on whether `release` may fail, where `Connection.close` and `Scoped.release` are the same tension about taking the resource back. |
-| **`defer` with an exit binding** | `defer (exit) { … }`, where the block can see which of the three exits happened. One grammar rule on a keyword that exists, it subsumes the per-failure compensation question below, and it forces the three exits to be named rather than collapsed into "error". Costs a `match` where `errdefer` was one word. |
-| **RAII** | **Already decided against.** `memory-model.md` has the cost table: `Drop` needs drop flags and moved-out analysis on every path, and *"a value not bound by a `with` is never released, so there is nothing to track. That is the entire cost difference."* Reopening it means paying what elp refused to pay. |
-| **`errdefer`** | Withdrawn, above. |
+| **`defer` with an exit binding** — the only live candidate | `defer (exit) { … }`, where the block can see which of the three exits happened. One grammar rule on a keyword that exists, no new word, and it answers the per-failure question below for free. A plain `defer` cannot do it, because it runs on success too and the handles must leave with the returned value. |
+| ~~A consuming `with` binding~~ | Gone with the keyword. The whole of it was in service of by-value release, and `release` no longer takes `self`. |
+| ~~RAII~~ | Already decided against, with a cost table in `memory-model.md`. |
+| ~~`errdefer`~~ | Withdrawn above. |
 
-**What the first candidate does not reach**, and the reason this is
-recorded rather than decided: `Recovery/sync.elp`'s compensation is not a
-release. Restoring a claimed item to the outbox is a **compensating
-action** on a different object, and modelling it as a `Scoped` claim guard
-whose `release` restores it needs success to take the item back out —
-which is the consuming binding again, from the other direction. Two
-customers, one missing piece. That is a better place to be than one
-keyword with one customer, and it is the piece to design.
+Until something is ratified, the error path is the `goto fail` ladder
+written out, which is what the corpus has — and which is what "explicit"
+means here rather than a gap being tolerated.
+
+**And one thing no candidate reaches**: `Recovery/sync.elp`'s compensation
+is not a release at all. Restoring a claimed item to the outbox is a
+**compensating action** on a different object, so there is nothing whose
+`release` could do it. Only the exit binding reaches it, because the
+compensation is ordinary code in a block that knows how the scope ended.
 
 And the sub-question `errdefer` raised survives it: in `sendOne` three
 failure paths want the compensation and three (the permanent ones) want

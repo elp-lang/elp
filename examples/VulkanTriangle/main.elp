@@ -11,32 +11,42 @@ import { Glfw, Window } from .window
 import { Renderer } from .renderer
 
 export fn main() {
-	// `with`, three bindings, released in reverse. This is the file that
-	// `memory-model.md`'s scoped-release section was designed against, and
-	// the diff against the previous draft is the argument for it: that draft
-	// was four levels of nested `match`, two hand-written teardown calls in
-	// one specific order, and one of them duplicated on an error path.
+	// MIGRATED — this was the only `with ... as x { }` block in the corpus,
+	// and the keyword is **deleted** (`memory-model.md`, "Release"). Three
+	// acquisitions, three `defer`s, and `defer` was already specified to
+	// run LIFO within a scope and on all three exits — so reverse-order
+	// release is the same guarantee from a mechanism that already existed.
 	//
-	// GLFW's initialisation is the outermost binding, as a token type, so
-	// `glfwTerminate` runs exactly once and after every window inside it.
-	// That is the fix for `window.elp`'s misplaced `glfwTerminate`, and it
-	// only works because release order is the reverse of acquisition.
+	// The diff against the pre-`with` draft is still the argument for
+	// *something*: that draft was four levels of nested `match`, two
+	// hand-written teardown calls in one specific order, and one of them
+	// duplicated on an error path. This is six lines with no nesting and
+	// each teardown written once, next to what it tears down.
 	//
-	// The `?` on each acquisition is `error-handling.md`'s open question
-	// rather than a decided spelling; `memory-model.md` records that `with`
-	// depends on it for ergonomics and not for correctness. Without it this
-	// is a `match` around the `with`, which is the previous draft again.
-	with Glfw.initialised()? as _,
-	     Window.open(800, 600, "triangle")? as window,
-	     Renderer.new(&window)? as renderer {
-		// `&window` and `&renderer`, not `&var` — and the corpus sweep
-		// checked this rather than assuming it. Both `pumpEvents` and
-		// `drawFrame` take `&self`, because what they mutate lives behind an
-		// opaque C handle rather than in elp storage. That is exactly the
-		// refinement the sweep made to `memory-model.md` rule 7: `&var`
-		// means something only where elp owns what C writes into.
-		loop(&window, &renderer)
-	}
+	// GLFW's initialisation comes first, as a token type, so `glfwTerminate`
+	// runs exactly once and after every window — because its `defer` is
+	// registered first and therefore runs last. That is the fix for
+	// `window.elp`'s misplaced `glfwTerminate`, and the ordering is now
+	// visibly the author's rather than the construct's. Reordering these six
+	// lines breaks it, and nothing checks that: `renderer.elp` GAP 5's point
+	// about aggregates now applies across resources too, which is what the
+	// keyword was buying and is the honest cost of deleting it.
+	const glfw = Glfw.initialised()?
+	defer glfw.release()
+
+	const window = Window.open(800, 600, "triangle")?
+	defer window.release()
+
+	const renderer = Renderer.new(&window)?
+	defer renderer.release()
+
+	// `&window` and `&renderer`, not `&var` — and the corpus sweep checked
+	// this rather than assuming it. Both `pumpEvents` and `drawFrame` take
+	// `&self`, because what they mutate lives behind an opaque C handle
+	// rather than in elp storage. That is exactly the refinement the sweep
+	// made to `memory-model.md` rule 7: `&var` means something only where
+	// elp owns what C writes into.
+	loop(&window, &renderer)
 
 	// GAP 1, RESOLVED — the teardown order spanned two files and two
 	// libraries, and nothing checked it.
@@ -47,14 +57,20 @@ export fn main() {
 	// `Move`, so both were destroyed at most once and in whatever order
 	// someone typed.
 	//
-	// Reverse-order release makes that a consequence of the acquisition
-	// order, which is the one ordering a reader can check locally: the
-	// renderer is built *from* the window, so it is bound after it, so it is
-	// released before it.
+	// LIFO `defer` makes that a consequence of the acquisition order, which
+	// is the one ordering a reader can check locally: the renderer is built
+	// *from* the window, so its `defer` is registered later, so it runs
+	// first.
 	//
-	// What is NOT fixed is the ordering *inside* `Renderer.release` — see
-	// `renderer.elp` GAP 5. Across resources the construct answers it;
-	// within an aggregate it does not.
+	// RE-OPENED by the deletion, and worth being straight about. With the
+	// keyword, the acquisition order *was* the binding order and a reader
+	// could not separate them. With three `defer`s, a later edit can move
+	// one and nothing complains. So "nothing checked it" is true again —
+	// the mitigation is that the `defer` sits on the line after the
+	// acquisition, where moving one without the other looks wrong.
+	//
+	// What is NOT fixed either way is the ordering *inside*
+	// `Renderer.release` — see `renderer.elp` GAP 5.
 }
 
 // GAP 2 — this loop must run on the main thread and there is no way to say

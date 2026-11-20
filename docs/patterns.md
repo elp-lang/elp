@@ -148,7 +148,9 @@ same posture as `collections.md` rejecting `..` as a catch-all and leaving
 owned by its binding afterwards. Nothing is implicitly dropped, so there
 is no "silently discards" case left to warn about.
 
-**3. `_` on a `Scoped` field is an error.** Binding it would owe a
+**3. `_` on a `Scoped` field is an error.** (`Scoped` is a marker since
+`with` was deleted; the rule is unchanged, because what it is about is the
+obligation rather than who discharges it.) Binding it would owe a
 release, and `_` cannot discharge one:
 
 ```

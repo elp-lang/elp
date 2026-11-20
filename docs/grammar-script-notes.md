@@ -51,7 +51,8 @@ genuinely language-level questions it did surface were folded into
    keyword for that (`errdefer`) was proposed and **withdrawn** — the
    problem belongs to `memory-model.md`'s scoped release, which was
    ratified as the answer to it, and the missing piece is a **consuming
-   `with` binding** rather than new statement syntax. No grammar change
+   `with` binding** — itself since deleted along with the keyword. No
+   grammar change
    until that is decided; `error-handling.md` carries the four candidates.
 
 4. **No `throw` in `.elp`.** The `throw` form seen in `.velp` component
@@ -381,7 +382,7 @@ for = 'for' pattern 'in' expr 'by' expr (',' expr)* block
   a compound key is an ordered sequence hashed component-wise, so joining
   two fields costs no allocation and needs no tuple type. That is the same
   syntactic-list shape as `implements Copy + Add`, a named style's
-  `: base + emphasis`, and a `with` block's several bindings, and it parses
+  `: base + emphasis`, and it parses
   for the same reason — the list is terminated by the block's `{`.
 - **`const x = expr`** is allowed, for a value computed once on entering
   the block. `var` is not — reactive state belongs in the component

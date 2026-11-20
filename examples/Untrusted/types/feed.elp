@@ -53,11 +53,15 @@ Comment implements Copy
 // with a stack trace pointing at nothing the program wrote.
 //
 // `memory-model.md` has a table that looks like it covers this and does not.
-// Its scoped-release section compares `with` against RAII and gives
-// *"recursive release of fields (drop glue): **no**"* — which is true and is
-// about `Scoped`. The refcount cascade is the runtime's, not `Scoped`'s, and
-// it is recursive whatever `with` does. A reader checking that table would
-// conclude the opposite of the truth.
+// Its release section compares the RAII it rejected against what elp does
+// and gives *"recursive release of fields (drop glue): **no**"* — which is
+// true and is about `release`. The refcount cascade is the runtime's, not
+// `release`'s, and it is recursive whichever way release is spelled. A
+// reader checking that table would conclude the opposite of the truth.
+//
+// Still true after `with` was deleted, and the deletion is why this is
+// worth re-reading: the table survived the construct it was written to
+// justify, so a claim about `Scoped` is now a claim about a marker.
 //
 // This is a known defect of the technique rather than a surprise: Rust has
 // exactly this bug for a long `Box` chain, and the standard answer is an
