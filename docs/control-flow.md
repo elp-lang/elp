@@ -409,11 +409,35 @@ this section, the more directly they are exposed.
 The reasoning above survives and is narrower than it reads. `by` is an
 assertion of uniqueness and a false assertion is a defect — **when the list
 is yours**. When it is someone else's the assertion is about *data*, and a
-defect in the data should not be a defect in the program. Three ways out,
-none taken here: dedupe at every boundary, which is the
-unrepresentable-mistake rule failing; drop the duplicate, which is defined,
-cheap and quietly loses data; or make the trap a property of the key's
-**provenance**, which nothing in the language can express.
+defect in the data should not be a defect in the program.
+
+Three ways out, and a fourth that is better than all of them. Dedupe at
+every boundary is the unrepresentable-mistake rule failing. Dropping the
+duplicate is defined, cheap, and quietly loses data. Making the trap a
+property of the key's **provenance** needs taint tracking, which is a large
+feature for one rule.
+
+**The fourth: move the assertion off the loop and onto the collection.** A
+list that has passed a uniqueness check is a different value from one that
+has not, so the check belongs where it can be *fallible* — once, at the
+boundary the data arrives through — rather than at the loop, where it can
+only trap:
+
+```elp
+const rows = Keyed<string, Post>.of(posts, fn (p) { return p.id })?
+```
+
+A markup `for` over a `Keyed<K, T>` then needs **no `by` at all**, because
+the key is in the type. That makes the mistake unrepresentable rather than
+lintable, which is this design's stated preference, and it costs the
+language exactly **one rule** — a `for` over a `Keyed` omits the clause —
+with `Keyed<K, T>` itself being ordinary stdlib.
+
+Not ratified here, because it wants designing with the rest of the
+collection surface and because the cheap path still matters for a list the
+program built itself. Recorded as the direction, and as the answer to why
+the trap stays: it is right for a key you computed, and `Keyed` is how you
+say you did not.
 
 **And the corpus sites are kept**, flagged, rather than contorted. Both
 want a line identity that survives editing, which is a rope's node

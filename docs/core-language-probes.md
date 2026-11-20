@@ -2087,13 +2087,21 @@ both.
 
 Five findings.
 
-1. **A transfer cannot be written atomically**, and three spellings each
-   fail differently. Two sequential `update`s read best and are wrong, since
-   a trap in the second leaves the first applied. One `update` reaching the
-   other is refused by exclusivity, correctly. Moving both out and putting
-   both back works, is O(1), and has a window in which **neither account is
-   in the ledger** — the same half-finished-value hazard `aliasing.md` rule
-   3 records for one cell, arriving through a collection.
+1. **CORRECTED — a transfer can be written atomically, and this probe missed
+   it.** With the ledger in a cell, nesting costs nothing: the outer
+   transform holds the lock and cannot suspend, and the two inner transforms
+   are **sequential**, so their borrows never overlap. Exclusivity forbids
+   two *live* paths, not two paths in a row, and `l.accounts` is the field
+   projection rule 6 grants.
+
+   What survives is narrower and still worth having: **a plain field cannot
+   be the unit of atomicity.** `Ledger` is `Move` with a `var accounts`
+   field, so there is no lock to hold and nothing to nest inside, and the
+   three spellings the file documents are what is left when the container is
+   not a cell. The original claim — that no spelling exists — was wrong, and
+   an outside reviewer's framing is what found it: a multi-object
+   transaction is a missing *operation* rather than a flaw in `update`, and
+   chasing what that operation would need turned up that it already exists.
 
 2. **Validate-then-apply is the middle ground and nothing says so.** What
    makes the third spelling survivable is that everything able to fail
@@ -2161,14 +2169,27 @@ satisfied — the type is `Sendable`, the read is legal, the lock is correct —
 and the only thing that notices is the frame-budget diagnostic, after the
 fact. Two correct features, one bad program, no rule to point at.
 
-**Unsound**, and this is the one to act on. `reactivity.md` makes
-cancellation cooperative: it lands at a yield point and unwinds the stack. A
-transform may call anything, so it may yield. The unwind leaves the payload
-**half-written**. `aliasing.md` records that a *failing* transform leaves a
-partial write and offers three candidate answers — all three are about
-failure paths, and this has none. The transform's guarantee was that its
-critical section is *syntactically* total, and cancellation is precisely a
-non-syntactic exit.
+**Unsound — and RESOLVED by a property the design already owed.**
+`reactivity.md` makes cancellation cooperative: it lands at a yield point
+and unwinds the stack, a transform may call anything, so it may yield, and
+the unwind leaves the payload half-written. The transform's guarantee was
+that its critical section is *syntactically* total, and cancellation is
+precisely a non-syntactic exit.
+
+The remediation cost nothing, because the restriction that fixes it was
+already queued. `aliasing.md` required that a `Synchronized` transform must
+not `background`, receive from a channel or lock a second `Synchronized` —
+**which is exactly the list of yield points**. Ratified as
+`nonsuspending`, the third body property (`functions.md`), carried by the
+transform's parameter type: `update(nonsuspending fn (&var T) -> R) -> R`.
+One marking, two jobs — the deadlock the rule was written for, and this.
+
+Its cost is viral marking on every helper reachable from a transform, and a
+helper that does I/O cannot be called from one at all. `render(path)` in
+this probe is exactly that, the refusal is correct, and the fix is to
+compute before the transform and write inside it — `examples/Ledger`
+FINDING 2's validate-then-apply, for the third time from a third
+direction.
 
 ## 20. Rejection — `examples/Rejected`
 
@@ -2301,9 +2322,24 @@ is a fourth, and *"this body is bounded"* is a fifth with the clearest
 closed set of any of them — no unbounded recursion, no allocation sized by
 its input, no call to something not itself bounded.
 
-Whether that is a good idea is a real question. That it is the same shape is
-not, and it ends the argument in `functions.md`: two body properties is two
-special cases, and five is an algebra.
+**Withdrawn, and the objection is better than the proposal.** Boundedness
+cannot be established by the kind of check the other properties use: a
+function with no recursion can loop a number of times its input chooses, and
+one allocating a fixed amount per iteration still has no useful upper bound.
+A closed set of forbidden *operations* cannot see either, so the property
+would promise more than any checker could deliver — and an over-promising
+property is worse than none, because people rely on it.
+
+What the language owes instead is narrower and real: the three places **it**
+does unbounded work on a program's behalf, where the program cannot
+intervene — `.copy()`'s depth, the refcount cascade freeing a deep
+`indirect` chain, and the macro evaluator's step count. Those are runtime
+obligations, not user-facing properties.
+
+The argument in `functions.md` is settled anyway, by a candidate that does
+hold up: `nonsuspending` is ratified as the third, thread affinity is a
+fourth, and three closed sets with no nesting between them is a mechanism
+rather than a set of special cases.
 
 ### Why this is a different axis
 
@@ -2361,6 +2397,23 @@ rules fire.
 `open-questions.md`'s composition question is about. Every probe exercises
 one area; the interactions between eight concurrency primitives, three
 scope-exit constructs and two body properties have no program at all.
+
+**And the corpus is a list of obligations, not a list of features.** Put
+there by an outside reviewer and worth keeping as the standing caution: a
+finding discharges in one of four ways, and only one of them is a new
+construct. It may be a tighter restriction (`nonsuspending`), a runtime
+obligation (the drop cascade), a documentation rule (identity is a policy,
+not a `==`), or **the example being wrong** (`examples/Ledger` FINDING 1).
+Three of those four happened in one round, which is the argument for the
+caution rather than against it.
+
+**One methodological qualification, also from outside, and it applies to
+every entry here.** These are *conceptual* tests: they establish what the
+design as described appears to permit or refuse, not what a compiler does.
+There is no compiler. That is the right order — this is the work to do
+before one exists — and the distinction is worth preserving as the corpus
+grows, because the day a front end returns, every verdict in
+`examples/Rejected` becomes a claim that can be checked rather than argued.
 
 So the next entries were chosen by what is *missing* from this rubric rather
 than by what is interesting: §19 puts five primitives in one place and asks

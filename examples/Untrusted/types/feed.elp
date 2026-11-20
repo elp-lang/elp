@@ -111,11 +111,21 @@ export fn totalCents(posts &[Post]) -> int {
 // The adversarial version is the other direction. A hostile account picks a
 // handle that normalizes to a trusted one, and every comparison in this
 // program says they are different — which is what lets it render beside the
-// real one. The fix is `normalized(.NFC)` before comparing, which is stdlib
+// real one. `normalized(.NFC)` before comparing fixes that case, is stdlib
 // and available, and **nothing says an identity comparison must do it**.
 //
-// That is a documentation gap rather than a design flaw, and it is the kind
-// that only shows up when the input is chosen rather than typed.
+// CORRECTED, and the correction matters more than the finding. NFC resolves
+// **canonical equivalence** and nothing else. It does not address visual
+// confusables — Cyrillic а against Latin a, or ɡ against g — which are
+// distinct scalars under any normalization and need a confusable-skeleton
+// policy rather than a normal form. Treating NFC as the answer to
+// impersonation is the mistake this comment originally made.
+//
+// So what the language owes here is one sentence and no feature: an identity
+// comparison is not a `==` on a `string`, it is a policy, and `strings.md`
+// should say that its predictable scalar-wise `==` is the right primitive
+// *and* the wrong identity test. The policy itself is stdlib and then
+// application.
 export fn isSameAuthor(a &Author, b &Author) -> bool {
 	return a.handle == b.handle
 }

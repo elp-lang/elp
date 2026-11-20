@@ -85,6 +85,42 @@ not against the set they governed. The corpus-wide version is this: a
 decision is checked against the program that asked for it, and the cost
 lands on a program written later.
 
+## Remediation, and what each one costs the language
+
+Five findings were put at the top of the agenda by an outside review. The
+column that matters is the last one, because the review's own caution is the
+right one: a finding discharges in one of four ways and only one is a new
+construct.
+
+| finding | remediation | language cost |
+|---|---|---|
+| **cancellation unwinds a transform** | `nonsuspending`, the third body property — and the restriction that fixes it was already owed | **one property**, and viral marking on helpers |
+| **freeing a deep `indirect` chain recurses** | a stated runtime obligation; rule 4 is what makes an iterative drop or pointer reversal available to the runtime | **none** |
+| **multi-object atomicity** | nest the transform: the outer holds the lock and cannot suspend, the inner two are sequential so their borrows never overlap | **none** — `examples/Ledger` FINDING 1 was wrong |
+| **a `by` key from untrusted data** | move the assertion onto the collection: a `Keyed<K, T>` built by a fallible constructor, and a `for` over one needs no `by` | **one rule**, plus stdlib |
+| **resource-bounded computation** | nothing at language level; the limits stay the program's | **none** — the `bounded` property is withdrawn |
+
+Two of the five cost nothing and one of those is a correction to a probe
+rather than to the language, which is the distribution to expect if the
+corpus is doing its job. One costs a property the design had already
+promised. One costs a rule and a library type and is not ratified. And one
+costs nothing because the proposal was wrong.
+
+**The property that was withdrawn is worth more than the three that landed.**
+`bounded` looked like a fifth body property and cannot be one: a function
+with no recursion can loop a number of times its input chooses, and one
+allocating a fixed amount per iteration has no useful upper bound either. A
+closed set of forbidden *operations* sees neither, so the property would
+promise what no checker could deliver — and an over-promising property is
+worse than none, because people rely on it. The mechanism is attractive
+enough to be reached for carelessly, which is the first evidence that it
+needs a stated admission test rather than a growing list of members.
+
+**What the language owes instead, in that last row**, is narrower and real:
+the three places **it** does unbounded work on a program's behalf, where
+the program cannot intervene — `.copy()`'s depth, the refcount cascade, and
+the macro evaluator's step count. Runtime obligations, not properties.
+
 ## What this file is not
 
 It is not a list of regrets and it should not become one. A design with no

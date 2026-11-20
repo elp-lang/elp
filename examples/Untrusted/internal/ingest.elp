@@ -25,14 +25,25 @@ const MAX_THREAD   = 64
 // candidate was already queued (what may appear inside a `Synchronized`
 // transform) and a fourth arrived with thread affinity.
 //
-// "This body is bounded" is a fifth, and it is the one with the clearest
-// closed set: no unbounded recursion, no allocation sized by its input, no
-// call to something that is not itself bounded. Whether that is a good idea
-// is a real question. That it is *the same shape* is not.
+// "This body is bounded" looked like a fifth. **Withdrawn**, and the
+// objection is better than the proposal.
 //
-// Recorded as an observation rather than a proposal, because the thing it
-// actually settles is the argument in `functions.md`: two body properties is
-// two special cases, and five is an algebra.
+// Boundedness cannot be established by the kind of check the other
+// properties use. A function with no recursion can still loop a number of
+// times its input chooses; a function allocating a fixed amount per
+// iteration still has no useful upper bound. A closed set of forbidden
+// *operations* cannot see either, so the property would promise more than
+// any checker could deliver — and a property that over-promises is worse
+// than none, because people would rely on it.
+//
+// So the limits in this file stay the program's, which is
+// `examples/Json` FINDING 13's answer and is correct. What the **language**
+// owes is narrower and real: the three places it does unbounded work on a
+// program's behalf, where the program cannot intervene — `.copy()`'s depth,
+// the refcount cascade when a deep `indirect` chain is freed, and the macro
+// evaluator's step count. Those are runtime obligations rather than
+// user-facing properties, and `memory-model.md` now records the second one
+// as such.
 export fn fetchFeed(url string) -> Either<[Post], Error> {
 	const body = Http.getText(url)?
 	const document = parse(body)?

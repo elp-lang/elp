@@ -63,7 +63,20 @@ Three supporting reasons:
 typing it on a second can produce strings that compare unequal, and
 nothing in the language will warn them.
 
-That is a real footgun and it is worth naming rather than burying. Two
+That is a real footgun and it is worth naming rather than burying.
+
+**And it has a second direction the paragraph above does not cover.**
+`examples/Untrusted` found it: that cost is a *user* typing the same name two
+ways, and the adversarial version is a hostile handle chosen to normalize
+onto a trusted one. `normalized(.NFC)` answers that case — and **only that
+case**, because NFC resolves canonical equivalence and says nothing about
+visual confusables, which are distinct scalars under every normal form.
+
+So the rule worth stating, which costs no feature: a **scalar-wise `==` is
+the right primitive and the wrong identity test.** Comparing identities is a
+policy — normalize, then apply a confusable skeleton, then compare — and it
+belongs in stdlib and then in an application, never in an operator. The
+mistake to avoid is treating a normal form as the whole answer. Two
 things make it the right trade anyway: it is the same footgun Rust, Go,
 Python 3, Java, C# and JavaScript all have — Swift is the outlier, not
 elp — and it is **predictable**, which is the property this language

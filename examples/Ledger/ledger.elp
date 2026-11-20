@@ -19,14 +19,49 @@ export fn Ledger.open(&var self, id AccountId) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// FINDING 1 — a transfer cannot be written atomically, and this is the
-// corpus's first program that needs one.
+// FINDING 1, CORRECTED — a transfer **can** be written atomically, and this
+// file missed it because its ledger is not in a cell.
+//
+// The original finding said no spelling exists. That was wrong in two ways,
+// and the corrections came from outside: a reviewer pointed out that a
+// multi-object transaction is a missing *operation* rather than a flaw in
+// `update`, and chasing what that operation would need turned up that it
+// already exists.
+//
+// **With the ledger in a cell, nesting gives atomicity for nothing:**
+//
+//     state.update(nonsuspending fn (&var l) {
+//         l.accounts.update(from, fn (&var a) {
+//             a.balance = a.balance - amount
+//         })
+//         l.accounts.update(to, fn (&var b) {
+//             b.balance = b.balance + amount
+//         })
+//     })
+//
+// The outer transform holds the lock across both and cannot be suspended
+// (`functions.md`'s `nonsuspending`). The two inner transforms are
+// **sequential**, so their borrows never overlap and exclusivity is
+// satisfied — the rule forbids two *live* paths, not two paths in a row.
+// `l.accounts` is field projection, which rule 6 grants.
+//
+// So multi-object atomicity costs the language nothing. What this file
+// demonstrates is narrower and still worth having: **a plain field cannot be
+// the unit of atomicity.** `Ledger` is `Move` with a `var accounts` field, so
+// there is no lock to hold and nothing to nest inside, and the three
+// spellings below are what is left when the container is not a cell. That is
+// a real finding about where atomicity comes from, and it is not the finding
+// this comment originally claimed.
+//
+// What survives unchanged: the original three spellings and why each fails,
+// kept because they are the reason the nested form is the answer.
 //
 // Debiting one account and crediting another is the oldest worked example in
 // computing, and it has exactly one requirement: do both or do neither. Three
 // spellings are available and each fails differently.
 //
-// **Spelling A — two sequential updates.** Reads best, and it is wrong:
+// **Spelling A — two sequential updates on a plain field.** Reads best, and
+// it is wrong, for one reason rather than the two first claimed:
 //
 //     self.accounts.update(from, fn (&var a) {
 //         a.balance = a.balance - amount
@@ -36,8 +71,11 @@ export fn Ledger.open(&var self, id AccountId) {
 //     })
 //
 // If the second traps — `to` is not in the map — the first has already
-// happened and the money is gone. The transform's guarantee is that control
-// reaches the end of **one** closure; nothing spans two.
+// happened and the money is gone. That is the whole of it: there is no
+// *other thread* to interleave, because `Ledger` is `Move` and has one
+// owner, and under `nonsuspending` there is no cancellation to land between
+// them either. So the failure is **the trap**, which validate-then-apply
+// removes, and not the lack of a critical section.
 //
 // **Spelling B — one update reaching the other.** Unspellable:
 //

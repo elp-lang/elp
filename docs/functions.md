@@ -425,6 +425,66 @@ and the honest move at that point is to design one rather than add a third
 keyword. That decision is not made here; it is recorded so the next person
 to want a body property knows they are the one who tips it.
 
+### `nonsuspending`, ratified — and it was already owed
+
+The queued candidate turned out to be the remediation for the most serious
+finding in the corpus, which is why it is decided here rather than deferred.
+
+`examples/Rejected` case 13 and `examples/Dashboard` found that
+**cancellation can unwind out of a `Synchronized.update` transform**, leaving
+the payload half-written with no failure path on the page. `reactivity.md`
+makes cancellation cooperative: it lands at the next yield point and unwinds.
+A transform may call anything, so it may yield.
+
+The queued restriction — *a `Synchronized` transform must not `background`,
+receive from a channel, or lock a second `Synchronized`* — is **exactly the
+list of yield points**. It was written to prevent deadlock and it prevents
+this for free, which is the argument for it being a property rather than
+three prohibitions.
+
+**`nonsuspending` is the third body property**, and the transform's parameter
+type carries it:
+
+```elp
+Confined<T>.update(nonsuspending fn (&var T) -> R) -> R
+Synchronized<T>.update(nonsuspending fn (&var T) -> R) -> R
+```
+
+Expressible only because a function **type** had to admit `&var T` for the
+transform to exist at all — the third amendment's decisive argument, paying
+for itself a second time.
+
+**Its closed set, and it is not a subset of either other property.** No
+channel send or receive, no `background`, no `effect`, no lock acquisition.
+An `@external` call **is allowed**: a blocking C call blocks the OS thread
+rather than yielding the coroutine, so cancellation cannot land there. So
+`realtime` forbids what `nonsuspending` permits and permits what
+`nonsuspending` forbids, and neither contains `pure`. Three closed sets, no
+nesting — which is the clearest evidence yet that these are instances of one
+mechanism rather than three special cases.
+
+**The cost, and it is the real one: the marking is viral.** Every helper
+reachable from any transform must declare it, and a helper that does I/O
+cannot be called from a transform at all. `examples/Dashboard`'s
+`render(path)` is exactly that case and the refusal is correct — the fix is
+to compute before the transform and write inside it, which is
+`examples/Ledger` FINDING 2's validate-then-apply arriving for the third
+time from a third direction.
+
+**A panic is not covered and does not need to be.** A panic inside a
+transform also leaves a partial write, and `error-handling.md`'s
+`RecoveryBoundary` discards and reinitialises the component — so the
+half-written state is thrown away rather than observed. Worth stating so the
+gap is known to be closed rather than overlooked.
+
+**Three alternatives, and why not.** *Defer cancellation until the transform
+completes* needs no marking and makes cancellation unbounded, so a slow
+transform makes a component un-cancellable and breaks `effect`'s teardown;
+it is also unnecessary once the body cannot suspend. *Transactional
+rollback* needs `T` to be `Duplicate` and costs the copy the transform
+exists to avoid. *Declare partial updates possible* gives up the guarantee
+rather than discharging it.
+
 **And a second candidate arrived the same week, which settles that it is no
 longer "not now".** `Sendable` says whether a *value* may cross a thread;
 nothing says whether a *function must run on a particular one*. GLFW's event

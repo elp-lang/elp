@@ -174,11 +174,13 @@ Map<K, V>.update(key K, fn (&var V) -> R) -> R
    `Synchronized` transform still must not `background`, receive from a
    channel, or lock a second `Synchronized` — and it is now plainly a
    restriction on a body *by position*, which is where it should have been
-   filed. `functions.md` now owns the mechanism — a declared bit, a closed
-   set, call-wise propagation — and names this as the **candidate third**
-   body property after `pure` and `realtime`. A third is the point at which
-   two special cases become an algebra, so it is deliberately not added
-   here.
+   filed. **Now ratified** as `nonsuspending`, the third body property
+   (`functions.md`), and it does two jobs for one marking: the hazards this
+   rule was written for — `background`, a channel receive, a second lock —
+   are precisely the yield points, so forbidding them also forbids a
+   cancellation unwinding mid-write. The restriction stops being
+   by-position and becomes a type: the transform takes a
+   `nonsuspending fn (&var T) -> R`.
 5. **The `&var T` may not escape.** It is a borrow and a field may not hold
    one, so storing it is already an error; this adds no rule and is stated
    because the closure makes it look like it might.
@@ -228,7 +230,21 @@ Raised by an outside review of the corpus, which asked what an early-return
 path inside an `update` does. Nothing in the corpus took one, which is why
 neither the probe nor the ratification found it.
 
-**And it is worse than a failure path, because cancellation is not one.**
+**RESOLVED for cancellation, by the property this restriction was already
+owed.** `functions.md` ratifies `nonsuspending` as the third body property
+and the transform's parameter type carries it, so the closure cannot
+`background`, receive from a channel, acquire a lock or run an `effect` —
+which is the same list rule 4 below was written to forbid for deadlock, and
+is exactly the set of yield points. With no yield point there is no
+cooperative cancellation to land, and a panic is discarded by
+`RecoveryBoundary` rather than observed.
+
+So the signature is `update(nonsuspending fn (&var T) -> R) -> R`, and rule
+4's *"a real requirement with no mechanism yet"* now has one. What survives
+is the **author-written failure path** below, which is a smaller problem: it
+is visible on the page, and the three candidates still apply to it.
+
+**It was worse than a failure path, because cancellation is not one.**
 `examples/Dashboard` found the sharper case: `reactivity.md` makes
 cancellation cooperative — it lands at the next yield point and **unwinds the
 stack** — and a transform may call anything, so it may yield. The unwind

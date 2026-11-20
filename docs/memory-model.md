@@ -1359,6 +1359,16 @@ the thing it falsifies.
   long `Box` chain, which makes it a known cost of the technique rather than
   a surprise.
 
+  **The remediation is a runtime obligation and it costs the language
+  nothing** — written down because an obligation nobody records is not one. A
+  *chain* unlinks iteratively in constant extra space. A *tree* —
+  `examples/Json`'s `JSON`, `examples/QuadTree` — needs either an explicit
+  worklist, which asks for memory in order to release memory, or pointer
+  reversal in the Deutsch–Schorr–Waite manner, which needs the boxes to be
+  temporarily mutable. Rule 4 forbids that to a **program** and says nothing
+  about the runtime, which is what makes the obligation dischargeable rather
+  than a design flaw.
+
 ## `Buffer<T>` — contiguous storage, and where an address may exist
 
 The rule above leaves one thing unsayable, and it is correct for every
