@@ -31,7 +31,6 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { Confined, Synchronized, Shared } from elp.concurrency
-import { Error } from elp.types
 
 export object Doc {
 	var lines [string],

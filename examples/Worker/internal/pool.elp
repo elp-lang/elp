@@ -13,7 +13,6 @@
 // and that **there is no `..` and no file-relative form at all**: moving a
 // file changes no import in it. These read `..` and `...` as if the dots
 // counted directories.
-import { Error } from elp.types
 import { Job, JobId, JobState, PoolError } from .types.job
 
 export enum PoolMsg {

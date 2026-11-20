@@ -5,7 +5,7 @@
 // `control-flow.md`'s `while`/`break`/`continue` carry all of it. There is
 // no `loop`, no labels, and this needed neither.
 
-import { Either, Error } from elp.types
+import { Either } from elp.types
 import { Duration } from elp.time
 import { Http, HttpError, HttpBody } from elp.net
 import { Protected } from elp.types

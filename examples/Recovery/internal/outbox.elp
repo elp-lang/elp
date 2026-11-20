@@ -8,7 +8,7 @@
 //
 // This file does one, four times, and the fourth is unrecoverable.
 
-import { Either, Error } from elp.types
+import { Either } from elp.types
 import { Synchronized } from elp.concurrency
 import { OutboxItem, Receipt } from ..types.item
 import { OutboxError } from ..types.errors

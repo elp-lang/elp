@@ -2,7 +2,6 @@
 // handles, four of them owned, created in one order and destroyed in the
 // reverse order, with nothing in the language saying so.
 
-import { Error } from elp.types
 // `Buffer<T>` is imported, not atmospheric: it fails `name-resolution.md`'s
 // criterion because no grammar or desugaring produces one.
 import { Buffer } from elp.memory

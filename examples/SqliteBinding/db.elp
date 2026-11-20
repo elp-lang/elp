@@ -1,7 +1,6 @@
 // The safe surface over internal/external.elp. This is where the FFI boundary's
 // questions turn into decisions a caller lives with.
 
-import { Error } from elp.types
 import {
 	Sqlite3,
 	CString,

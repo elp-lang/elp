@@ -1,4 +1,3 @@
-import { Error } from elp.types
 import {
 	Sqlite3,
 	Sqlite3Stmt,

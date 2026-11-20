@@ -1,7 +1,7 @@
 // The policy layer: where an error's identity decides what the program
 // does, which is the thing no other corpus entry does.
 
-import { Either, Error, From } from elp.types
+import { Either, From } from elp.types
 import { OutboxItem, Receipt } from .types.item
 import { TransportError, OutboxError, SyncError } from .types.errors
 import { Transport } from .internal.transport

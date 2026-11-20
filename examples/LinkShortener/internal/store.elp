@@ -7,7 +7,7 @@
 // question rather than answering it — one task owns the Map, and everyone
 // else sends it messages.
 
-import { Error, Sendable } from elp.types
+import { Sendable } from elp.types
 import { Channel } from elp.concurrent
 import { Link, StoreError } from .types.link
 

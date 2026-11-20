@@ -3,7 +3,6 @@
 // to each other in the same file, doing different things, with the difference
 // visible at a glance.
 
-import { Error } from elp.types
 import {
 	GLFWwindow,
 	GLFWmonitor,

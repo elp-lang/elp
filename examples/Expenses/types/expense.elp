@@ -1,4 +1,4 @@
-import { Error, UUID, Codec } from elp.types
+import { UUID, Codec } from elp.types
 import { CodeGen } from elp.macros
 
 // Money is integer minor units throughout. Floating point currency is a bug

@@ -8,7 +8,6 @@
 // Leans on undesigned constructs: `while`, `char`, `Map`, index expressions,
 // `==` / `<` / `&&` / `||`, `-` and `*`, `??`. See docs/core-language-probes.md.
 
-import { Error } from elp.types
 
 // A compiled pattern. Compiling once and searching many times is the whole
 // point of the algorithm, so the skip table is built in `new` and the object
