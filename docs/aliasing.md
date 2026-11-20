@@ -212,7 +212,8 @@ It also extends the re-entrancy hazard rule 3 already records. That one says
 a re-entrant *reader* can see a half-finished value; this says the **caller**
 can, after the transform returns, with nothing marking it.
 
-Three candidate answers, none decided:
+Three candidate answers, none decided — **superseded, see "resolved by
+`commit`" below**:
 
 - **State it and move on.** A failing transform leaves a partial write, the
   same way a failing method leaves a partially mutated receiver, which is
@@ -260,6 +261,60 @@ non-syntactic exit.
 So this is the one pair in the corpus the composability probe classed as
 **unsound** rather than as a gap or a bad program, and it is the entry in
 `tradeoffs.md` with the shortest fuse.
+
+### ~~The partial write~~ — resolved by `commit`, and the vocabulary was C++'s
+
+**RESOLVED, 2026-11-20.** The three candidates above are superseded, and
+what unstuck them was borrowing a vocabulary rather than inventing a
+mechanism. `error-handling.md` now owns the three exception-safety
+guarantees Abrahams named — **nothrow**, **strong**, **basic** — because
+they describe what a caller may assume *after a failure*, which is the
+question all three candidates were circling.
+
+`update(nonsuspending fn (&var T) -> R) -> R` gives the **basic**
+guarantee. That is not a defect in the mechanism, it is what `&var T` is:
+the closure writes through a mutable borrow, so on `Err` those writes are
+in the cell. Stating it is the first candidate, and it was right as far as
+it went.
+
+The cell surface gains a second form for the strong guarantee:
+
+```elp
+commit(nonsuspending fn (&var T) -> Either<R, E>) -> Either<R, E>
+```
+
+available when `T: Duplicate`. It is C++'s copy-and-swap, and elp already
+had both halves: `Duplicate` is the copy, a move into the cell is the
+nothrow swap. Take the lock, copy the payload, run the closure against
+`&var` the copy, move it in on `Ok` and drop it on `Err`, release.
+
+This is the third candidate — *"snapshot and restore on a failing return"* —
+with the objection removed. It was rejected for costing *"the copy the
+transform exists to avoid"*, and that objection was aimed at the wrong
+target: the transform exists to avoid a copy on the **hot path**, and this
+copies only where the author asked for atomicity. The call site says which,
+which is the thing all three candidates failed to make visible: `.update(`
+means the payload may be half-written, `.commit(` means it is not.
+
+**It also closes the cancellation hole above**, which is why this is
+resolved rather than narrowed. A cancellation unwinds out of the closure
+while the cell still holds the original, so the case with *no failure path
+on the page* needs no rule of its own — for every `Duplicate` payload. That
+is the `tradeoffs.md` entry with the shortest fuse, defused by a mechanism
+that is one conformance and no new concepts.
+
+Costs, in full: a copy inside the critical section, so `commit` is
+**forbidden in a `realtime` body** like everything else that allocates (and
+a `realtime` body has no failure path to be atomic about); nothing for a
+non-`Duplicate` payload, where the basic guarantee remains all there is;
+and the rule that a fallible transform must say which it wants —
+`error-handling.md` carries the rule and the diagnostic.
+
+Forced by `examples/Recovery/internal/outbox.elp`, which does the partial
+write four times and has no correct handler for it: two items marked
+delivered, the third's id unknown, the count advanced by two, and an `Err`
+that says only `UNKNOWN_ITEM`. No correct handler is the signature of a
+missing guarantee rather than of a missing arm.
 
 **What it closes.** The cell's write surface (so a `Confined<Node>` holding
 a `Move` aggregate is writable, which is five of the nine reports),

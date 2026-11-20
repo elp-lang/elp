@@ -53,17 +53,332 @@ original scope split — script code stays fully explicit, `throw` is a
 component-body ergonomic. Nothing here revisits that split; it wasn't
 part of the boundary question this doc resolves.
 
-## `?` — still not decided
+## One error type per layer, and the existential only at the top
 
-Unrelated to the boundary question, and still open. The objection to
-Rust's `?` specifically is its implicit `Into`/`From` conversion across
-error types — the auto-coercion machinery, not propagation-shorthand as a
-category — and how that machinery complicates `Copy`/derive and lifetime
-management. A narrower operator (only legal when the error type already
-matches exactly, no coercion, otherwise a plain type error at that line)
-would dodge that specific complaint if boilerplate ever becomes a real
-problem in practice. Not designed, not scheduled — `grammar-script-notes.md`
-gap #3 stands as written until real code makes the tradeoff concrete.
+**Decided**, after a survey of the corpus on 2026-11-20 that counted the
+thing nobody had counted: of 59 fallible signatures, **51 return the bare
+existential `Either<_, Error>`** and 8 return a concrete type — and every
+`Err(...)` handler in 11,300 lines of corpus does one of exactly two
+things, `e.toString()` or `Err(Wrapper.from(e))`. **Not one program
+branches on which error it got.**
+
+That is not a style problem, it is information destroyed at the boundary.
+`LinkShortener/main.elp` answers a disk failure with `CONFLICT` because
+`store.put` returns `Either<Link, Error>` and `CONFLICT` is the only thing
+the call site can say. `SocialFeed` cannot tell a 404 from a dropped
+connection. In both cases the error *arrived* knowing which it was.
+
+C++, Go and Rust reached the same arrangement from three different
+starting points, and it is the one elp takes:
+
+| | |
+|---|---|
+| **A concrete error type per layer** | Each layer's type names only what that layer can fail with. Rust: `thiserror` in a library. Go: a typed error wrapped with `%w`. C++23: `std::expected<T, E>` with a real `E`. elp: an `@error` enum, which the corpus already had and had only ever used for leaf errors it then discarded. |
+| **Converted at the boundary** | A layer converts the layer below's error into its own, and the conversion is where the policy lives. |
+| **The existential at the top, where nobody branches** | Rust's `Box<dyn Error>` and `anyhow::Error` exist for a real reason: at the top of a program there is nobody left to branch on behalf of. The error is logged, reported, and the process exits. |
+
+So the rule is not "never use the existential". It is **the existential
+belongs where nobody branches, and that is about one function per
+program.** New lint, `existential_error`, warn by default: an `export fn`
+returning `Either<_, Error>` where `Error` is the interface. The message
+names the concrete type the body actually produces, because in every corpus
+instance the body knows.
+
+`examples/Recovery` is the probe. Its three layers are `TransportError`
+(five failures, four different responses), `OutboxError` (three, all local)
+and `SyncError` (five, each with a different follow-up including one that
+pages somebody), and the shape of the program is that the five arms at the
+top get five different log levels — which is the entire reason the type has
+five variants instead of a string.
+
+### What `@error` generates, and `@message`
+
+`macros.md` lists `@error` as a directive and five corpus files use it.
+**None of them says what `toString()` returns**, and for
+`RenderError.NO_SWAPCHAIN` the only thing derivable from the declaration is
+the variant's name. "NO_SWAPCHAIN" is not a sentence anybody can act on.
+
+thiserror's answer is a per-variant format string and it is the feature
+that makes the macro worth having rather than a conformance stub. Spelled
+`@message`, over the variant's own fields, in elp's existing interpolation
+syntax:
+
+```elp
+@error
+export enum TransportError {
+	@message("the request timed out after {elapsedMs}ms")
+	TIMEOUT { elapsedMs int },
+
+	@message("gave up after {attempts} attempts: {cause}")
+	EXHAUSTED { attempts int, indirect cause TransportError },
+}
+```
+
+No new expression language, no positional arguments, and the fields are
+already named. Two things fall out of it:
+
+**Error wrapping inside one layer makes the error type recursive**, and
+`indirect` is exactly the ratified mechanism — sixth sighting, and the
+first that is not a tree. "I gave up after six attempts" is useless without
+"and here is what the sixth said", so the retry variant carries a
+`TransportError`. The box being immutable is what keeps the enum `Copy`
+(`memory-model.md`, `indirect` rule 1), and an error type being `Copy` is
+not a detail: it is what lets a failure be stored in a report, logged, and
+matched again with nobody writing `.copy()`.
+
+**`@message` cannot be specified until string interpolation is.**
+`{cause}` is not a primitive. `strings.md`'s open item records that the
+corpus interpolates primitives directly and calls `.toString()` for
+everything else, consistently, and that no document says so. Either
+interpolation accepts any conformer and `{cause}` is right, or it accepts
+primitives only and this must read `{cause.toString()}`.
+
+The case that decides it is the one that **must not compile**:
+
+```elp
+@message("the token {token} was refused")
+REFUSED { token Protected<string> },
+```
+
+`Protected<T>` is secret by *absent conformances*, so it has no
+`toString` — an interpolation that requires one refuses this on its own,
+with no rule about errors and secrets anywhere in the language. That is the
+design working. An auth token in a log line is the most ordinary security
+defect there is, and elp is one unwritten sentence away from refusing it.
+
+## `?` — decided, and the objection does not reach elp
+
+**Decided.** This section previously read *"still not decided"* and
+recorded the objection precisely: not propagation-shorthand as a category,
+but *"its implicit `Into`/`From` conversion across error types — the
+auto-coercion machinery, not propagation-shorthand as a category, and how
+that machinery complicates `Copy`/derive and lifetime management"*.
+
+**The objection was to Rust's blanket conversions, and elp cannot have
+them.** `SocialFeed/internal/api.elp` already declares
+
+```elp
+ApiError implements Error + From<HttpError>
+
+fn ApiError.from(value HttpError) -> Self { ... }
+```
+
+`From<Source>` is an ordinary nominal conformance in elp: one declaration
+per pair, greppable, with the policy visible in a named function. Rust's is
+implicit because a blanket `impl` can exist for a pair nobody wrote; elp
+has no blanket conformances, so every conversion `?` can perform is a
+conformance somebody declared on purpose. Four corpus files already write
+that conversion **by hand, at every call site**.
+
+`expr?` in a function returning `Either<_, E>` evaluates `expr`, yields the
+`Ok` payload, and on `Err(e)` returns early with `Err` of **one** of:
+
+1. **`e` itself**, when the error types match exactly. (The narrow operator
+   this doc previously offered as the fallback position.)
+2. **`E.from(e)`**, when `E` declares `From<SourceError>`. The conversion
+   is a declaration, not inference.
+3. **`e` widened**, when `E` is an interface the source type conforms to —
+   ordinary existential boxing (`dispatch.md`), and the rule that makes
+   `?` work in `main`. Rust has this rule too and nobody notices, because
+   the blanket `impl<E: Error> From<E> for Box<dyn Error>` hides it inside
+   rule 2.
+
+All three are checkable from a signature alone, which is the same bar
+`functions.md` sets for a body property. None of them is a coercion in the
+numeric sense, and `operators.md`'s ban on implicit numeric conversion is
+untouched: these convert *error types*, by a named conformance, in a return
+position.
+
+**The cost, stated rather than discovered later.** There is one `from` per
+pair, so one global mapping policy per pair. A call site that needs
+something else — `examples/Recovery` has one, where the same
+`TransportError` becomes a retryable `SyncError` or a permanent one
+depending on the variant — writes the `match` out and does not use `?`.
+That is correct, and it is the honest version of Rust's
+`.map_err(|e| ...)`. A `from` is a **lossy decision**, and that is the
+feature: `ApiError.from(HttpError)` maps status ranges onto three variants
+and discards the rest, once, in one place a reviewer can find.
+
+### `errdefer`, which is part of `?` rather than a neighbour of it
+
+**Proposed, and it must be ratified with `?` or not at all.**
+
+`?` works by inserting an early return the reader cannot see. The moment a
+function acquires something before the first `?` — a claimed work item, a
+created row, an opened handle — every invisible return leaks it.
+`examples/Recovery/sync.elp` is the case: `sendOne` claims an item out of
+`pending` into `inFlight` and then has six error paths, and an item left in
+`inFlight` is never retried and never acknowledged. It is silently lost,
+and the more `?` is used the more places it is lost from.
+
+Zig has `errdefer` for exactly this, and the pairing is not a coincidence:
+a language that makes early returns cheap has to make the compensation for
+them cheap too, or the ergonomics are paid for in leaks. elp's `defer` is
+the wrong tool — it runs on normal exit too, and on success the item must
+*stay* claimed.
+
+```elp
+const item = self.outbox.claim(id)?
+errdefer { self.outbox.restore(item) }
+```
+
+Same scoping as `defer`. The rule is one sentence: **it runs when the
+enclosing scope exits with an `Err`, and not otherwise.**
+
+**The open piece: a compensation that must not fire on every failure.** In
+`sendOne`, three error paths want the item restored and three (the
+permanent ones) want it dropped — a rejected item put back in `pending` is
+retried forever against a server that will always say no, which is
+`examples/Untrusted`'s lesson in a new costume. Three answers, with costs:
+
+| | |
+|---|---|
+| **Two scopes** | Split the function so retryable and permanent paths each get their own `errdefer`. No new surface; the split is artificial and a reader has to follow it. |
+| **A disarming statement** | `errdefer.cancel`. Honest, and it is a second piece of control flow attached to the first — fine when written, bad when nested. |
+| **Bind the error** — `errdefer (e) { match e { ... } }` | The compensation decides per failure, which is where the decision belongs, at the cost of one binding in the grammar. |
+
+The third is what the probe wants, and it is not a coincidence that it
+looks like a `match`: "what do I undo" has the same shape as "what do I
+report". **This is the first thing the `errdefer` proposal has to settle,
+because a compensation that fires on the wrong failure is worse than none.**
+
+## The three guarantees, and the fallible transform
+
+C++ has had the vocabulary since Abrahams named it, and it is the right
+vocabulary because it describes **what a caller may assume after a
+failure** rather than how the failure happened:
+
+| | |
+|---|---|
+| **nothrow** | The operation cannot fail. |
+| **strong** | If it fails, nothing changed. All-or-nothing. |
+| **basic** | If it fails, invariants hold and nothing leaked, but the value may have been modified. |
+
+`aliasing.md`'s `update(nonsuspending fn (&var T) -> R) -> R` gives the
+**basic** guarantee, and the register has carried that as *"a failing
+transform leaves a partial write"* — a defect the `&var T` widening
+introduced, with three candidate answers and no decision, and no corpus
+program that did one. `examples/Recovery/internal/outbox.elp` does one, and
+it has no correct handler: two items are marked delivered, the third's id
+is unknown, the count is advanced by two and the `Err` says only
+`UNKNOWN_ITEM`. The caller cannot retry (double-counting the first two) and
+cannot give up (they really were delivered). **No correct handler is the
+signature of a missing guarantee, not of a missing arm.**
+
+**Decided: `commit`, the strong guarantee by copy-and-swap.**
+
+```elp
+commit(nonsuspending fn (&var T) -> Either<R, E>) -> Either<R, E>
+```
+
+C++'s answer to "all-or-nothing, and my operation can fail" is
+copy-and-swap, and elp has both halves already: `Duplicate` is the copy,
+and a move into the cell is the nothrow swap. Take the lock, copy the
+payload, run the closure against `&var` the copy, move it back on `Ok` and
+drop it on `Err`, release the lock. Available when `T: Duplicate`.
+
+Three consequences, and they are why this is worth ratifying rather than
+leaving to each author:
+
+- **It closes the cancellation hole.** The register lists *"cancellation
+  can unwind out of a transform"* as **unsound** rather than open, because
+  the payload is left half-written and all three candidate answers were
+  about failures the author wrote. Under `commit` a cancellation unwinds
+  out of the closure while the cell still holds the original — the
+  unsoundness is gone for every `Duplicate` payload, with no new rule
+  about cancellation anywhere.
+- **It costs a copy inside the critical section**, so it is forbidden in a
+  `realtime` body for the same reason everything else that allocates is.
+  The right cost to pay: a `realtime` body has no failure path to be
+  atomic about.
+- **It puts the guarantee at the call site.** `.update(` means the payload
+  may be half-written; `.commit(` means it is not. All three of
+  `aliasing.md`'s candidates left the call site looking identical.
+
+And it answers the question the candidates could not. *"Require the
+transform to be total, so `R` may not be an `Either`"* was rejected as too
+strong — it bans a shape to fix a subset. The conditional form is not:
+
+> **A transform whose `R` is an `Either` must be `commit`, not `update`,
+> unless the author opts into the basic guarantee explicitly.**
+
+The diagnostic, which is the test `diagnostics.md` sets:
+
+```
+error: this transform can fail, and a failure leaves the payload partly written
+  --> outbox.elp:84
+   |  return self.state.update(fn (&var s) -> Either<int, OutboxError> {
+   |                    ^^^^^^ returns `Either`, so `update` gives only the
+   |                           basic guarantee
+   = note: `OutboxState` is `Duplicate`, so `commit` can give the strong one
+   = help: if a partial write is intended, say so with `update(basic: ...)`
+```
+
+**The nothrow tier has no spelling, and it is the one the other two rest
+on.** C++ marks it `noexcept` precisely because the guarantee is only
+useful if the compiler can be told. `Outbox.restore` must never fail — a
+restore that could fail would leave an item in neither list, with nothing
+left to compensate with — and the only record of that is its return type
+and a comment. Open, owned here.
+
+## Aggregation: a typed report, not a joined error
+
+Go added `errors.Join` in 1.20 and it is the right primitive for Go: a
+deferred `Close` failing alongside the operation it was closing, two
+independent failures of equal weight, neither dropped. It is the **wrong**
+primitive for elp, and the reason is about elp rather than about Go.
+
+A joined error is opaque — you recover the parts by walking a dynamic chain
+with `errors.Is`/`errors.As`. **elp has no dynamic chain.** Wrapping here is
+an enum payload (`.DEFERRED { cause }`): static, matchable, `Copy`. So an
+aggregate must be *typed*, and once it is typed there is no reason to
+pretend it is an error:
+
+```elp
+export object SyncReport {
+	const delivered [Receipt],
+	const failed    [SyncFailure],
+	const remaining int,
+}
+```
+
+A partially successful batch is not a failure, it is a result with two
+lists in it — which is also why it is not `Either<SyncReport, SyncError>`.
+There is nothing a caller could do with an `Err` that it cannot do better
+with `failed`.
+
+The cost: no generic "does this failure involve a timeout, anywhere down
+the chain". Recovering a nested cause is a nested pattern
+(`.DEFERRED { cause = .TIMEOUT { elapsedMs } }`), which makes
+`patterns.md`'s **nested record patterns** an error-handling dependency
+rather than a convenience.
+
+## Handle an error once: logged, or returned, never both
+
+The most portable piece of error-handling advice Go has produced, and it
+costs no language surface. A layer that logs *and* returns turns one
+failure into four log lines at four layers, none of which is the one with
+the context. `Recovery/sync.elp` records and returns; `Recovery/main.elp`
+logs, once, because it is the layer that will not return it any further.
+
+Convention, not a rule — it is not checkable without knowing what counts as
+logging, and the lint that tried would fire on every sensible `Log.debug`.
+
+## A library may not trap on input
+
+elp traps in several designed places: a duplicate `by` key
+(`control-flow.md`), a nested `update` on one cell, numeric overflow. A
+trap is a panic, and a panic means *bug*, which makes the rule a
+consequence rather than a new policy:
+
+> **A trap reachable from untrusted input is a defect, and the fallible
+> form has to exist.**
+
+`examples/Untrusted` already found one — `by` over server-supplied ids is a
+remote crash — and this is the sentence that says why the `Keyed<K, T>`
+direction is not optional. It is also Go's rule (a library returns an
+error, it does not `panic`) and Rust's (`panic!` is for broken invariants,
+not for bad input), arrived at from elp's own trap list.
 
 ## Matching an interface-typed value always needs a fall-through
 
@@ -82,6 +397,21 @@ interface-typed value by concrete type** is a *type switch*, distinct
 from matching an enum's variants, and neither its syntax nor its
 semantics is designed. Whatever it ends up looking like, the mandatory
 catch-all applies to it.
+
+**Amended 2026-11-20: the type switch has lost its only customer.** The
+quoted comment is `BlogStyle`'s, and it describes the style the decision
+above replaces — a function returning `Either<Content, Error>` whose caller
+must ask *"was that an ApiError or a SerializationError"*. With a concrete
+error type per layer the question does not arise: `Recovery/main.elp`
+matches a `SyncError`, a closed enum, so five arms cover it exhaustively
+and a sixth variant added later is a compile error at that line rather than
+a silently wrong log level.
+
+So the type switch is not needed for error handling, which is the only
+place the corpus wanted it. It may still be wanted elsewhere, and the
+mandatory catch-all above still applies wherever an interface is matched —
+but "nobody needs it yet" is not "it is wrong", so this stays recorded
+rather than closed, and it is no longer urgent.
 
 ### Enums are different, and a catch-all is a choice there
 

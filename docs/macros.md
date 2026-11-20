@@ -204,6 +204,35 @@ wearing an `@` is, and the answer was already on the page:
 |---|---|---|---|
 | **macro** | declarations | Capitalised | `@CodeGen`, `@Duplicate`, `@Screen`, `@Reducer` |
 | **directive** | nothing — it tells the compiler something | lowercase | `@external`, `@abi`, `@error`, `@default`, `@allow` |
+
+### `@error` generates a conformance, and `@message` is what makes it worth having
+
+**Added 2026-11-20.** `@error` appears in five corpus files and nothing
+here said what the `Error` conformance it generates actually returns from
+`toString()`. The only thing derivable from a declaration is the variant's
+name, and `RenderError.NO_SWAPCHAIN` is not a sentence anybody can act on.
+
+thiserror's per-variant format string is the answer, spelled `@message` and
+written over the variant's own fields in elp's existing interpolation
+syntax:
+
+```elp
+@error
+export enum TransportError {
+	@message("the request timed out after {elapsedMs}ms")
+	TIMEOUT { elapsedMs int },
+}
+```
+
+A variant attribute, so it is the first macro input attached below the type
+level — which is also the shape the dropped Go-style field tags wanted, and
+is worth noting here because that item is still open on this page.
+
+What it depends on: **what string interpolation accepts**
+(`strings.md`). `@message` cannot be specified until that is, because
+`{cause}` in a wrapping variant is not a primitive. The decision belongs
+there; `error-handling.md` carries the case that forces it, which is a
+`Protected<string>` field that must not be interpolable.
 | **a value** | nothing — it *is* one | Capitalised, being a type | `@Package` |
 
 Every elp attribute in the corpus obeys this, which makes it evidence

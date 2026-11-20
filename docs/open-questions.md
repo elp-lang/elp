@@ -45,7 +45,7 @@ ratifications had both missed, because no corpus program does either.
 
 | | |
 |---|---|
-| **A failing transform leaves a partial write** | `aliasing.md`, "The transform closure" — a defect the `&var T` widening introduced, written up there with three candidate answers. The original `fn (T) -> T` could not do it. |
+| ~~**A failing transform leaves a partial write**~~ | **Resolved** by `commit` (`aliasing.md`, `error-handling.md`): the strong exception-safety guarantee by copy-and-swap, for `T: Duplicate`. `update` gives the basic guarantee and says so; a fallible transform must say which it wants. |
 | **Two related elements cannot be mutated in one operation** | `collections.md` — `xs.update(i, …)` holds `&var xs[i]`, and reading `xs[j]` inside it needs `&xs`, which overlaps and is refused. So a swap, a sort step, or any pairwise operation has no spelling. Nothing in the corpus does one. |
 
 Three of its other stress tests turn out to be **already answered**, which is
@@ -91,7 +91,7 @@ of "nobody has checked" and into this file.
 
 | | |
 |---|---|
-| **Cancellation can unwind out of a transform** | `aliasing.md` — **unsound**, not a gap. The payload is left half-written with no failure path on the page, and all three candidate answers to the partial-write defect are about failures the author wrote. |
+| ~~**Cancellation can unwind out of a transform**~~ | **Resolved** by the same mechanism, which is why it was worth taking: under `commit` the unwind leaves the cell holding the original, so the case with no failure path on the page needs no rule of its own. For a non-`Duplicate` payload the basic guarantee is still all there is. |
 | A `Published<T>` cannot notify a component | `reactivity.md` — no mechanism joins them, and the only thing that would is `frame`, which that file does not mention. Both halves read as complete alone. |
 | A lock taken on the cell thread | `reactivity.md` — legal, correct by every rule, and a UI thread blocking on a worker's lock. Wants a diagnostic, not a rule. |
 
@@ -104,6 +104,40 @@ restriction on a `Synchronized` transform body, what rejects `a[i] = v`, and
 the diagnostic for a conformance the fields deny.
 
 Of sixteen ways to write something wrong, **nine are not currently caught**.
+
+## What the error-handling round decided, and what it opened
+
+Run on 2026-11-20 after a survey counted the corpus's error handling rather
+than reading it: **51 of 59 fallible signatures returned the bare
+existential `Either<_, Error>`**, and every `Err(...)` handler in 11,300
+lines did one of exactly two things — `e.toString()` or
+`Err(Wrapper.from(e))`. Nothing branched on which error it got, which is
+why two things had sat open with no customer (`?`, the type switch) and one
+defect had sat unresolved (the partial write).
+
+Decided, all in `error-handling.md`: one concrete error type per layer with
+the existential only where nobody branches; `?` with three rules;
+`@message` on an `@error` variant; the three exception-safety guarantees
+and `commit`; typed aggregation instead of a joined error; handle-once as a
+convention; and a library may not trap on input. `examples/Recovery` is the
+probe.
+
+What it opened:
+
+| | |
+|---|---|
+| **`errdefer`'s binding form** | `error-handling.md` — proposed, and the first thing to settle. Three error paths in `Recovery/sync.elp` want the compensation and three want it skipped, in one scope. `errdefer (e) { match e { … } }` is the candidate; a disarming statement and two scopes are the others. **`errdefer` must land with `?` or not at all.** |
+| **The nothrow tier has no spelling** | `error-handling.md` — and it is the one the other two rest on. C++ marks it `noexcept` because the guarantee is only useful if the compiler can be told. `Outbox.restore` must never fail and only a comment says so. |
+| **No narrower error type than the enum** | `error-handling.md` — the set of failures *one request* can produce is a subset of what the *policy* can produce, and a `match` must still write the unreachable arm. Zig infers an error set from the body; Swift 6 makes the author name it; elp has no spelling for "these three of those six", and the workaround is two enums and twice the conversions. |
+| **Cancellation cannot be reported** | `error-handling.md` / `core-language-probes.md` — `SyncError.CANCELLED` is declared and unconstructable, because cancellation is an unwind rather than a value. A caller cannot tell a cancelled batch from a crashed one. Same gap as *"`background` has no join"*, seen from the error side. |
+| **What `@message` may interpolate** | `strings.md` — now has a second customer and a sharper case: a `Protected<string>` field must not be interpolable, and whether it is refused depends on whether interpolation is specified in terms of a conformance. |
+| **`existential_error`'s level** | `diagnostics.md` — warn by default, with `@allow` expected on `main`. Arrives with the standing open item about default levels. |
+
+And one it sharpened rather than opened: **a field default's timing**.
+`OutboxItem.idempotencyKey` is the first corpus field where "once per type"
+and "once per construction" differ in *behaviour* rather than in style — a
+default that reran would turn at-least-once delivery into duplicate
+delivery.
 
 ## Where the decided set is in tension with itself
 
@@ -202,9 +236,9 @@ genuinely undecided thing — that `a..b` includes both ends.
 | Float vs range lexing — `.5` is currently illegal by accident | `grammar-script-notes.md` |
 | Destructured params do not parse | `grammar-script-notes.md` |
 | Is `style` a reserved prop name? | `grammar-script-notes.md` |
-| Nested record patterns | `patterns.md` |
-| `?` | `error-handling.md` (wanted by `memory-model.md`'s scoped release) |
-| The type switch | `error-handling.md` — recorded in `dispatch.md` and `patterns.md` too, which both defer here |
+| Nested record patterns | `patterns.md` — **promoted**: with wrapping done by enum payload rather than a dynamic chain, `.DEFERRED { cause = .TIMEOUT { … } }` is how a nested cause is recovered at all, so this is an error-handling dependency rather than a convenience |
+| ~~`?`~~ | **Decided** in `error-handling.md`: three propagation rules (types match, a declared `From`, or widening to a conformed interface), all checkable from a signature. The recorded objection was to Rust's *blanket* conversions, which elp cannot have. |
+| The type switch | `error-handling.md` — **no longer urgent**: its only customer was branching on `Either<_, Error>`, and one concrete error type per layer makes that a closed-enum `match`. Still open, no longer load-bearing. |
 
 **Types and conformance**
 

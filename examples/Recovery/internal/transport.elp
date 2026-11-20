@@ -1,0 +1,180 @@
+// The retry layer, which is the first place in this corpus where an error's
+// *identity* decides what happens next.
+//
+// Four of the five transport failures get four different responses, and
+// `control-flow.md`'s `while`/`break`/`continue` carry all of it. There is
+// no `loop`, no labels, and this needed neither.
+
+import { Either, Error } from elp.types
+import { Duration } from elp.time
+import { Http, HttpError, HttpBody } from elp.net
+import { Protected } from elp.types
+import { OutboxItem, Receipt } from ..types.item
+import { TransportError } from ..types.errors
+
+const MAX_ATTEMPTS = 5
+const BASE_BACKOFF = Duration.milliseconds(200)
+const ENDPOINT = "https://example.invalid/items"
+
+export object Transport {
+	// The token is `Protected<string>`, which is this corpus's **second**
+	// customer for the type and the one that justifies it. The first
+	// (`login-form.velp`) holds a password in a component; this holds a
+	// bearer token that is about to be interpolated into a header, logged
+	// on failure by whoever catches the error, and printed in a crash
+	// report. Every one of those is a leak, and `Protected<T>`'s whole
+	// design is that none of them compiles.
+	var token Protected<string>,
+
+	// Whether this attempt has already refreshed the credentials. Not a
+	// counter: the answer to a second 401 is to stop, not to try harder.
+	var refreshed bool,
+}
+
+// One request, no policy. Splitting this out is what lets `send` below be
+// *only* the policy, and it is the same split `examples/Pipeline` makes
+// between the work and the orchestration.
+fn Transport.postOnce(&self, item OutboxItem) -> Either<Receipt, TransportError> {
+	const payload HttpBody<OutboxItem> = .new(item)
+
+	// `.expose()` — the one greppable way a secret leaves `Protected<T>`
+	// (`aliasing.md`). It is called exactly once in this program, at the
+	// only place the token is genuinely needed, and `expose_protected` is
+	// the lint that makes a reviewer look at this line.
+	return match Http.post<Receipt>(
+		ENDPOINT,
+		payload,
+		headers = ["Authorization": "Bearer {self.token.expose()}", "Idempotency-Key": item.idempotencyKey],
+	) {
+		Ok(receipt) -> Ok(receipt)
+
+		// FINDING 5 — the FFI-shaped boundary, in a non-FFI layer.
+		//
+		// `HttpError` is the stdlib's error and `TransportError` is this
+		// program's. The conversion is a `match` over a status range, which
+		// is the same shape `SocialFeed`, `BlogStyle` and `SqliteBinding`
+		// all write, and `control-flow.md`'s inclusive `a..b` is what makes
+		// `400..499` read correctly.
+		//
+		// Written out rather than declared as `From<HttpError>` on purpose:
+		// the mapping needs `elapsed`, which is not in the `HttpError`. A
+		// conversion that needs a second input is not a `From`, and this is
+		// the boundary where `?` legitimately cannot help.
+		Err(err) -> match err.responseCode {
+			401      -> Err(.UNAUTHORIZED)
+			408      -> Err(.TIMEOUT { elapsedMs = err.elapsed.inMilliseconds() })
+			400..499 -> Err(.REJECTED { status = err.responseCode, detail = err.toString() })
+			500..599 -> Err(.UNAVAILABLE { status = err.responseCode })
+			_        -> Err(.MALFORMED { detail = err.toString() })
+		}
+	}
+}
+
+// The policy. Five failures, four responses, one budget.
+export fn Transport.send(&var self, item OutboxItem) -> Either<Receipt, TransportError> {
+	var attempt = 0
+	var backoff = BASE_BACKOFF
+
+	// `last` has to be initialised, and there is no sensible initial
+	// failure — which is `Optional<T>`'s job, and `patterns.md`'s narrowing
+	// is what reads it back out at the bottom.
+	var last Optional<TransportError> = nil
+
+	while attempt < MAX_ATTEMPTS {
+		attempt += 1
+
+		match self.postOnce(item) {
+			Ok(receipt) -> return Ok(receipt)
+
+			// Permanent. Returning the error *unwrapped* is deliberate: the
+			// caller's policy for a rejection does not depend on how many
+			// attempts we made, because we made one.
+			Err(.REJECTED { status, detail }) ->
+				return Err(.REJECTED { status, detail })
+
+			Err(.MALFORMED { detail }) ->
+				return Err(.MALFORMED { detail })
+
+			// Retryable exactly once, and then permanent. A server that
+			// answers 401 to a freshly minted token is not going to answer
+			// anything else, and the alternative is a radio-burning loop
+			// against a peer who is in control of the answer.
+			Err(.UNAUTHORIZED) -> {
+				if self.refreshed {
+					return Err(.UNAUTHORIZED)
+				}
+
+				self.refreshed = true
+
+				match self.refreshCredentials() {
+					Ok(_)    -> continue
+					Err(why) -> return Err(why)
+				}
+			}
+
+			// Retryable with backoff. Both arms do the same thing and are
+			// written separately because `last` differs, and because a
+			// reader looking for "what do we do about a timeout" should
+			// find a timeout arm.
+			Err(.TIMEOUT { elapsedMs }) -> {
+				last = .TIMEOUT { elapsedMs }
+				sleep(backoff)
+				backoff = backoff * 2
+			}
+
+			Err(.UNAVAILABLE { status }) -> {
+				last = .UNAVAILABLE { status }
+				sleep(backoff)
+				backoff = backoff * 2
+			}
+
+			// FINDING 6 — the recursive arm has no sensible handler, and
+			// the type says it can occur.
+			//
+			// `Transport.send` is the only thing that constructs
+			// `.EXHAUSTED`, so `postOnce` can never return one — but the
+			// match is over `TransportError`, whose variant set includes
+			// it, so the arm must be written. `error-handling.md` settled
+			// that *"a match with no catch-all must be exhaustive; writing
+			// `_` opts out"*, and both options here are bad: a catch-all
+			// would swallow a sixth variant added later, and this arm is
+			// unreachable-by-construction with no way to say so.
+			//
+			// What this wants is a narrower type — the set of failures
+			// *one request* can produce, which is a subset of the set the
+			// *policy* can produce. Zig spells that an error set and can
+			// infer it from the body; Swift 6's typed throws makes the
+			// author name it. elp has no spelling for "these three of
+			// those six", and the honest workaround is two enums, which
+			// doubles the conversions. Recorded, not solved.
+			Err(.EXHAUSTED { attempts, cause }) ->
+				return Err(.EXHAUSTED { attempts, cause })
+		}
+	}
+
+	// The budget is spent. `indirect cause` is what lets this carry the
+	// reason rather than just the count.
+	return match last {
+		// Unreachable in practice: the loop only exits here after at least
+		// one retryable failure set `last`. Expressing *that* is the same
+		// gap as FINDING 6, one level down.
+		nil   -> Err(.UNAVAILABLE { status = 0 })
+		cause -> Err(.EXHAUSTED { attempts = MAX_ATTEMPTS, cause })
+	}
+}
+
+// Refreshing produces a new token, and the new token is secret too — so the
+// function that mints it returns a `Protected<string>` and the assignment
+// never passes through a plain `string`. That is the whole of `Protected`'s
+// contract: the type, not a convention, is what keeps it out of the log.
+fn Transport.refreshCredentials(&var self) -> Either<bool, TransportError> {
+	return match Http.post<Protected<string>>("{ENDPOINT}/token", .empty()) {
+		Ok(fresh) -> {
+			self.token = fresh
+			Ok(true)
+		}
+		Err(_) -> Err(.UNAUTHORIZED)
+	}
+}
+
+// vim: ft=kotlin

@@ -1,0 +1,40 @@
+// What is being synced. Deliberately small: this entry is about failure,
+// not about the payload.
+
+import { Codec } from elp.types
+import { CodeGen } from elp.macros
+
+@CodeGen(ToJSON, Codec<JSON>)
+export object OutboxItem {
+	const id      string,
+	const body    string,
+
+	// The answer to `SyncError.ACKNOWLEDGED_NOT_RECORDED`, and the only one
+	// there is. If the server accepted the item and our acknowledgement was
+	// lost, the retry is a duplicate unless the server can recognise it. So
+	// the key is generated **once, when the item is created**, and is the
+	// same on every attempt.
+	//
+	// This is the field that would be wrong if a default ran per
+	// construction instead of per item. `id = UUID.v4()` as a field default
+	// is in the register as an open question
+	// (*"may a field carry a default, and when does it run?"*), and this is
+	// the first corpus field where the two answers differ in behaviour
+	// rather than in style: a default that reran would silently turn
+	// at-least-once delivery into duplicate delivery.
+	const idempotencyKey string,
+}
+
+OutboxItem implements Copy
+
+// The server's answer. Carried rather than discarded because
+// `SyncReport` reports what was sent, not just how many.
+@CodeGen(ToJSON, Codec<JSON>)
+export object Receipt {
+	const id       string,
+	const serverId string,
+}
+
+Receipt implements Copy
+
+// vim: ft=kotlin

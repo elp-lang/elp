@@ -1,0 +1,195 @@
+// The error types, and the reason this entry exists.
+//
+// A survey of the corpus on 2026-11-20 counted 59 fallible signatures: 51
+// return the bare existential `Either<_, Error>`, 8 return a concrete type.
+// And every `Err(...)` handler in 11,300 lines does one of exactly two
+// things — `e.toString()`, or `Err(Wrapper.from(e))`. Not one program
+// branches on *which* error it got.
+//
+// That is why the type switch has been open since `error-handling.md` was
+// written with no customer, and why `?` is undecided despite 135 `Either`
+// sightings: nothing has ever had to recover differently per failure. This
+// program has to, because the thing it does — pushing a local outbox to a
+// server — fails in five ways that demand five different responses.
+//
+// The model is the one C++, Go and Rust converged on from three different
+// starting points: a **concrete error type per layer**, each layer's type
+// naming only what that layer can fail with, converted at the boundary.
+// Rust spells it `thiserror` in a library and `anyhow` at the top; Go
+// spells it a typed error wrapped with `%w`; C++23 spells it
+// `std::expected<T, E>` with a real `E`. elp already has the mechanism —
+// `@error` on an enum — and the corpus has only ever used it for leaf
+// errors it then threw away.
+
+import { Error, Either, From } from elp.types
+
+// LAYER 1 — the transport. Five ways a request fails, and they are kept
+// apart *because the responses differ*: one is retryable, one is retryable
+// only after re-authenticating, two are permanent, and one is a bug in
+// either us or them.
+//
+// FINDING 1 — `@error` generates a conformance and nothing says what the
+// message is.
+//
+// `macros.md` lists `@error` as a directive and five corpus files use it.
+// None of them says what `toString()` returns. For `RenderError.NO_SWAPCHAIN`
+// the only thing derivable from the declaration is the variant's name, and
+// "NO_SWAPCHAIN" is not a sentence anyone can act on.
+//
+// thiserror's answer is a per-variant format string, and it is the feature
+// that makes the macro worth having rather than a conformance stub. Written
+// here as `@message`, using elp's own interpolation syntax over the
+// variant's own fields — which is the whole of the proposal: no new
+// expression language, no positional arguments, and the fields are already
+// named.
+@error
+export enum TransportError {
+	@message("the request timed out after {elapsedMs}ms")
+	TIMEOUT { elapsedMs int },
+
+	// Permanent. The server understood us and said no; sending it again
+	// produces the same answer and burns the user's battery doing it.
+	@message("the server rejected the request: {status} {detail}")
+	REJECTED { status int, detail string },
+
+	// Retryable. The server is having a bad time, which is not about us.
+	@message("the server is unavailable: {status}")
+	UNAVAILABLE { status int },
+
+	// Retryable exactly once, after refreshing credentials — and the
+	// distinction between "once" and "until it works" is load-bearing. A
+	// re-auth loop against a server that always answers 401 is a hot loop
+	// on a mobile radio, and `examples/Untrusted` is the entry that taught
+	// this corpus to ask what a hostile peer can make us do.
+	@message("the credentials were refused")
+	UNAUTHORIZED,
+
+	// Neither retryable nor the user's problem: the response did not have
+	// the shape its content type promised.
+	@message("the response was not the shape we asked for: {detail}")
+	MALFORMED { detail string },
+
+	// FINDING 2 — error wrapping inside one layer makes the error type
+	// **recursive**, and `indirect` is exactly the ratified mechanism for
+	// it. This is its sixth sighting and the first that is not a tree.
+	//
+	// "I gave up after six attempts" is useless without "and here is what
+	// the sixth attempt said", so the retry error has to carry a
+	// `TransportError` — itself. `indirect` puts it behind an immutable
+	// box, which is what keeps `TransportError` `Copy` (`memory-model.md`,
+	// `indirect` rule 1), and an error type being `Copy` is not a detail:
+	// it is what lets a failure be stored in a report, logged, and matched
+	// again without anybody writing `.copy()`.
+	@message("gave up after {attempts} attempts: {cause}")
+	EXHAUSTED { attempts int, indirect cause TransportError },
+}
+
+// FINDING 3 — what `@message` may interpolate is undecided, and
+// `Protected<T>` is why it matters.
+//
+// `{cause}` above interpolates a `TransportError`, not a primitive.
+// `strings.md`'s open item records that the corpus interpolates primitives
+// directly and calls `.toString()` for everything else, consistently, and
+// that no document says so. `@message` cannot be specified until it is:
+// either interpolation accepts any `Stringable` and `{cause}` is right, or
+// it accepts primitives only and this has to read `{cause.toString()}`.
+//
+// The case that decides it is the one below, which **must not compile**:
+//
+//     @message("the token {token} was refused")
+//     REFUSED { token Protected<string> },
+//
+// `Protected<T>` is secret by *absent conformances* (`aliasing.md`): it has
+// no `toString`, so an interpolation that requires one refuses this on its
+// own, with no rule about errors and secrets anywhere. That is the design
+// working. But it only works if interpolation is specified in terms of a
+// conformance — and if it is instead "primitives directly, everything else
+// via `.toString()`", then the author writes `{token.expose()}` and the
+// greppable escape hatch is doing its job too.
+//
+// Either way the answer is the same shape and neither is written down. An
+// auth token in a log line is the most ordinary security defect there is,
+// and the language is one unwritten sentence away from refusing it.
+
+// LAYER 2 — the local outbox. Disk, not network.
+@error
+export enum OutboxError {
+	@message("the outbox is full: {held} items held")
+	FULL { held int },
+
+	@message("the outbox could not be written to disk: {detail}")
+	PERSIST { detail string },
+
+	@message("no item is held under {id}")
+	UNKNOWN_ITEM { id string },
+}
+
+// LAYER 3 — the sync, which is where the two layers below meet and where
+// the *policy* lives. Every variant here exists because somebody upstream
+// has to do something different about it.
+@error
+export enum SyncError {
+	// Try again later. The item is still in the outbox.
+	@message("{id} could not be delivered: {cause}")
+	DEFERRED { id string, cause TransportError },
+
+	// Never try again. The item is dropped and the user is told.
+	@message("{id} will never be accepted: {cause}")
+	PERMANENT { id string, cause TransportError },
+
+	// The dangerous one, and the reason this program is worth writing.
+	//
+	// The server accepted the item and our own bookkeeping then failed, so
+	// the item is still in the outbox marked unsent. Retrying it sends it
+	// **twice**. There is no local-only fix: the only honest answer is
+	// at-least-once delivery plus an idempotency key the server
+	// deduplicates on, which is why `OutboxItem` carries one.
+	@message("{id} reached the server but was not recorded locally: {cause}")
+	ACKNOWLEDGED_NOT_RECORDED { id string, cause OutboxError },
+
+	// The outbox itself is broken; nothing can be synced until it is fixed.
+	@message("the outbox failed: {cause}")
+	LOCAL { cause OutboxError },
+
+	@message("the sync was cancelled with {remaining} items unsent")
+	CANCELLED { remaining int },
+}
+
+// The conversions, and the argument for `?`.
+//
+// `error-handling.md` records the objection to Rust's `?` precisely: not
+// propagation-shorthand as a category, but *"its implicit `Into`/`From`
+// conversion across error types — the auto-coercion machinery"*.
+//
+// That objection does not reach elp, and the corpus is the reason.
+// `SocialFeed/internal/api.elp` already declares
+// `ApiError implements Error + From<HttpError>` and already hand-writes
+// `fn ApiError.from(value HttpError) -> Self`. `From<Source>` is an
+// ordinary nominal conformance here — one declaration per pair, greppable,
+// with the policy visible in a named function. Rust's version is implicit
+// because a blanket `impl` can exist for a pair nobody wrote; elp's cannot.
+//
+// So `?` is not asking for coercion machinery. It is asking to call a
+// conversion that four corpus files already wrote by hand, at every call
+// site, forever.
+SyncError implements From<OutboxError>
+
+fn SyncError.from(value OutboxError) -> Self {
+	return Self.LOCAL { cause = value }
+}
+
+// And here is the cost of that, stated rather than discovered later.
+//
+// There is **one** `from` per pair, so there is one global mapping policy
+// per pair of error types. This conversion cannot say which item failed,
+// because an `OutboxError` does not know. A call site that needs the id has
+// to write the `match` out and may not use `?` — which is correct, and is
+// the honest version of Rust's `.map_err(|e| ...)`.
+//
+// FINDING 4 — a `from` is a *lossy decision*, and that is the feature.
+// `ApiError.from(HttpError)` maps status ranges onto three variants and
+// throws the rest away. Whether a conversion is allowed to lose
+// information is not a question `From` can answer; it is a question the
+// author answers once, in one place, where a reviewer can find it.
+
+// vim: ft=kotlin

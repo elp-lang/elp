@@ -1,0 +1,207 @@
+// The policy layer: where an error's identity decides what the program
+// does, which is the thing no other corpus entry does.
+
+import { Either, Error, From } from elp.types
+import { OutboxItem, Receipt } from .types.item
+import { TransportError, OutboxError, SyncError } from .types.errors
+import { Transport } from .internal.transport
+import { Outbox } from .internal.outbox
+
+// A batch has no single answer, and this object is the decision about that.
+//
+// Go added `errors.Join` in 1.20 and it is the right primitive for Go: a
+// deferred `Close` failing alongside the operation it was closing, two
+// independent failures of equal weight, kept so neither is dropped. It is
+// the **wrong** primitive here, and the reason is worth stating because it
+// is about elp rather than about Go.
+//
+// A joined error is opaque: you recover the parts with `errors.Is`/`As`,
+// walking a dynamic chain. elp has no dynamic chain — wrapping is an enum
+// payload (`.DEFERRED { cause }`), which is static, matchable and `Copy`.
+// So an aggregate in elp must be *typed*, and once it is typed there is no
+// reason to pretend it is an error: a partially successful sync is not a
+// failure, it is a result with two lists in it.
+//
+// Which is also why this is not `Either<SyncReport, SyncError>`. There is
+// nothing a caller could do with an `Err` here that it cannot do better
+// with `failed`.
+export object SyncReport {
+	const delivered [Receipt],
+	const failed    [SyncFailure],
+	const remaining int,
+}
+
+export object SyncFailure {
+	const id    string,
+	const cause SyncError,
+}
+
+export object Syncer {
+	var transport Transport,
+	const outbox  Outbox,
+}
+
+// One item, and the whole of this entry's argument for `?`.
+//
+// Written with `?` it is nine lines. Written as the corpus writes it today
+// it is the three-deep nested `match` of `LinkShortener/main.elp`, where
+// every arm but the innermost is `Err(e) -> Err(...)` and the shape of the
+// function is lost inside the error plumbing.
+//
+// FINDING 9 — **`?` and `errdefer` are one feature, not two**, and
+// ratifying either alone is a hazard.
+//
+// `?` works by inserting an early return the reader cannot see. This
+// function claims an item out of `pending` before it sends it, so every one
+// of those invisible returns leaves the item stranded in `inFlight`: not
+// pending, so never retried; not delivered, so never acknowledged. The
+// item is silently lost, and the more `?` is used the more places it is
+// lost from.
+//
+// Zig has `errdefer` for exactly this and the pairing is not a coincidence:
+// a language that makes early returns cheap has to make the compensation
+// for them cheap too, or the ergonomics it bought are paid for in leaks.
+// elp already has `defer`, which runs on normal exit, cancellation unwind
+// and panic unwind (`reactivity.md`) — and plain `defer` is *wrong* here,
+// because on success the item must stay claimed.
+//
+//     errdefer { self.outbox.restore(item) }
+//
+// One keyword, the same scoping as `defer`, and the rule is a sentence:
+// **it runs when the enclosing scope exits with an `Err`, and not
+// otherwise.** The two together are what make the nine-line version
+// correct; `?` alone makes it shorter and broken.
+export fn Syncer.sendOne(&var self, id string) -> Either<Receipt, SyncError> {
+	// `?` over an `OutboxError`, converted by the `From<OutboxError>`
+	// conformance in `types/errors.elp`. The outbox failing to hand over an
+	// item is `.LOCAL`, and no call site needs a say in that.
+	const item = self.outbox.claim(id)?
+
+	// Compensation for every path below that leaves with an `Err`, written
+	// once, next to the thing it compensates for.
+	errdefer { self.outbox.restore(item) }
+
+	// And here `?` is deliberately *not* used, because the mapping is a
+	// decision this call site owns: the same `TransportError` becomes a
+	// different `SyncError` depending on whether it can be retried. This is
+	// the half of error handling the corpus has never written, and it is
+	// four lines.
+	const receipt = match self.transport.send(item) {
+		Ok(receipt) -> receipt
+
+		// Retryable: the item stays in the outbox (the `errdefer` above
+		// puts it back) and the caller may try again later.
+		Err(.TIMEOUT { elapsedMs }) ->
+			return Err(.DEFERRED { id, cause = .TIMEOUT { elapsedMs } })
+		Err(.UNAVAILABLE { status }) ->
+			return Err(.DEFERRED { id, cause = .UNAVAILABLE { status } })
+		Err(.EXHAUSTED { attempts, cause }) ->
+			return Err(.DEFERRED { id, cause = .EXHAUSTED { attempts, cause } })
+
+		// Permanent: the item is dropped rather than restored, so this is
+		// the one error path that must *defeat* the `errdefer`. See
+		// FINDING 10.
+		Err(.REJECTED { status, detail }) ->
+			return Err(.PERMANENT { id, cause = .REJECTED { status, detail } })
+		Err(.UNAUTHORIZED) ->
+			return Err(.PERMANENT { id, cause = .UNAUTHORIZED })
+		Err(.MALFORMED { detail }) ->
+			return Err(.PERMANENT { id, cause = .MALFORMED { detail } })
+	}
+
+	// The dangerous window. The server has the item; our bookkeeping has
+	// not caught up yet. If this fails there is nothing to compensate —
+	// restoring the item to `pending` would send it again, and *not*
+	// restoring it loses the local record of something that really
+	// happened.
+	//
+	// The idempotency key is what makes the first option survivable, and
+	// it is the reason the error is its own variant: `ACKNOWLEDGED_NOT_RECORDED`
+	// is the only `SyncError` whose correct handler is "repair the local
+	// state", not "retry" and not "give up".
+	return match self.outbox.markDeliveredAtomically([receipt]) {
+		Ok(_)  -> Ok(receipt)
+		Err(e) -> Err(.ACKNOWLEDGED_NOT_RECORDED { id, cause = e })
+	}
+}
+
+// FINDING 10 — `errdefer` needs a way to be cancelled, and Zig's answer is
+// not available here.
+//
+// The permanent-failure arms above must *not* restore the item: a rejected
+// item put back in `pending` is retried forever against a server that will
+// always say no, which is `examples/Untrusted`'s lesson in a new costume.
+// So the compensation is right for three arms and wrong for three others,
+// in one scope.
+//
+// Zig's idiom is to disarm it with a flag the `errdefer` reads, which works
+// and is ugly. The alternatives, with what each costs:
+//
+//   1. **Two scopes.** Split `sendOne` so the retryable and permanent paths
+//      live in different functions, each with its own `errdefer`. No new
+//      language surface; the split is artificial and the reader has to
+//      follow it.
+//   2. **A disarming statement** — `errdefer.cancel` or similar. Honest,
+//      but it is a second piece of control flow attached to the first, and
+//      it is exactly the kind of thing that reads fine when written and
+//      badly when nested.
+//   3. **Make the compensation take the error** —
+//      `errdefer (e) { match e { ... } }`. The compensation then decides
+//      per failure, which is where the decision actually belongs, and it
+//      costs one binding in the grammar.
+//
+// (3) is the one this program wants, and it is not a coincidence that it
+// looks like a `match`: the question "what do I undo" has the same shape as
+// the question "what do I report", and this file answers the second one
+// twelve lines above.
+//
+// Not ratified. Recorded as the first thing the `errdefer` proposal has to
+// settle, because a compensation that fires on the wrong failure is worse
+// than no compensation at all.
+
+// The batch. Every item is attempted; one item's failure does not stop the
+// others; nothing is logged here.
+export fn Syncer.syncAll(&var self) -> SyncReport {
+	var delivered [Receipt] = []
+	var failed [SyncFailure] = []
+
+	for item in self.outbox.pendingItems() by item.id {
+		match self.sendOne(item.id) {
+			Ok(receipt) -> delivered.append(receipt)
+
+			// Go's single-handling rule, which is the most portable piece
+			// of error-handling advice there is: an error is either logged
+			// **or** returned, never both. Logging here and returning the
+			// report as well is how one failure becomes four log lines at
+			// four layers, none of which is the one with the context.
+			//
+			// So this records and moves on. `main.elp` is where it is
+			// logged, once, because that is where nobody is going to
+			// return it any further.
+			Err(cause) -> failed.append(SyncFailure { id = item.id, cause })
+		}
+	}
+
+	return SyncReport {
+		delivered,
+		failed,
+		remaining = self.outbox.pendingCount(),
+	}
+}
+
+// FINDING 11 — cancellation has no representation in the report.
+//
+// `SyncError.CANCELLED { remaining }` is declared in `types/errors.elp` and
+// nothing in this file can construct it. A cancellation unwinds the loop
+// above; it does not arrive as an `Err` from `sendOne`, because
+// cancellation is not an error value in elp — it is an unwind, which is why
+// `defer` is specified to run on it.
+//
+// So a cancelled sync produces no report at all, and the caller cannot tell
+// a cancelled sync from a crashed one. The register already carries
+// *"cancellation during mutation, with no cell thread"* and
+// *"`background` has no join"*; this is the same gap seen from the error
+// side, and the variant is left in place as the evidence that the type
+// wanted to say something the language cannot.
+
+// vim: ft=kotlin

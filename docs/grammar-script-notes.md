@@ -27,10 +27,31 @@ genuinely language-level questions it did surface were folded into
    The grammar gains `while expr block`, `break` and `continue` as
    statements.
 
-3. **No `?` error-propagation operator.** Errors are always pattern-matched
-   explicitly. The compiler is expected to warn on unhandled `Either<_, E>`
-   values that escape a scope, Go-style. If `?` is ever added it would be
-   sugar over an explicit match, not a new control-flow primitive.
+3. ~~**No `?` error-propagation operator.**~~ **Resolved** by
+   `error-handling.md`, and the note's own last sentence is what it
+   resolved to: `?` **is** sugar over an explicit match and not a new
+   control-flow primitive. The grammar gains a postfix operator and one
+   statement:
+
+   ```
+   try_expr  = expr '?'
+   errdefer  = 'errdefer' ( '(' IDENT ')' )? block
+   ```
+
+   `expr?` is legal only in a function whose return type is `Either<_, E>`,
+   and it propagates in exactly three cases — the error types match, `E`
+   declares `From<Source>`, or `E` is an interface the source conforms to.
+   All three are checkable from a signature alone.
+
+   The unhandled-`Either` rule in this note's second sentence stands and is
+   what makes `?` safe to add: a value that escapes unconsumed is still an
+   error, and `?` is one of the ways to consume it.
+
+   `errdefer` is proposed rather than ratified, with the binding form
+   (`errdefer (e) { ... }`) the open piece. It must land with `?` or not at
+   all — `?` inserts early returns a reader cannot see, and a function that
+   acquired something before the first `?` leaks it on every one of them.
+   `examples/Recovery/sync.elp` is the case.
 
 4. **No `throw` in `.elp`.** The `throw` form seen in `.velp` component
    bodies lives in the view dialect, not the script dialect — script code

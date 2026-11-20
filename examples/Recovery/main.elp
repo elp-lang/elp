@@ -1,0 +1,142 @@
+// The top, and the one place in this program where the existential `Error`
+// is the right type.
+//
+// The survey that produced this entry found 51 of 59 fallible corpus
+// signatures returning `Either<_, Error>` — the interface, not a type. That
+// is Rust's `Box<dyn Error>` and `anyhow::Error`, and both exist for a
+// reason: at the top of a program nobody branches, because there is nobody
+// left to branch on behalf of. The error is printed, reported, and the
+// process exits.
+//
+// The rule the corpus was missing is not "never use the existential". It is
+// **the existential belongs where nobody branches, and that is one function
+// per program.** Everywhere else it deletes the information the caller
+// needed, which is why `LinkShortener` answers a disk failure with
+// `CONFLICT` and `SocialFeed` cannot tell a 404 from a dropped connection.
+
+import { Error, Either } from elp.types
+import { Protected } from elp.types
+import { Log } from elp.diagnostics
+import { OutboxItem } from .types.item
+import { SyncError } from .types.errors
+import { Transport } from .internal.transport
+import { Outbox } from .internal.outbox
+import { Syncer, SyncReport } from .sync
+
+export fn main() -> Either<bool, Error> {
+	const outbox = Outbox.new()
+
+	// Three items. The second will be rejected and the third deferred,
+	// which is the point: the batch must survive both.
+	outbox.add(OutboxItem {
+		id = "a",
+		body = "{\"kind\":\"note\"}",
+		idempotencyKey = "a-1",
+	})?
+
+	outbox.add(OutboxItem {
+		id = "b",
+		body = "{\"kind\":\"bogus\"}",
+		idempotencyKey = "b-1",
+	})?
+
+	outbox.add(OutboxItem {
+		id = "c",
+		body = "{\"kind\":\"note\"}",
+		idempotencyKey = "c-1",
+	})?
+
+	// FINDING 12 — `?` here converts `OutboxError` to the existential
+	// `Error`, and no conformance says it may.
+	//
+	// `main` returns `Either<bool, Error>`. `outbox.add` returns
+	// `Either<bool, OutboxError>`. For `?` to work, either
+	//
+	//   (a) every `@error` type conforms to `Error` (it does — that is what
+	//       the macro is for) and `?` accepts *widening to an interface the
+	//       source already conforms to*, which is not a `From` conversion
+	//       at all but ordinary existential boxing (`dispatch.md`), or
+	//   (b) somebody writes `Error implements From<OutboxError>`, which is
+	//       absurd: a conformance on the interface, for every error type in
+	//       every program.
+	//
+	// (a) is obviously right and it is a second rule for `?`, not a special
+	// case of the first. Rust has the same two rules and nobody notices,
+	// because the blanket `impl<E: Error> From<E> for Box<dyn Error>`
+	// hides one inside the other. elp has no blanket conformances, so the
+	// rule has to be written: **`?` propagates when the error types match,
+	// when a `From` conformance exists, or when the target is an interface
+	// the source conforms to.**
+	//
+	// Three rules is more than the objection in `error-handling.md`
+	// imagined, and all three are checkable from a signature.
+
+	var syncer = Syncer {
+		transport = Transport {
+			// The token arrives as a secret and never stops being one. In
+			// a real program this comes from the keychain; the literal is
+			// what a probe can write, and `Protected.of` is the only
+			// constructor that should exist — there is no
+			// `token.toString()` to get it back out, only `.expose()`.
+			token = Protected.of("hunter2"),
+			refreshed = false,
+		},
+		outbox,
+	}
+
+	const report = syncer.syncAll()
+
+	// Logged once, here, because this is the layer that will not return it
+	// any further — Go's single-handling rule, applied.
+	for failure in report.failed by failure.id {
+		// And the five `SyncError` variants get five different log levels
+		// and five different follow-ups, which is the entire reason the
+		// type has five variants instead of a string.
+		match failure.cause {
+			.DEFERRED { id, cause } ->
+				Log.info("{id} will be retried: {cause}")
+
+			.PERMANENT { id, cause } ->
+				Log.warn("{id} dropped, the server will never accept it: {cause}")
+
+			// The one that pages somebody.
+			.ACKNOWLEDGED_NOT_RECORDED { id, cause } ->
+				Log.error("{id} is delivered but not recorded; the outbox needs repair: {cause}")
+
+			.LOCAL { cause } ->
+				Log.error("the outbox is failing: {cause}")
+
+			.CANCELLED { remaining } ->
+				Log.info("cancelled with {remaining} unsent")
+		}
+	}
+
+	Log.info("delivered {report.delivered.count()}, failed {report.failed.count()}, {report.remaining} still pending")
+
+	return Ok(report.failed.count() == 0)
+}
+
+// FINDING 13 — a `match` over a concrete error enum is exhaustive, and
+// that is what dissolves the type switch.
+//
+// `error-handling.md` records that matching an interface-typed value can
+// never be exhaustive, because any package may add a conformance, so a
+// catch-all is mandatory — and that **matching an interface-typed value by
+// concrete type is a type switch, which the language does not have**. It
+// has been open since that doc was written.
+//
+// The match above needs none of it. `failure.cause` is a `SyncError`, a
+// closed enum, so five arms cover it and a sixth variant added later is a
+// compile error at this line rather than a silently wrong log level. The
+// type switch was demanded by the style this entry is replacing: if the
+// corpus had kept branching on `Either<_, Error>`, it would have had to
+// ask "is this an ApiError or a SerializationError", and
+// `BlogStyle/internal/api.elp` says so in a comment.
+//
+// So the type switch is not needed for error handling. It may still be
+// wanted elsewhere — but its only customer was a style that was costing
+// the corpus its error information, and with concrete enums the question
+// stops being urgent. Recorded rather than closed, because "nobody needs
+// it yet" is not the same as "it is wrong".
+
+// vim: ft=kotlin

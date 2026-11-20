@@ -178,6 +178,40 @@ code and says nothing. `Category.label` and `PatternError.toString` are
 silent, and the day a sixth variant is added they are a hard error —
 which is the whole point.
 
+### `existential_error` — warn by default
+
+An `export fn` whose error type is the **interface** `Error` rather than a
+concrete type. `error-handling.md` decides that the existential belongs
+where nobody branches, which is about one function per program, and the
+corpus survey that forced the decision found 51 of 59 fallible signatures
+returning it.
+
+The message names the concrete type the body produces, because in every
+corpus instance the body knows it:
+
+```
+warning: this returns `Either<Link, Error>`, so a caller cannot tell its
+         failures apart
+  --> store.elp:80
+   |  export fn Store.put(&self, link Link) -> Either<Link, Error> {
+   |                                                        ^^^^^ the
+   |                                                   interface, not a type
+   = note: the body produces `StoreError`, which has 3 variants
+   = help: return `Either<Link, StoreError>`; the existential belongs at the
+           top of a program, where nobody branches
+```
+
+Warn, not deny: it is right at the top of a program and in a prototype, and
+`@allow(existential_error)` on `main` is the expected annotation.
+
+### Not a lint — the fallible transform
+
+`error-handling.md` ratifies `commit` for the strong guarantee, and a
+transform whose `R` is an `Either` must use it rather than `update`. That
+is an **error**, not a lint, for the reason the soundness floor above gives:
+the program it rejects has no correct handler, so there is nothing for an
+author to weigh. The diagnostic is written out in that document.
+
 ## Commitments already made elsewhere
 
 Scattered through the other docs, collected here so they have a home:

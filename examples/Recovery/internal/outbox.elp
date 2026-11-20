@@ -1,0 +1,222 @@
+// The local half, and the entry's hardest finding.
+//
+// `aliasing.md` ratified `update(nonsuspending fn (&var T) -> R) -> R` and
+// recorded, one review later, that **a failing transform leaves a partial
+// write** — with three candidate answers and no decision. The register
+// calls it a defect the `&var T` widening introduced, and notes that
+// nothing in the corpus does one.
+//
+// This file does one, four times, and the fourth is unrecoverable.
+
+import { Either, Error } from elp.types
+import { Synchronized } from elp.concurrency
+import { OutboxItem, Receipt } from ..types.item
+import { OutboxError } from ..types.errors
+
+const CAPACITY = 256
+
+export object OutboxState {
+	var pending [OutboxItem],
+	var inFlight [OutboxItem],
+	var delivered int,
+}
+
+// `Duplicate`, not `Copy`, and the declaration is load-bearing below:
+// `Duplicate` is what makes the strong guarantee available at all.
+OutboxState implements Duplicate
+
+export object Outbox {
+	const state Synchronized<OutboxState>,
+}
+
+export fn Outbox.new() -> Self {
+	return Self {
+		state = .new(OutboxState { pending = [], inFlight = [], delivered = 0 }),
+	}
+}
+
+// The total case. No failure path, so the basic guarantee and the strong
+// guarantee are the same thing and nothing has to be decided.
+export fn Outbox.add(&self, item OutboxItem) -> Either<bool, OutboxError> {
+	return self.state.update(fn (&var s) -> Either<bool, OutboxError> {
+		if s.pending.count() >= CAPACITY {
+			return Err(.FULL { held = s.pending.count() })
+		}
+
+		s.pending.append(item)
+
+		return Ok(true)
+	})
+}
+
+// FINDING 7 — the three exception-safety guarantees, and elp currently
+// offers one of them without saying which.
+//
+// C++ has had the vocabulary for this since Abrahams named it, and it is
+// the right vocabulary because it describes *what the caller may assume
+// after a failure* rather than how the failure happened:
+//
+//   - **nothrow**: the operation cannot fail.
+//   - **strong**: if it fails, nothing changed. All-or-nothing.
+//   - **basic**: if it fails, invariants hold and no resource leaked, but
+//     the value may have been modified.
+//
+// `update(fn (&var T) -> Either<R, E>)` gives the **basic** guarantee, and
+// that is not a bug in the mechanism — it is what `&var T` *is*. The
+// closure writes through a mutable borrow of the payload; when it returns
+// an `Err`, the writes it already made are in the cell. The `Err` is
+// correct about the operation having failed and tells the caller nothing
+// about what state the payload is in.
+//
+// Below is the smallest program where that matters. Two items are marked
+// delivered and the third's id is unknown, so the count is advanced by two
+// and the `Err` says only "UNKNOWN_ITEM". The caller cannot retry (that
+// would double-count the first two) and cannot give up (the first two
+// really were delivered). There is no correct handler, which is the
+// signature of a missing guarantee rather than a missing arm.
+export fn Outbox.markDelivered(&self, receipts [Receipt]) -> Either<int, OutboxError> {
+	return self.state.update(fn (&var s) -> Either<int, OutboxError> {
+		var marked = 0
+
+		for receipt in receipts by receipt.id {
+			match s.inFlight.indexOf(fn (held) { return held.id == receipt.id }) {
+				nil -> return Err(.UNKNOWN_ITEM { id = receipt.id })
+				at  -> {
+					s.inFlight.removeAt(at)
+					s.delivered += 1
+					marked += 1
+				}
+			}
+		}
+
+		return Ok(marked)
+	})
+}
+
+// PROPOSED — `commit`, the strong guarantee, by the oldest trick there is.
+//
+//     commit(nonsuspending fn (&var T) -> Either<R, E>) -> Either<R, E>
+//
+// C++'s answer to "I need all-or-nothing and my operation can fail" is
+// copy-and-swap: do the work on a copy, then install it with an operation
+// that cannot fail. elp has both halves already and neither is new
+// machinery — `Duplicate` is the copy (`aliasing.md`), and a move into the
+// cell is the nothrow swap. So:
+//
+//   1. take the lock,
+//   2. `.copy()` the payload,
+//   3. run the closure against `&var` the copy,
+//   4. on `Ok`, move the copy into the cell; on `Err`, drop it,
+//   5. release the lock.
+//
+// Available when `T: Duplicate`, which is why `OutboxState` declares it
+// above. Three things follow, and they are the reason this is worth
+// ratifying rather than leaving to each author:
+//
+// **It also closes the cancellation hole.** The register lists
+// *"cancellation can unwind out of a transform"* as **unsound** rather than
+// open, because the payload is left half-written with no failure path on
+// the page and all three candidate answers were about failures the author
+// wrote. Under `commit` a cancellation unwinds out of the closure while the
+// cell still holds the original, so the unsoundness is gone for every
+// `Duplicate` payload — without a single new rule about cancellation.
+//
+// **It costs a copy inside the critical section**, so it is forbidden in a
+// `realtime` body for the same reason everything else that allocates is.
+// That is a real cost and it is the correct one to pay here: a `realtime`
+// body has no failure path to be atomic about.
+//
+// **It makes the guarantee visible at the call site**, which `aliasing.md`'s
+// three candidates all failed to do. A reader seeing `.update(` knows the
+// payload may be half-written; a reader seeing `.commit(` knows it is not.
+//
+// And it gives the open question its answer. The register's candidate
+// *"require the transform to be total, so `R` may not be an `Either`"* was
+// rejected as too strong — it bans a whole shape to fix a subset. The
+// conditional form is not too strong:
+//
+//   **A transform whose `R` is an `Either` must be `commit`, not `update`,
+//   unless the author opts into the basic guarantee explicitly.**
+//
+// The diagnostic writes itself, which is the test `diagnostics.md` sets:
+//
+//   error: this transform can fail, and a failure leaves the payload
+//          partly written
+//     --> outbox.elp:84
+//      |  return self.state.update(fn (&var s) -> Either<int, OutboxError> {
+//      |                    ^^^^^^ returns `Either`, so `update` gives only
+//      |                           the basic guarantee
+//      = note: `OutboxState` is `Duplicate`, so `commit` can give the
+//              strong one: the payload is restored if the closure fails
+//      = help: if a partial write is intended, say so with
+//              `update(basic: ...)`
+//
+// Written out as it would be, so the shape is on the page:
+export fn Outbox.markDeliveredAtomically(&self, receipts [Receipt]) -> Either<int, OutboxError> {
+	return self.state.commit(fn (&var s) -> Either<int, OutboxError> {
+		var marked = 0
+
+		for receipt in receipts by receipt.id {
+			match s.inFlight.indexOf(fn (held) { return held.id == receipt.id }) {
+				nil -> return Err(.UNKNOWN_ITEM { id = receipt.id })
+				at  -> {
+					s.inFlight.removeAt(at)
+					s.delivered += 1
+					marked += 1
+				}
+			}
+		}
+
+		return Ok(marked)
+	})
+}
+
+// Claiming an item moves it out of `pending` and into `inFlight`, so two
+// syncs cannot both send it. This is the operation `sync.elp` must undo if
+// the send fails, and the reason that entry needs `errdefer`.
+export fn Outbox.claim(&self, id string) -> Either<OutboxItem, OutboxError> {
+	return self.state.commit(fn (&var s) -> Either<OutboxItem, OutboxError> {
+		return match s.pending.indexOf(fn (held) { return held.id == id }) {
+			nil -> Err(.UNKNOWN_ITEM { id })
+			at  -> {
+				const claimed = s.pending.removeAt(at)
+				s.inFlight.append(claimed)
+
+				Ok(claimed)
+			}
+		}
+	})
+}
+
+// The compensation. Note what it is *not*: it is not fallible. A restore
+// that could fail would leave the program with an item in neither list,
+// and there would be nothing left to compensate with — so this is the
+// nothrow tier, deliberately, and the type says so.
+//
+// FINDING 8 — the nothrow tier has no spelling either, and it is the one
+// the other two rest on. C++ marks it `noexcept`; the guarantee is useful
+// precisely because the compiler can be told. Here the only record that
+// this must never fail is the return type `()` and this comment, and
+// nothing stops a later edit returning an `Either` and breaking every
+// caller's assumption silently.
+export fn Outbox.restore(&self, item OutboxItem) {
+	self.state.update(fn (&var s) {
+		match s.inFlight.indexOf(fn (held) { return held.id == item.id }) {
+			nil -> nil
+			at  -> {
+				s.inFlight.removeAt(at)
+				s.pending.append(item)
+			}
+		}
+	})
+}
+
+export fn Outbox.pendingCount(&self) -> int {
+	return self.state.with(fn (&s) -> int { return s.pending.count() })
+}
+
+export fn Outbox.pendingItems(&self) -> [OutboxItem] {
+	return self.state.with(fn (&s) -> [OutboxItem] { return s.pending.copy() })
+}
+
+// vim: ft=kotlin
