@@ -212,11 +212,11 @@ export fn Outbox.restore(&self, item OutboxItem) {
 }
 
 export fn Outbox.pendingCount(&self) -> int {
-	return self.state.with(fn (&s) -> int { return s.pending.count() })
+	return self.state.read(fn (&s) -> int { return s.pending.count() })
 }
 
 export fn Outbox.pendingItems(&self) -> [OutboxItem] {
-	return self.state.with(fn (&s) -> [OutboxItem] { return s.pending.copy() })
+	return self.state.read(fn (&s) -> [OutboxItem] { return s.pending.copy() })
 }
 
 // vim: ft=kotlin

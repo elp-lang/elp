@@ -650,11 +650,12 @@ does.
    `&var T` parameter spelling that `memory-model.md` Finding 4
    deliberately rejected, plus whole-value assignment through a
    reference, which is `QuadTree`'s GAP 4. Splitting it by direction —
-   `update(fn (T) -> T)` and `with(fn (&T) -> R) -> R` — needed neither,
+   `update(fn (T) -> T)` and `read(fn (&T) -> R) -> R` (spelled `with` at
+   the time) — needed neither,
    could not forget to write back, and made the critical section total.
    **Both blockers are now gone**, so `update` has been widened to
    `fn (&var T) -> R` and the split survives for a different reason: a
-   `Synchronized<T>` has no `.get()`, so `with` is its read.
+   `Synchronized<T>` has no `.get()`, so `read` is how it is read.
 4. **`background` has no join.** The fan-out loop never collects anything
    to wait on, so `snapshot()` reads before the workers finish.
    `reactivity.md` says `background` blocks its caller, which works for
@@ -710,7 +711,7 @@ cannot answer **even in principle**.
    `Connection` leaks the C allocation and nothing notices. elp has no
    destructors, no `defer`, nothing at scope exit. The smallest candidate
    is a scoped form (`with Connection.open(path) as db { ... }`) — and it
-   is worth noting that `Synchronized<T>`'s `update`/`with` are the same
+   is worth noting that `Synchronized<T>`'s `update`/`read` are the same
    shape, a resource borrowed for one block, arrived at independently.
 4. **A borrow invalidated by an unrelated call cannot be typed.**
    `sqlite3_column_text` returns a pointer killed by the next `step` on
@@ -984,7 +985,7 @@ FFI works because of a rule adopted for a different reason.
 A scoped form was reached for independently by `SqliteBinding`
 (exactly-once release), `VulkanTriangle` (the teardown ladder *and* GLFW's
 handle-less `init`/`terminate`), and noted in `aliasing.md` as the same
-shape as `Synchronized<T>`'s `update`/`with`.
+shape as `Synchronized<T>`'s `update`/`read`.
 
 **Designed** in `memory-model.md`, "Scoped release": `with expr as x { }`,
 with multiple bindings released in reverse, and a `Scoped` interface whose

@@ -299,7 +299,7 @@ fn QuadNode<T>.collect(&self, bounds &Rect, area &Rect, out &var [Entry<T>]) {
 // `Synchronized<T>` carries two closures split by direction:
 //
 //     .update(fn (T) -> T)         // read-modify-write
-//     .with(fn (&T) -> R) -> R     // read, return something derived
+//     .read(fn (&T) -> R) -> R     // read, return something derived
 //
 // `children.update(i, fn (&var child) -> bool { … })` above is both at once: it
 // mutates in place *and* returns the closure's value. So the signature the

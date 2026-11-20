@@ -95,7 +95,7 @@ export component Dashboard(paths [string]) {
 		// The natural way to show a derived figure is to ask the authoritative
 		// counter rather than the sampled copy:
 		//
-		//     Text("{pool.counts.with(fn (p) { return p.failed }).toString()}")
+		//     Text("{pool.counts.read(fn (p) { return p.failed }).toString()}")
 		//
 		// `Synchronized<T>.with` takes the lock. On the cell thread. In a
 		// markup read, which runs inside a turn that `reactivity.md` gives a

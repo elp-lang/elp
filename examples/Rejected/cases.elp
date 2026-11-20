@@ -234,7 +234,7 @@ realtime fn case10(frames int) -> int {
 //          third direction.
 fn case11(a &Synchronized<int>, b &Synchronized<int>) {
 	a.update(fn (&var x) {
-		x += b.with(fn (y) { return *y })
+		x += b.read(fn (y) { return *y })
 	})
 }
 
@@ -292,11 +292,11 @@ fn slowNetworkThing(n int) {}
 //          to attribute.
 // SAYS     — nothing today. It should be a **lint** rather than an error,
 //          because the same call is correct off the cell thread: something
-//          like "`with` takes a lock, and this runs on the cell thread".
+//          like "`read` takes a lock, and this runs on the cell thread".
 //          Naming it needs the thread-affinity body property.
 // INSTEAD  Read the `Published<T>` copy, which is what it is for.
 fn case14(counts &Synchronized<int>) -> int {
-	return counts.with(fn (n) { return *n })
+	return counts.read(fn (n) { return *n })
 }
 
 // ── 15. UNCAUGHT — a coroutine outliving its component ───────────────────────

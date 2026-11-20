@@ -126,6 +126,39 @@ export fn Connection.open(path string) -> Either<Self, DbError> {
 // out of it, including the error paths.
 Connection implements Scoped
 
+// FIXED — `Connection implements Scoped` had **no construction site
+// anywhere in the corpus**, so by scoped release's own rule (*"a value not
+// bound by a `with` is never released"*) nothing in this package could ever
+// release a connection. Not a leak in running code, because nothing ran:
+// an unexercised conformance, which is worse in a design corpus than a leak
+// would be in a program.
+//
+// Five types declare `Scoped` and, before this, exactly one `with` block
+// existed — in `examples/VulkanTriangle/main.elp`, binding three of them.
+// This package was one of the three probes that asked for the construct.
+//
+// `execute` is the smallest honest consumer: sqlite's own `sqlite3_exec` in
+// elp's shape. It is also the first corpus code where `with` and `?` appear
+// together, which is the combination `memory-model.md` says the construct
+// depends on for ergonomics.
+export fn execute(path string, sql string) -> Either<bool, DbError> {
+	with Connection.open(path)? as db {
+		// GAP — `?` inside a `with` block, and nothing says what happens.
+		//
+		// `memory-model.md`'s open item reads *"early `return` out of a
+		// `with` block releases and then returns, which is the intent"*, and
+		// `?` is an early return the reader cannot see (`error-handling.md`).
+		// So the release has to run on the `?` path too. It should, by the
+		// same rule, and the rule was written before `?` existed — this is
+		// the first site where the two meet.
+		var statement = db.prepare(sql)?
+		const stepped = statement.step()?
+		statement.finalize()?
+
+		return Ok(stepped)
+	}
+}
+
 export fn Connection.release(self) {
 	// GAP — `release` returns nothing and `sqlite3_close` returns a status,
 	// so a failing close is silently dropped. That is Rust's problem with

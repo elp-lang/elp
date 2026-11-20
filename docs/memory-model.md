@@ -948,6 +948,62 @@ A value not bound by a `with` is never released, so there is nothing to
 track. That is the entire cost difference, and it is why Rust needs
 unwinding machinery for `Drop` soundness and this needs none.
 
+### How this differs from a `defer`, which is the question that decides it
+
+Asked directly, and it is the right question — `defer` already exists for
+`reactivity.md`, already runs at scope exit, and could hold a cleanup call.
+`examples/Json/internal/parser.elp` had already noticed half of the answer
+in passing: *"`defer` is at-most-once-if-you-write-it, same as `with`."*
+
+| | `defer` | `with ... as x { }` |
+|---|---|---|
+| already in the language | **yes** | no — a keyword, a grammar form, `Scoped`, and a by-value receiver `functions.md` does not admit |
+| which exits it runs on | normal, cancellation unwind, panic unwind — **specified** | "every exit", and the open items below admit the panic path is unchecked |
+| ordering | LIFO within a scope | reverse of acquisition across bindings — **the same guarantee** |
+| can you forget it? | yes | **yes.** A `Scoped` type not bound by a `with` is never released, and nothing warns |
+| who writes the cleanup | the caller, at every acquisition site | the type's author, **once** |
+| double release | spellable — defer it *and* call it | **unspellable** |
+| can the handle escape | nothing stops stashing it | no: the binding is a borrow, and a field may not hold a borrow |
+| **can the cleanup consume the resource** | **no** | **yes** |
+| a resource assembled for a caller | no | no |
+| a resource acquired in a loop | body-scoped — `reactivity.md` calls this a footgun | cannot bind n resources |
+| a resource owned by a platform runtime | no scope to attach to | no brace to bind in |
+
+Eleven rows and **one** of them is a real difference in capability:
+
+> **`with` is a `defer` that can consume.** `defer db.release()`, where
+> `release` takes `self` by value, requires knowing the value is still
+> owned at scope exit — which is drop flags and moved-out analysis, the
+> exact cost the table above refuses for RAII. `with` dodges it by never
+> giving the block ownership: the binding is a borrow, the `with` itself
+> owns the value, so consuming it at exit is unconditionally legal.
+
+Everything else on that list `defer` either already does, or neither does.
+The two safety properties are consequences of that one choice rather than
+independent benefits.
+
+**So the question that decides whether this keyword survives is: may
+`release` take `&self`?**
+
+- **If yes**, `defer db.release()` covers the common case with no new
+  surface at all, and `with` is deletable. Note that it is *safe* by
+  construction for the shape that matters: the release runs at scope exit,
+  so there is no "afterwards" inside the block in which to use the handle.
+  What is given up is double-release being unspellable, and the cleanup
+  being written once on the type rather than at each site.
+- **If no**, the FFI evidence is the reason — `sqlite3_close(handle)` and
+  `delete_fluid_synth(synth)` consume the pointer, and a handle that is
+  still nameable after its release is a use-after-free waiting for the next
+  edit — and then the borrow-binding is the cheapest way to get by-value
+  release, and the keyword earns itself.
+
+My recommendation, recorded as mine: this is the decision to take before
+anything else in the release story, because the other three cases (assembly
+for a caller, a loop, a platform-owned lifetime) are all *additions* to
+whichever of the two survives, and designing additions to a construct that
+may be deleted is how this record got two mechanisms for one problem in two
+days.
+
 ### Two rules make it safe, and both already exist
 
 **The binding is a borrow** (`&T`) for the block's extent, so it cannot

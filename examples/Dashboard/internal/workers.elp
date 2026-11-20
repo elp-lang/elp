@@ -110,7 +110,7 @@ export fn Pool.started(workers int, total int) -> Self {
 							}
 						})
 
-						feed.publish(counts.with(fn (p) { return *p }))
+						feed.publish(counts.read(fn (p) { return *p }))
 					}
 				}
 			}

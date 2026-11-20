@@ -88,7 +88,7 @@ pool. `Arc<Mutex<T>>`.
 
 ```elp
 .update(fn (&var T) -> R) -> R   // read-modify-write under the lock
-.with(fn (&T) -> R) -> R         // read under the lock, return a derivation
+.read(fn (&T) -> R) -> R         // read under the lock, return a derivation
 ```
 
 ```elp
@@ -97,8 +97,8 @@ hits.update(fn (&var n) { n += 1 })
 
 The direction split survives here and not on `Confined<T>`, and the reason
 is the lock rather than symmetry: a `Synchronized<T>` cannot offer `.get()`
-because a read has to be bounded by the critical section, so `with` is its
-read. `Confined<T>` has `.get()` and needs no `with`.
+because a read has to be bounded by the critical section, so `read` is how
+it is read. `Confined<T>` has `.get()` and needs neither.
 
 A `.get()`/`.set()` pair over a lock is memory-safe and still
 *logically* racy — two writers interleave between the read and the write
@@ -145,9 +145,24 @@ One shape, at three sites, and it is the fix for all nine reports in
 ```elp
 Confined<T>.update(fn (&var T) -> R) -> R
 Synchronized<T>.update(fn (&var T) -> R) -> R
+Synchronized<T>.read(fn (&T) -> R) -> R
 [T].update(at int, fn (&var T) -> R) -> R
 Map<K, V>.update(key K, fn (&var V) -> R) -> R
 ```
+
+### Two constructs were both called `with`, and one is renamed
+
+**`Synchronized<T>`'s read-under-lock closure is `read`, not `with`.** It
+was `with(fn (&T) -> R) -> R` and it collided with `memory-model.md`'s
+`with ... as x { }`, which is an unrelated mechanism: one is a method on a
+cell that bounds a read by a critical section, the other is a statement
+that binds a resource to a block and releases it at the brace.
+
+Caught by the user asking where `with` came from, having seen `.with(` six
+times in the corpus and the statement once. That is the same defect as
+`realtime` being spelled two ways, and the fix is the same: pick one
+meaning per word. `read` also pairs with `update`, which is what the two
+halves of the surface actually are.
 
 1. **The payload never leaves.** This is the difference from Rust's
    `RefCell::replace_with` and it is what closes `examples/Recalc`'s GAP 7:
