@@ -23,6 +23,14 @@ export object ApiError {
 	const message string,
 }
 
+// MIGRATED — unchanged, and quoted in `error-handling.md` as the reason `?`
+// is decided rather than deferred. This conformance is what the objection
+// to Rust's `?` was about: *"its implicit `Into`/`From` conversion across
+// error types — the auto-coercion machinery"*. There is nothing implicit
+// here. `From<HttpError>` is a nominal conformance, declared on this line,
+// implemented in a named function forty lines down, and greppable. What `?`
+// adds is not the conversion but the end of writing
+// `Err(err) -> Err(ApiError.from(err))` at every call site.
 ApiError implements Error + From<HttpError>
 
 // `type` is a keyword inside an `@external` block, so the field and the
@@ -46,11 +54,8 @@ fn ApiError.from(value HttpError) -> Self {
 }
 
 // Returns the most recent posts in the feed.
-export fn getFeed() -> Either<[Post], Error> {
-	return match Http.get<[Post]>("https://example.invalid/posts") {
-		Err(err)   -> Err(ApiError.from(err))
-		Ok(posts)  -> Ok(posts)
-	}
+export fn getFeed() -> Either<[Post], ApiError> {
+	return Ok(Http.get<[Post]>("https://example.invalid/posts")?)
 }
 
 // GAP 1 — a structural object type, and this is one of the three corpus
@@ -66,14 +71,11 @@ export fn getFeed() -> Either<[Post], Error> {
 // What a multipart request body actually wants is a reason to decide: the
 // payload exists for one call, nothing else names its type, and inventing
 // `CreatePostRequest` for it is the workaround a reader would resent.
-export fn createPost(body string, imagePath Optional<string>) -> Either<Post, Error> {
+export fn createPost(body string, imagePath Optional<string>) -> Either<Post, ApiError> {
 	const payload HttpBody<object{ body string, image Optional<string> }> =
 		.new(object{ body, image = imagePath }, contentType = .Multipart)
 
-	return match Http.post<Post>("https://example.invalid/posts", payload) {
-		Err(err)     -> Err(ApiError.from(err))
-		Ok(created)  -> Ok(created)
-	}
+	return Ok(Http.post<Post>("https://example.invalid/posts", payload)?)
 }
 
 // vim: ft=kotlin

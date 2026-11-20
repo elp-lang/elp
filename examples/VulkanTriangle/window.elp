@@ -35,9 +35,9 @@ export object Glfw {}
 Glfw implements Move
 Glfw implements Scoped
 
-export fn Glfw.initialised() -> Either<Self, Error> {
+export fn Glfw.initialised() -> Either<Self, WindowError> {
 	if glfwInit() == 0 {
-		throw WindowError.INIT_FAILED
+		return Err(.INIT_FAILED)
 	}
 
 	return Ok(Self {})
@@ -49,8 +49,13 @@ export fn Glfw.release(self) {
 
 @error
 export enum WindowError {
+	@message("GLFW could not be initialised")
 	INIT_FAILED,
+
+	@message("no {width}x{height} window could be created")
 	CREATE_FAILED { width int, height int },
+
+	@message("GLFW reports no primary monitor")
 	NO_MONITOR,
 }
 
@@ -87,7 +92,7 @@ Monitor implements Copy
 // every call. Which of those is right is the same question as whether a
 // capability should be a parameter or an ambient fact, and nothing in the
 // design has had to answer it yet.
-export fn Window.open(width int, height int, title string) -> Either<Self, Error> {
+export fn Window.open(width int, height int, title string) -> Either<Self, WindowError> {
 	// 0x00022001 is GLFW_CLIENT_API, 0 is GLFW_NO_API: tell GLFW not to make
 	// an OpenGL context, because Vulkan owns the surface. Raw because the
 	// constants would come from a generated binding (`vk-types.elp`).
@@ -102,7 +107,7 @@ export fn Window.open(width int, height int, title string) -> Either<Self, Error
 		// elp answer and the wrong C one: an `Optional<OpaqueHandle>` is not
 		// guaranteed to be a null pointer at the ABI. Nothing says how an
 		// absent pointer is spelled at the boundary.
-		.NULL  -> throw WindowError.CREATE_FAILED { width, height }
+		.NULL  -> return Err(.CREATE_FAILED { width, height })
 		handle -> return Ok(Self { handle = handle.asWindow(), title })
 	}
 }
@@ -138,9 +143,9 @@ export fn Window.release(self) {
 // derived from them*, which is `aliasing.md`'s validity gap seen from the
 // release side rather than the duplication side.
 
-export fn Monitor.primary() -> Either<Self, Error> {
+export fn Monitor.primary() -> Either<Self, WindowError> {
 	match glfwGetPrimaryMonitor() {
-		.NULL  -> throw WindowError.NO_MONITOR
+		.NULL  -> return Err(.NO_MONITOR)
 		handle -> return Ok(Self { handle = handle.asMonitor() })
 	}
 }

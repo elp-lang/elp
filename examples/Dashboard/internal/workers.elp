@@ -140,7 +140,25 @@ export fn Pool.reader(&self) -> Published<Progress> {
 	return self.feed.reader()
 }
 
-fn render(path string) -> Either<int, Error> {
+// MIGRATED — the signature was `Either<int, Error>` on a body that cannot
+// fail, which is the same shape `examples/Pipeline`'s `Config.load` had:
+// a fallible signature standing in for a function nobody has written. The
+// three ways rendering an image actually fails are named, and the worker
+// loop above counts `Err(_)` without looking, which is now a choice rather
+// than the only option.
+@error
+export enum RenderError {
+	@message("{path} could not be read")
+	UNREADABLE { path string },
+
+	@message("{path} is not an image this build can decode")
+	UNSUPPORTED { path string },
+
+	@message("{path} could not be written: {detail}")
+	NOT_WRITTEN { path string, detail string },
+}
+
+fn render(path string) -> Either<int, RenderError> {
 	// Elided: decode, scale, write. It allocates, it does I/O, it blocks.
 	return Ok(path.length())
 }

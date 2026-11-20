@@ -44,14 +44,14 @@ const MAX_THREAD   = 64
 // evaluator's step count. Those are runtime obligations rather than
 // user-facing properties, and `memory-model.md` now records the second one
 // as such.
-export fn fetchFeed(url string) -> Either<[Post], Error> {
+export fn fetchFeed(url string) -> Either<[Post], IngestError> {
 	const body = Http.getText(url)?
 	const document = parse(body)?
 
 	return readPosts(&document)
 }
 
-fn readPosts(document &JSON) -> Either<[Post], Error> {
+fn readPosts(document &JSON) -> Either<[Post], IngestError> {
 	var posts [Post] = []
 
 	// FINDING 7 — the count limit is a `break`, and `break` arrived four
@@ -84,7 +84,7 @@ fn readPosts(document &JSON) -> Either<[Post], Error> {
 // `control-flow.md` cited when it gave `continue` its evidence — there, for
 // skipping whitespace in a lexer. Here the same construct is the difference
 // between a feed that renders and a feed that does not.
-fn readPost(value &JSON) -> Either<Post, Error> {
+fn readPost(value &JSON) -> Either<Post, IngestError> {
 	const id = value.get("id")
 		?? return Err(IngestError.MISSING { field = "id" })
 	const body = value.get("body")

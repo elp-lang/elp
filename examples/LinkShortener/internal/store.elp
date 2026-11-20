@@ -14,8 +14,8 @@ import { Link, StoreError } from .types.link
 // A reply channel is how a request-shaped message gets an answer back out of
 // an actor. Capacity 1 so the actor never blocks handing the reply over.
 export enum StoreMsg {
-	PUT { link Link, reply Channel<Either<Link, Error>> },
-	RESOLVE { code string, reply Channel<Either<Link, Error>> },
+	PUT { link Link, reply Channel<Either<Link, StoreError>> },
+	RESOLVE { code string, reply Channel<Either<Link, StoreError>> },
 	LIST { reply Channel<[Link]> },
 	SHUTDOWN,
 }
@@ -77,12 +77,16 @@ fn Store.ask<T>(&self, build fn(Channel<T>) -> StoreMsg) -> T {
 	return reply.receive()
 }
 
-export fn Store.put(&self, link Link) -> Either<Link, Error> {
-	return self.ask<Either<Link, Error>>(fn (reply) { return .PUT { link, reply } })
+// MIGRATED — `Either<Link, StoreError>`, so the two failures stay apart
+// all the way to the router. A channel reply carrying the existential was
+// the worst case of it in the corpus: the error type is written four times
+// here, and every one of them was the interface.
+export fn Store.put(&self, link Link) -> Either<Link, StoreError> {
+	return self.ask<Either<Link, StoreError>>(fn (reply) { return .PUT { link, reply } })
 }
 
-export fn Store.resolve(&self, code string) -> Either<Link, Error> {
-	return self.ask<Either<Link, Error>>(fn (reply) { return .RESOLVE { code, reply } })
+export fn Store.resolve(&self, code string) -> Either<Link, StoreError> {
+	return self.ask<Either<Link, StoreError>>(fn (reply) { return .RESOLVE { code, reply } })
 }
 
 export fn Store.list(&self) -> [Link] {

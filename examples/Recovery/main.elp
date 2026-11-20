@@ -23,6 +23,10 @@ import { Transport } from .internal.transport
 import { Outbox } from .internal.outbox
 import { Syncer, SyncReport } from .sync
 
+// The lint that enforces the decision, allowed in the one place the
+// decision says it belongs. `@allow` on `main` is the expected annotation
+// and is cheaper than a rule with an exception in it.
+@allow(existential_error)
 export fn main() -> Either<bool, Error> {
 	const outbox = Outbox.new()
 

@@ -14,8 +14,13 @@ import { Statement } from .internal.statement
 
 @error
 export enum DbError {
+	@message("{path} could not be opened: {message}")
 	CANNOT_OPEN { path string, message string },
+
+	@message("the connection is closed")
 	CLOSED,
+
+	@message("this sqlite was built without thread support (mode {mode})")
 	NOT_THREADSAFE { mode int },
 }
 
@@ -81,7 +86,7 @@ Connection implements Move
 // `with` is simply never released. `examples/VulkanTriangle` is what made it
 // urgent, because its five-deep handle tree needs release *ordering* and
 // reverse-order release gives that for free.
-export fn Connection.open(path string) -> Either<Self, Error> {
+export fn Connection.open(path string) -> Either<Self, DbError> {
 	// GAP 2, RESOLVED — there is no `unsafe` marker, because `@external` is
 	// the marker.
 	//
@@ -105,14 +110,14 @@ export fn Connection.open(path string) -> Either<Self, Error> {
 
 	match sqlite3_open(&c, &var handle) {
 		0    -> {}
-		code -> throw DbError.CANNOT_OPEN { path, message = "sqlite error {code}" }
+		code -> return Err(.CANNOT_OPEN { path, message = "sqlite error {code}" })
 	}
 
 	// GAP — the status code said the slot was written and the type cannot
 	// know that. Two returns the C ABI does not relate, so this `??` is the
 	// irreducible residual rather than a missing feature.
 	match handle {
-		null -> throw DbError.CANNOT_OPEN { path, message = "sqlite reported success and wrote nothing" }
+		null -> return Err(.CANNOT_OPEN { path, message = "sqlite reported success and wrote nothing" })
 		h    -> return Ok(Self { handle = h, path })
 	}
 }
@@ -131,7 +136,7 @@ export fn Connection.release(self) {
 	sqlite3_close(self.handle)
 }
 
-export fn Connection.close(self) -> Either<bool, Error> {
+export fn Connection.close(self) -> Either<bool, DbError> {
 	// `self` by value, not `&self` — this consumes the connection, which is
 	// what makes the double close a compile error rather than a crash.
 	//
@@ -142,7 +147,7 @@ export fn Connection.close(self) -> Either<bool, Error> {
 	// because `with` cannot be built without it.
 	match sqlite3_close(self.handle) {
 		0    -> return Ok(true)
-		code -> throw DbError.CANNOT_OPEN { path = self.path, message = "close failed: {code}" }
+		code -> return Err(.CANNOT_OPEN { path = self.path, message = "close failed: {code}" })
 	}
 }
 
@@ -150,7 +155,7 @@ export fn Connection.lastError(&self) -> string {
 	return sqlite3_errmsg(self.handle).asString() ?? "unknown"
 }
 
-export fn Connection.prepare(&self, sql string) -> Either<Statement, Error> {
+export fn Connection.prepare(&self, sql string) -> Either<Statement, DbError> {
 	return Statement.new(self.handle, sql)
 }
 

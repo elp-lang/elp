@@ -1,12 +1,16 @@
 // The public surface. Three functions, and the package's whole argument is
 // in the files they call.
 
-import { Error } from elp.types
+import { Either } from elp.types
 import { JSON } from .types.value
-import { Parser } from .internal.parser
+import { Parser, ParseError } from .internal.parser
 import { write } from .internal.writer
 
-export fn parse(source string) -> Either<JSON, Error> {
+// MIGRATED — `ParseError`, not the existential. A JSON parser's error is
+// the one thing its caller always wants to look at: `examples/Untrusted`
+// discards a malformed post and keeps the rest of the feed, and it can only
+// do that if it can tell a depth limit from a bad number.
+export fn parse(source string) -> Either<JSON, ParseError> {
 	var parser = Parser.over(source)
 
 	return parser.parse()
@@ -25,7 +29,7 @@ export fn stringify(value &JSON) -> string {
 // would have been a `Duplicate` whose only safe read is a deep copy — the
 // same quadratic read-side hole `examples/QuadTree`'s `tree-places.elp`
 // FINDING 5 found, in a program where the depth is attacker-controlled.
-export fn roundTrip(source string) -> Either<string, Error> {
+export fn roundTrip(source string) -> Either<string, ParseError> {
 	const value = parse(source)?
 
 	return Ok(stringify(&value))

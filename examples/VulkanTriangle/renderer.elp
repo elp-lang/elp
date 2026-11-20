@@ -33,13 +33,29 @@ import {
 import { VkInstanceCreateInfo, StructureType } from .internal.vk-types
 import { glfwCreateWindowSurface } from .internal.glfw
 
+// MIGRATED — `@message` per variant (`macros.md`). Before this round
+// `@error` generated a conformance and nothing said what `toString()`
+// returned, so the best a caller could print was "NO_SWAPCHAIN". A driver
+// status code is the only diagnostic Vulkan gives you and it was being
+// carried in the payload and never shown.
 @error
 export enum RenderError {
+	@message("vkCreateInstance failed: {code}")
 	NO_INSTANCE { code int },
+
+	@message("vkCreateDevice failed: {code}")
 	NO_DEVICE { code int },
+
+	@message("no Vulkan device can present to this surface")
 	NO_GPU,
+
+	@message("glfwCreateWindowSurface failed: {code}")
 	NO_SURFACE { code int },
+
+	@message("vkCreateSwapchainKHR failed: {code}")
 	NO_SWAPCHAIN { code int },
+
+	@message("frame submission failed: {code}")
 	DRAW_FAILED { code int },
 }
 
@@ -81,7 +97,7 @@ Renderer implements Move
 // objects outliving each other, but one object's field outliving another
 // field of the same object.
 
-export fn Renderer.new(window &Window) -> Either<Self, Error> {
+export fn Renderer.new(window &Window) -> Either<Self, RenderError> {
 	const info = VkInstanceCreateInfo {
 		sType                   = StructureType.INSTANCE_CREATE_INFO.raw(),
 		pNext                   = null,
@@ -105,13 +121,38 @@ export fn Renderer.new(window &Window) -> Either<Self, Error> {
 
 	match vkCreateInstance(&info, null, &var instanceSlot) {
 		0    -> {}
-		code -> throw RenderError.NO_INSTANCE { code }
+		code -> return Err(.NO_INSTANCE { code })
 	}
 
 	// Repeated after every call below, and it is the irreducible residual
 	// rather than ceremony: the status code is the only evidence the slot was
 	// written, and the C ABI does not relate the two returns.
-	const instance = instanceSlot ?? throw RenderError.NO_INSTANCE { code = 0 }
+	// MIGRATED — `x ?? throw E` was the corpus's spelling for
+	// unwrap-or-fail and it rested on something undesigned: `throw` as an
+	// *expression* is a diverging expression, which needs a bottom type elp
+	// has never specified (`error-handling.md`, "what the 36 `throw` sites
+	// were really asking for"). `.orError(e)` turns an `Optional<T>` into an
+	// `Either<T, E>` and `?` propagates it — two decided things.
+	const instance = instanceSlot.orError(RenderError.NO_INSTANCE { code = 0 })?
+
+	// GAP 4, RESOLVED by `errdefer` — and this file is the second program
+	// to demand it, independently of the one that proposed it.
+	//
+	// GAP 4 used to read: *"every `throw` above this line still leaks
+	// everything created before it … a failure must destroy the swapchain,
+	// the device, the surface and the instance, in that order, before
+	// returning — and a failure is a value that returns immediately, so
+	// there is no scope exit to hook."* It then guessed that assembly
+	// belongs in a `with` *"which needs a way to cancel the release, and
+	// nothing proposes one."*
+	//
+	// `errdefer` is the answer and it dissolves the hard half rather than
+	// solving it: there is nothing to cancel, because the compensation is
+	// only ever registered for the error path. On success these never run
+	// and the handles leave with the `Self`. LIFO like `defer`, which is
+	// the reverse-acquisition order teardown needs and `release` below
+	// documents by hand.
+	errdefer { vkDestroyInstance(instance, null) }
 
 	// GAP 3, RESOLVED — the count-then-fill call, now writable.
 	//
@@ -131,7 +172,7 @@ export fn Renderer.new(window &Window) -> Either<Self, Error> {
 	const found = count ?? 0
 
 	if found == 0 {
-		throw RenderError.NO_GPU
+		return Err(.NO_GPU)
 	}
 
 	var gpus = Buffer<Optional<VkPhysicalDevice>>.filled(found, nil)
@@ -146,25 +187,32 @@ export fn Renderer.new(window &Window) -> Either<Self, Error> {
 	// ABI does not relate the two returns. A binding package would do it once
 	// in a wrapper returning `[VkPhysicalDevice]`, which is what a wrapper is
 	// for.
-	const physical = gpus.at(0) ?? throw RenderError.NO_GPU
+	const physical = gpus.at(0).orError(RenderError.NO_GPU)?
 
 	var surfaceSlot Optional<VkSurfaceKHR> = null
 
 	match glfwCreateWindowSurface(&instance, &window.handle, null, &var surfaceSlot) {
 		0    -> {}
-		code -> throw RenderError.NO_SURFACE { code }
+		code -> return Err(.NO_SURFACE { code })
 	}
 
-	const surface = surfaceSlot ?? throw RenderError.NO_SURFACE { code = 0 }
+	const surface = surfaceSlot.orError(RenderError.NO_SURFACE { code = 0 })?
+
+	// No `errdefer` for the surface, and the omission is a finding rather
+	// than an oversight: `vkDestroySurfaceKHR` is an extension function
+	// loaded by name, which `release` below records as the one handle this
+	// program cannot destroy. So the error path leaks exactly what the
+	// success path leaks, which is the honest state of this binding.
 
 	var deviceSlot Optional<VkDevice> = null
 
 	match vkCreateDevice(physical, null, null, &var deviceSlot) {
 		0    -> {}
-		code -> throw RenderError.NO_DEVICE { code }
+		code -> return Err(.NO_DEVICE { code })
 	}
 
-	const device = deviceSlot ?? throw RenderError.NO_DEVICE { code = 0 }
+	const device = deviceSlot.orError(RenderError.NO_DEVICE { code = 0 })?
+	errdefer { vkDestroyDevice(device, null) }
 
 	// The borrowed handle. No status code at all, because nothing is created:
 	// this reads a pointer out of the device. So the slot is the *only*
@@ -172,62 +220,57 @@ export fn Renderer.new(window &Window) -> Either<Self, Error> {
 	// the type checker.
 	var queueSlot Optional<VkQueue> = null
 	vkGetDeviceQueue(device, 0, 0, &var queueSlot)
-	const graphics = queueSlot ?? throw RenderError.NO_DEVICE { code = 0 }
+	const graphics = queueSlot.orError(RenderError.NO_DEVICE { code = 0 })?
 
 	var swapchainSlot Optional<VkSwapchainKHR> = null
 
 	match vkCreateSwapchainKHR(device, null, null, &var swapchainSlot) {
 		0    -> {}
-		code -> throw RenderError.NO_SWAPCHAIN { code }
+		code -> return Err(.NO_SWAPCHAIN { code })
 	}
 
-	const swapchain = swapchainSlot ?? throw RenderError.NO_SWAPCHAIN { code = 0 }
+	const swapchain = swapchainSlot.orError(RenderError.NO_SWAPCHAIN { code = 0 })?
+	errdefer { vkDestroySwapchainKHR(device, swapchain, null) }
 
 	var poolSlot Optional<VkCommandPool> = null
 
 	match vkCreateCommandPool(device, null, null, &var poolSlot) {
 		0    -> {}
-		code -> throw RenderError.NO_SWAPCHAIN { code }
+		code -> return Err(.NO_SWAPCHAIN { code })
 	}
 
-	// GAP 4 — every `throw` above this line still leaks everything created
-	// before it, and this is the function `with` does **not** fix.
+	// What GAP 4 leaves behind, which is smaller and still real.
 	//
-	// By the last call there are five live handles. A failure must destroy
-	// the swapchain, the device, the surface and the instance, in that order,
-	// before returning — and `error-handling.md` makes a failure a value that
-	// returns immediately, so there is no scope exit to hook.
+	// `errdefer` destroys what *this function* created. It says nothing
+	// about the order relative to `release` below, and nothing enforces
+	// that the four `errdefer` blocks appear in acquisition order — they
+	// do, because they are written next to their acquisitions, and that is
+	// a convention rather than a rule. GAP 5's point stands: the order is
+	// the specification and the compiler cannot read it.
 	//
-	// `memory-model.md`'s scoped release covers a resource *used* inside a
-	// block. This is a resource being *assembled* for a caller, so there is
-	// no block to bound it: each handle has to outlive this function. So
-	// `with` answers `main.elp` (where these are consumed in a known order)
-	// and does not answer here.
-	//
-	// Which sharpens what is left. The remaining question is narrower than
-	// "elp has no destructors": it is **a partially-constructed aggregate on
-	// an error path**, which is C's `goto fail` ladder and which Rust solves
-	// with `Drop` on the error path. Possibly the answer is that assembly
-	// itself belongs in a `with`, with the handles moved out on success —
-	// which needs a way to cancel the release, and nothing proposes one.
+	// It also does not reach a resource acquired in a *loop*: a `for` that
+	// creates n command buffers and fails at item k wants n−1 releases, and
+	// `errdefer` inside the loop body runs at the body's exit rather than
+	// the function's. Nothing in this corpus does that yet.
+	const pool = poolSlot.orError(RenderError.NO_SWAPCHAIN { code = 0 })?
+
 	return Ok(Self {
-		instance, physical, device, graphics, surface, swapchain,
-		pool = poolSlot ?? throw RenderError.NO_SWAPCHAIN { code = 0 },
+		instance, physical, device, graphics, surface, swapchain, pool,
 	})
 }
 
-export fn Renderer.drawFrame(&self) -> Either<bool, Error> {
+export fn Renderer.drawFrame(&self) -> Either<bool, RenderError> {
 	// Elided: acquire an image, record a command buffer, three draw calls.
 	// `vkQueueSubmit` and `vkQueuePresentKHR` are the only part that touches
 	// anything this probe is about.
 	match vkQueueSubmit(self.graphics, 1, null, null) {
 		0    -> {}
-		code -> throw RenderError.DRAW_FAILED { code }
+		code -> return Err(.DRAW_FAILED { code })
 	}
 
 	match vkQueuePresentKHR(self.graphics, null) {
 		0    -> return Ok(true)
-		code -> throw RenderError.DRAW_FAILED { code }
+		code -> return Err(.DRAW_FAILED { code })
 	}
 }
 

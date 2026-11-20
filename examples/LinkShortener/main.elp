@@ -6,9 +6,9 @@
 // on method with a path match inside each arm, which triples the line count
 // and buries the route table.
 
-import { Error } from elp.types
-import { Server, Request, Response, Status } from elp.http
-import { Link } from .types.link
+import { Either, From } from elp.types
+import { Server, Request, Response, Status, DecodeError } from elp.http
+import { Link, LinkError, StoreError } from .types.link
 import { Store } from .internal.store
 
 const PORT = 8080
@@ -30,24 +30,77 @@ fn route(req Request, store Store) -> Response {
 	}
 }
 
-fn createLink(req Request, store Store) -> Response {
-	return match req.body.decode<Link>() {
-		Err(e) -> Response.text(.BAD_REQUEST, e.toString())
-		Ok(submitted) -> match Link.validate(submitted.target) {
-			Err(e) -> Response.text(.BAD_REQUEST, e.toString())
-			Ok(target) -> {
-				const link = Link {
-					code = Link.generateCode(),
-					target,
-				}
+// MIGRATED, and this file is the reason the error-handling round happened.
+//
+// `createLink` used to be a three-deep nested `match` in which every arm
+// but the innermost was error plumbing, and it got the answers wrong:
+// `store.put` returning the existential `Error` meant the only status this
+// function could name was `CONFLICT`, so **a disk failure was reported to
+// the client as a code collision**. The information to answer correctly
+// arrived at this function and was thrown away one layer below it.
+//
+// The route layer owns its own error type, and three `From` conformances
+// are what let the handler body be the handler. This is the shape Rust web
+// code reaches for (one app error, `IntoResponse`) and Go reaches for (a
+// handler wrapper that maps error to status), arrived at here because `?`
+// only propagates into one error type.
+@error
+export enum RouteError {
+	@message("the request body is not a link: {cause}")
+	BAD_BODY { cause DecodeError },
 
-				return match store.put(link) {
-					Err(e)      -> Response.text(.CONFLICT, e.toString())
-					Ok(created) -> Response.json(.CREATED, created)
-				}
-			}
-		}
+	@message("{cause}")
+	BAD_LINK { cause LinkError },
+
+	@message("{cause}")
+	STORE { cause StoreError },
+}
+
+RouteError implements From<DecodeError> + From<LinkError> + From<StoreError>
+
+fn RouteError.from(value DecodeError) -> Self { return Self.BAD_BODY { cause = value } }
+fn RouteError.from(value LinkError) -> Self { return Self.BAD_LINK { cause = value } }
+fn RouteError.from(value StoreError) -> Self { return Self.STORE { cause = value } }
+
+// The status is a property of the error, decided once, next to the error.
+// Spreading it across call sites is how the old version came to answer a
+// disk failure with 409.
+fn RouteError.status(&self) -> Status {
+	return match self {
+		.BAD_BODY(_) -> .BAD_REQUEST
+		.BAD_LINK(_) -> .BAD_REQUEST
+
+		// The nested pattern this depends on is `patterns.md`'s open item,
+		// promoted by this round: with wrapping done by enum payload rather
+		// than a dynamic chain, reaching a cause *is* a nested pattern.
+		.STORE { cause = .CODE_TAKEN(_) } -> .CONFLICT
+		.STORE { cause = .NOT_FOUND(_) }  -> .NOT_FOUND
 	}
+}
+
+// Three `?` and no plumbing. `createLink` is now about creating a link.
+fn createLink(req Request, store Store) -> Response {
+	return match attemptCreate(req, store) {
+		Ok(created) -> Response.json(.CREATED, created)
+		Err(e)      -> Response.text(e.status(), e.toString())
+	}
+}
+
+// FINDING — `?` forces the split between doing the work and rendering the
+// failure, because it is only legal in a function returning `Either<_, E>`
+// and an HTTP handler returns a `Response`.
+//
+// That is not a defect, and it is worth recording because it looked like
+// one. Every mature web stack ends up with this split for the same reason:
+// a handler that renders its own failures interleaves two unrelated
+// concerns, and the status table ends up scattered across the arms. What
+// `?` costs here is one extra function per handler; what it buys is that
+// the status table is `RouteError.status` and lives in one place.
+fn attemptCreate(req Request, store Store) -> Either<Link, RouteError> {
+	const submitted = req.body.decode<Link>()?
+	const target = Link.validate(submitted.target)?
+
+	return Ok(store.put(Link { code = Link.generateCode(), target })?)
 }
 
 // `/abc123` -> look up `abc123`. Stripping the leading slash is a string
@@ -61,9 +114,13 @@ fn followLink(path string, store Store) -> Response {
 		return Response.text(.NOT_FOUND, "not found")
 	}
 
+	// MIGRATED — `.NOT_FOUND` is now the error's own answer rather than
+	// this call site's guess. It happens to agree here, which is exactly
+	// why the old code looked fine: a guess that is right for the only
+	// failure you tested is indistinguishable from a decision.
 	return match store.resolve(code) {
-		Err(e)   -> Response.text(.NOT_FOUND, e.toString())
 		Ok(link) -> Response.redirect(.FOUND, link.target)
+		Err(e)   -> Response.text(RouteError.from(e).status(), e.toString())
 	}
 }
 

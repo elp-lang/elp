@@ -37,22 +37,41 @@ export object Statement {
 // the result is a use-after-free in C.
 Statement implements Move
 
-export fn Statement.new(db &Sqlite3, sql string) -> Either<Self, Error> {
+export fn Statement.new(db &Sqlite3, sql string) -> Either<Self, StatementError> {
 	const text = CString.from(sql)
 
 	match sqlite3_prepare_v2(db, &text, -1, &var out, &var tail) {
 		0    -> return Ok(Self { handle = out.asStatement(), sql })
-		code -> throw StatementError.CANNOT_PREPARE { sql, code }
+		code -> return Err(.CANNOT_PREPARE { sql, code })
 	}
 }
 
+// MIGRATED — messages, and the variant set was lying.
+//
+// `CANNOT_PREPARE` was reported for preparing, binding, stepping *and*
+// finalizing, because it was the only variant carrying a code. The error a
+// caller got said "cannot prepare" for a failed `bind`, which is worse
+// than the existential it was wrapped in: a wrong answer rather than no
+// answer. One variant per operation, all carrying the sqlite code.
 @error
 export enum StatementError {
+	@message("could not prepare `{sql}`: sqlite error {code}")
 	CANNOT_PREPARE { sql string, code int },
+
+	@message("could not bind parameter {index} of `{sql}`: sqlite error {code}")
+	CANNOT_BIND { sql string, index int, code int },
+
+	@message("`{sql}` failed while stepping: sqlite error {code}")
+	CANNOT_STEP { sql string, code int },
+
+	@message("`{sql}` could not be finalized: sqlite error {code}")
+	CANNOT_FINALIZE { sql string, code int },
+
+	@message("the result set is exhausted")
 	EXHAUSTED,
 }
 
-export fn Statement.bind(&self, index int, value string) -> Either<bool, Error> {
+export fn Statement.bind(&self, index int, value string) -> Either<bool, StatementError> {
 	const text = CString.from(value)
 
 	// GAP — the fifth argument is SQLite's destructor for the bound bytes,
@@ -65,14 +84,14 @@ export fn Statement.bind(&self, index int, value string) -> Either<bool, Error> 
 	// untyped function pointer.
 	match sqlite3_bind_text(self.handle, index, &text, -1, &transient) {
 		0    -> return Ok(true)
-		code -> throw StatementError.CANNOT_PREPARE { sql = self.sql, code }
+		code -> return Err(.CANNOT_BIND { sql = self.sql, index, code })
 	}
 }
 
-export fn Statement.bindInt(&self, index int, value int) -> Either<bool, Error> {
+export fn Statement.bindInt(&self, index int, value int) -> Either<bool, StatementError> {
 	match sqlite3_bind_int(self.handle, index, value) {
 		0    -> return Ok(true)
-		code -> throw StatementError.CANNOT_PREPARE { sql = self.sql, code }
+		code -> return Err(.CANNOT_BIND { sql = self.sql, index, code })
 	}
 }
 
@@ -100,18 +119,18 @@ export fn Statement.intAt(&self, column int) -> int {
 
 // `100` is SQLITE_ROW, `101` is SQLITE_DONE. Named constants would come from
 // the stdlib binding; spelled raw here because the point is the shape.
-export fn Statement.step(&self) -> Either<bool, Error> {
+export fn Statement.step(&self) -> Either<bool, StatementError> {
 	match sqlite3_step(self.handle) {
 		100  -> return Ok(true)
 		101  -> return Ok(false)
-		code -> throw StatementError.CANNOT_PREPARE { sql = self.sql, code }
+		code -> return Err(.CANNOT_STEP { sql = self.sql, code })
 	}
 }
 
-export fn Statement.finalize(self) -> Either<bool, Error> {
+export fn Statement.finalize(self) -> Either<bool, StatementError> {
 	match sqlite3_finalize(self.handle) {
 		0    -> return Ok(true)
-		code -> throw StatementError.CANNOT_PREPARE { sql = self.sql, code }
+		code -> return Err(.CANNOT_FINALIZE { sql = self.sql, code })
 	}
 }
 

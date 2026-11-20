@@ -242,6 +242,99 @@ looks like a `match`: "what do I undo" has the same shape as "what do I
 report". **This is the first thing the `errdefer` proposal has to settle,
 because a compensation that fires on the wrong failure is worse than none.**
 
+## What the 36 `throw` sites were really asking for
+
+The migration found the largest single violation of a decided rule the
+sweeps have turned up: **`throw` is used in 7 `.elp` files at 36 sites**,
+and `grammar-script-notes.md` gap #4 has forbidden it in the script dialect
+since it was written — `throw` is a `.velp` ergonomic and script code
+returns an `Either` explicitly.
+
+Two thirds of those sites are ordinary (`throw E` where `return Err(E)`
+would do), and the rule stands for them: two spellings of one thing is the
+mistake `realtime` already made once in this record. They are migrated.
+
+The other third is `x ?? throw E`, and it is **not** sugar for
+`return Err(E)` — it is `throw` in *expression* position, which makes it a
+**diverging expression**, and that is a thing elp has never specified.
+
+### And the corpus already depends on divergence, which is the real finding
+
+The first draft of this section said the 36 sites rested on an undesigned
+feature and should therefore go. Half right. The sites should go, and the
+feature is not merely undesigned — **it is undesigned and already
+load-bearing**:
+
+- `Json/internal/parser.elp` writes `self.take()? ?? return Err(...)`.
+- `Untrusted/internal/ingest.elp` writes `?? return Err(...)` twice.
+- `Interpreter/interpreter.elp` has `return Err(...)` as a `match` arm
+  whose sibling arms produce values.
+- Every `break` and `continue` in an expression position is the same thing.
+
+A `return` in an arm of a `match` that is itself an expression has no value
+and must be admitted anyway, which is exactly what a bottom type is for.
+So elp has **three diverging forms already** — `return`, `break`/`continue`
+— and no specified type for them. `control-flow.md`'s open item *"a
+diverging `while true`"* is the same question arriving from a third
+direction, and it now has customers in four files rather than being a
+hypothetical.
+
+That is the thing to settle. `throw` in `.elp` would be a fourth spelling
+of it and is refused; the bottom type under the other three is owed.
+
+### `.orError`, which is what the sites wanted
+
+`Optional<T>` to `Either<T, E>`, then `?`:
+
+```elp
+const instance = instanceSlot.orError(RenderError.NO_INSTANCE { code = 0 })?
+```
+
+Rust's `ok_or(e)?` with elp's naming. A stdlib method on a language type
+rather than language surface, which is `stdlib-boundary.md` bucket 2, and
+it replaces all twelve `?? throw` sites with two decided mechanisms.
+
+`VulkanTriangle/renderer.elp` is where it earns its keep: eleven fallible
+FFI calls in sequence, each with a status code *and* an out-parameter slot,
+which is the canonical shape `?` exists for.
+
+### And it is `VulkanTriangle` that settles `errdefer`
+
+GAP 4 in that file predates the `errdefer` proposal by weeks and describes
+it exactly:
+
+> *"every `throw` above this line still leaks everything created before it
+> … By the last call there are five live handles. A failure must destroy
+> the swapchain, the device, the surface and the instance, in that order,
+> before returning — and a failure is a value that returns immediately, so
+> there is no scope exit to hook."*
+
+It then guesses that assembly belongs in a `with`, *"which needs a way to
+cancel the release, and nothing proposes one."*
+
+**`errdefer` dissolves that rather than answering it.** There is nothing to
+cancel, because the compensation is only ever registered for the error
+path: on success it never runs and the handles leave with the value. LIFO,
+like `defer`, which is the reverse-acquisition order teardown needs.
+
+So the plain form is wanted by **two programs independently** —
+`Recovery/sync.elp` and `VulkanTriangle/renderer.elp`, plus a third site in
+`Playhead/main.elp` with the same shape — and the open piece is narrower
+than it looked: the *per-error* form (`errdefer (e) { ... }`) is wanted by
+one program, where three failure paths want the compensation and three do
+not. **Ratify the plain form with `?`; keep the binding form open.**
+
+Two limits, found by writing it out:
+
+- It does not reach a resource acquired in a **loop**. A `for` creating n
+  command buffers that fails at item k wants n−1 releases, and an
+  `errdefer` inside the body runs at the body's exit, not the function's.
+  Nothing in the corpus does this yet.
+- It says nothing about **order**. The four blocks in `renderer.elp` are in
+  acquisition order because they are written beside their acquisitions,
+  which is a convention. `VulkanTriangle` GAP 5's point stands: the order
+  is the specification and the compiler cannot read it.
+
 ## The three guarantees, and the fallible transform
 
 C++ has had the vocabulary since Abrahams named it, and it is the right

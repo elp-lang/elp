@@ -30,17 +30,17 @@ export fn Parser.over(source string) -> Self {
 // `examples/Recalc` on the grounds that it is *"the intended shape"*. This
 // file does the same, and says plainly that it is the one undesigned
 // construct the package cannot be written honestly without.
-export fn Parser.parse(&var self) -> Either<JSON, Error> {
+export fn Parser.parse(&var self) -> Either<JSON, ParseError> {
 	const value = self.parseValue()?
 
 	// Trailing content is an error, and noticing it needs one more token.
 	return match self.take()? {
 		nil -> Ok(value)
-		_   -> Err(ParseError.TRAILING)
+		_   -> Err(.TRAILING)
 	}
 }
 
-fn Parser.parseValue(&var self) -> Either<JSON, Error> {
+fn Parser.parseValue(&var self) -> Either<JSON, ParseError> {
 	// FINDING 13 — recursion depth is the parser's own problem, and that is
 	// the right answer rather than a gap.
 	//
@@ -51,10 +51,10 @@ fn Parser.parseValue(&var self) -> Either<JSON, Error> {
 	// itself. Nothing in the language should be doing this for it, and
 	// recording that is worth as much as a gap would be.
 	if self.depth >= MAX_DEPTH {
-		return Err(ParseError.TOO_DEEP)
+		return Err(.TOO_DEEP { limit = MAX_DEPTH })
 	}
 
-	const token = self.take()? ?? return Err(ParseError.UNEXPECTED_END)
+	const token = self.take()? ?? return Err(.UNEXPECTED_END)
 
 	return match token {
 		.NULL          -> Ok(.NULL)
@@ -64,11 +64,11 @@ fn Parser.parseValue(&var self) -> Either<JSON, Error> {
 		.NUMBER(raw)   -> number(raw)
 		.BRACKET_OPEN  -> self.parseArray()
 		.BRACE_OPEN    -> self.parseObject()
-		_              -> Err(ParseError.UNEXPECTED_TOKEN)
+		_              -> Err(.UNEXPECTED_TOKEN)
 	}
 }
 
-fn Parser.parseArray(&var self) -> Either<JSON, Error> {
+fn Parser.parseArray(&var self) -> Either<JSON, ParseError> {
 	self.depth += 1
 	defer { self.depth -= 1 }
 
@@ -91,7 +91,7 @@ fn Parser.parseArray(&var self) -> Either<JSON, Error> {
 	// (`defer`, `with ... as x { }`, `Scoped`) across two documents that each
 	// reason as if one of the others did not exist.
 	loop {
-		const next = self.peek()? ?? return Err(ParseError.UNEXPECTED_END)
+		const next = self.peek()? ?? return Err(.UNEXPECTED_END)
 
 		if next == .BRACKET_CLOSE {
 			self.take()?
@@ -107,14 +107,14 @@ fn Parser.parseArray(&var self) -> Either<JSON, Error> {
 	}
 }
 
-fn Parser.parseObject(&var self) -> Either<JSON, Error> {
+fn Parser.parseObject(&var self) -> Either<JSON, ParseError> {
 	self.depth += 1
 	defer { self.depth -= 1 }
 
 	var fields Map<string, JSON> = .new()
 
 	loop {
-		const next = self.peek()? ?? return Err(ParseError.UNEXPECTED_END)
+		const next = self.peek()? ?? return Err(.UNEXPECTED_END)
 
 		if next == .BRACE_CLOSE {
 			self.take()?
@@ -123,12 +123,12 @@ fn Parser.parseObject(&var self) -> Either<JSON, Error> {
 
 		const key = match self.take()? {
 			.SOME(.TEXT(s)) -> s
-			_               -> return Err(ParseError.EXPECTED_KEY)
+			_               -> return Err(.EXPECTED_KEY)
 		}
 
 		match self.take()? {
 			.SOME(.COLON) -> nil
-			_             -> return Err(ParseError.EXPECTED_COLON)
+			_             -> return Err(.EXPECTED_COLON)
 		}
 
 		// FINDING 15 — a duplicate key in the source, and `collections.md`'s
@@ -165,7 +165,7 @@ fn Parser.parseObject(&var self) -> Either<JSON, Error> {
 // here. Written as `loop` deliberately, so the decision has a dissenting site
 // rather than a silent one.
 
-fn Parser.take(&var self) -> Either<Optional<Token>, Error> {
+fn Parser.take(&var self) -> Either<Optional<Token>, ParseError> {
 	match self.ahead {
 		nil -> nil
 		held -> {
@@ -180,7 +180,7 @@ fn Parser.take(&var self) -> Either<Optional<Token>, Error> {
 	}
 }
 
-fn Parser.peek(&var self) -> Either<Optional<Token>, Error> {
+fn Parser.peek(&var self) -> Either<Optional<Token>, ParseError> {
 	match self.ahead {
 		nil -> nil
 		held -> return Ok(.SOME(held))
@@ -203,28 +203,63 @@ fn Parser.peek(&var self) -> Either<Optional<Token>, Error> {
 // defaulting, overflow"* as open, and this is the first program where an
 // overflowing literal arrives from **outside** the program and cannot be a
 // compile error.
-pure fn number(raw string) -> Either<JSON, Error> {
+pure fn number(raw string) -> Either<JSON, ParseError> {
 	if raw.contains(".") || raw.contains("e") || raw.contains("E") {
 		return match raw.toFloat() {
-			nil -> Err(ParseError.BAD_NUMBER { raw })
+			nil -> Err(.BAD_NUMBER { raw })
 			f   -> Ok(.DECIMAL { of = f })
 		}
 	}
 
 	return match raw.toInt() {
-		nil -> Err(ParseError.BAD_NUMBER { raw })
+		nil -> Err(.BAD_NUMBER { raw })
 		i   -> Ok(.INTEGER { of = i })
 	}
 }
 
-export enum ParseError implements Error {
+// MIGRATED, and the migration found a defect the existential was hiding.
+//
+// `Parser.take` returns `Ok(.SOME(r?))`, where `r` is the lexer's
+// `Either<Token, LexError>`. So a **`LexError` was propagating out of a
+// function whose other arms return `ParseError`**, and both signatures said
+// `Either<_, Error>`, so nothing noticed. Two unrelated error types flowed
+// through one declaration and the caller could tell them apart only by
+// stringifying.
+//
+// Making the types concrete forces the conversion to exist, which is the
+// whole argument for the decision in `error-handling.md`: the conversion
+// was always happening, it just had nowhere to be written down.
+@error
+export enum ParseError {
+	@message("the document ends in the middle of a value")
 	UNEXPECTED_END,
+
+	@message("unexpected token")
 	UNEXPECTED_TOKEN,
+
+	@message("an object member needs a string key")
 	EXPECTED_KEY,
+
+	@message("an object member needs a `:` after its key")
 	EXPECTED_COLON,
+
+	@message("trailing content after the top-level value")
 	TRAILING,
-	TOO_DEEP,
+
+	@message("nesting deeper than {limit} levels")
+	TOO_DEEP { limit int },
+
+	@message("`{raw}` is not a JSON number")
 	BAD_NUMBER { raw string },
+
+	@message("{cause}")
+	LEX { cause LexError },
+}
+
+ParseError implements From<LexError>
+
+fn ParseError.from(value LexError) -> Self {
+	return Self.LEX { cause = value }
 }
 
 export fn ParseError.toString(&self) -> string {

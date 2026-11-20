@@ -17,8 +17,8 @@ import { Error } from elp.types
 import { Job, JobId, JobState, PoolError } from .types.job
 
 export enum PoolMsg {
-	SUBMIT { job Job, reply Channel<Either<JobId, Error>> },
-	STATUS { id JobId, reply Channel<Either<JobState, Error>> },
+	SUBMIT { job Job, reply Channel<Either<JobId, PoolError>> },
+	STATUS { id JobId, reply Channel<Either<JobState, PoolError>> },
 	COMPLETED { id JobId, state JobState },
 	// Replies with the number of jobs that never ran, so a caller can report
 	// what was lost rather than guessing.
@@ -177,12 +177,12 @@ fn Pool.ask<T>(&self, build fn(Channel<T>) -> PoolMsg) -> T {
 	return reply.receive()
 }
 
-export fn Pool.submit(&self, job Job) -> Either<JobId, Error> {
-	return self.ask<Either<JobId, Error>>(fn (reply) { return .SUBMIT { job, reply } })
+export fn Pool.submit(&self, job Job) -> Either<JobId, PoolError> {
+	return self.ask<Either<JobId, PoolError>>(fn (reply) { return .SUBMIT { job, reply } })
 }
 
-export fn Pool.status(&self, id JobId) -> Either<JobState, Error> {
-	return self.ask<Either<JobState, Error>>(fn (reply) { return .STATUS { id, reply } })
+export fn Pool.status(&self, id JobId) -> Either<JobState, PoolError> {
+	return self.ask<Either<JobState, PoolError>>(fn (reply) { return .STATUS { id, reply } })
 }
 
 export fn Pool.shutdown(&self) -> int {

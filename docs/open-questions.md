@@ -126,12 +126,48 @@ What it opened:
 
 | | |
 |---|---|
-| **`errdefer`'s binding form** | `error-handling.md` — proposed, and the first thing to settle. Three error paths in `Recovery/sync.elp` want the compensation and three want it skipped, in one scope. `errdefer (e) { match e { … } }` is the candidate; a disarming statement and two scopes are the others. **`errdefer` must land with `?` or not at all.** |
+| **`errdefer`'s binding form** | `error-handling.md` — the *plain* form is settled by the migration: two programs demand it independently (`Recovery/sync.elp`, and `VulkanTriangle` GAP 4, which described it weeks earlier and guessed it needed *"a way to cancel the release"* — it does not). What stays open is the **per-error** form, wanted by one program where three failure paths want the compensation and three do not. **`errdefer` must land with `?` or not at all.** |
+| **`errdefer` in a loop, and its order** | `error-handling.md` — a `for` creating n handles that fails at item k wants n−1 releases, and a body-scoped `errdefer` runs at the body's exit. Nothing in the corpus does it yet. And nothing enforces that the blocks appear in acquisition order, which is `VulkanTriangle` GAP 5 one level down. |
+| **The bottom type, with four files depending on it** | `control-flow.md` — recorded there as *"a diverging `while true`"* and now arriving from a third direction. `return` in a `match` arm whose siblings produce values, `?? return Err(…)` in `Json` and `Untrusted`, and every `break` in expression position are all diverging expressions, and elp has no type for one. The 36 `throw` sites were a fourth spelling of it, and are migrated rather than admitted. |
 | **The nothrow tier has no spelling** | `error-handling.md` — and it is the one the other two rest on. C++ marks it `noexcept` because the guarantee is only useful if the compiler can be told. `Outbox.restore` must never fail and only a comment says so. |
 | **No narrower error type than the enum** | `error-handling.md` — the set of failures *one request* can produce is a subset of what the *policy* can produce, and a `match` must still write the unreachable arm. Zig infers an error set from the body; Swift 6 makes the author name it; elp has no spelling for "these three of those six", and the workaround is two enums and twice the conversions. |
 | **Cancellation cannot be reported** | `error-handling.md` / `core-language-probes.md` — `SyncError.CANCELLED` is declared and unconstructable, because cancellation is an unwind rather than a value. A caller cannot tell a cancelled batch from a crashed one. Same gap as *"`background` has no join"*, seen from the error side. |
 | **What `@message` may interpolate** | `strings.md` — now has a second customer and a sharper case: a `Protected<string>` field must not be interpolable, and whether it is refused depends on whether interpolation is specified in terms of a conformance. |
 | **`existential_error`'s level** | `diagnostics.md` — warn by default, with `@allow` expected on `main`. Arrives with the standing open item about default levels. |
+
+### What the migration found, which is the part that could not be predicted
+
+Nineteen files changed. Four of the findings are about the design and not
+about the files:
+
+- **The existential hid a conversion that was already happening.**
+  `Json/internal/parser.elp` returns `Ok(.SOME(r?))` where `r` is the
+  *lexer's* `Either<Token, LexError>`, so a `LexError` was propagating out
+  of a function whose other arms return `ParseError` — and both signatures
+  said `Either<_, Error>`, so nothing noticed. Making the types concrete
+  forced `ParseError implements From<LexError>` to exist. The conversion
+  was always there; it had nowhere to be written down.
+- **The existential was justified by a second error type that does not
+  exist.** `BlogStyle/internal/api.elp` carried the clearest statement of
+  how the corpus got to 51-to-8: *"more than one error type can reach here;
+  the caller matches on the interface and narrows if it cares."* No second
+  error type reaches it. All four functions have one `Err` arm, and the
+  narrowing it promised was the type switch.
+- **A fallible signature was standing in for a function nobody had
+  written.** `Pipeline`'s `Config.load` and `Dashboard`'s `render` both
+  declare `Either<_, Error>` over a body that cannot fail. Naming the real
+  failures is the fix; the alternative is the nothrow tier, which has no
+  spelling.
+- **One error variant was reported for four operations.**
+  `SqliteBinding`'s `StatementError.CANNOT_PREPARE` was returned by
+  `prepare`, `bind`, `step` and `finalize`, because it was the only variant
+  carrying a sqlite code. A caller was told "cannot prepare" when a bind
+  failed — a *wrong* answer, which is worse than the existential's no
+  answer.
+
+And one piece of stdlib surface the migration needs: **`.orError(e)`** on
+`Optional<T>`, which is what the twelve `?? throw E` sites wanted.
+`stdlib-boundary.md` bucket 2. Owner: `collections.md`.
 
 And one it sharpened rather than opened: **a field default's timing**.
 `OutboxItem.idempotencyKey` is the first corpus field where "once per type"

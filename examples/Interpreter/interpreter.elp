@@ -12,9 +12,18 @@
 import { Expr, Operator } from .types.expr
 import { Value, Env } from .runtime
 
-export enum EvalError implements Error {
+// MIGRATED — `@error` with messages. This file was already one of the
+// eight signatures in the corpus using a concrete error type, which is why
+// it is also the file where the migration is only about the spelling.
+@error
+export enum EvalError {
+	@message("`{name}` is not bound in this scope")
 	UNBOUND { name string },
+
+	@message("a number cannot be applied as a function")
 	NOT_A_FUNCTION,
+
+	@message("a closure cannot be used where a number is needed")
 	NOT_A_NUMBER,
 }
 
@@ -24,7 +33,10 @@ export fn evaluate(expr &Expr, env &Confined<Env>) -> Either<Value, EvalError> {
 
 		// Blocked on FINDING 5 in `runtime.elp` — `lookup` cannot be written,
 		// so neither can this. Left as the shape it wants.
-		.NAME { of } -> env.get().lookup(of) ?? throw EvalError.UNBOUND { name = of }
+		// MIGRATED — `?? throw E` is now `.orError(E)?`, and the shape this
+		// line *wants* is unchanged: a lookup that may miss, converted to
+		// the error this evaluator reports.
+		.NAME { of } -> Ok(env.get().lookup(of).orError(EvalError.UNBOUND { name = of })?)
 
 		.BINARY { op, left, right } -> {
 			const l = evaluate(left, env)?
@@ -124,7 +136,7 @@ export fn evaluate(expr &Expr, env &Confined<Env>) -> Either<Value, EvalError> {
 					evaluate(body.get(), &frame)
 				}
 
-				.NUMBER -> throw EvalError.NOT_A_FUNCTION
+				.NUMBER -> return Err(.NOT_A_FUNCTION)
 			}
 		}
 
@@ -136,7 +148,7 @@ export fn evaluate(expr &Expr, env &Confined<Env>) -> Either<Value, EvalError> {
 					evaluate(otherwise, env)
 				}
 
-				.CLOSURE -> throw EvalError.NOT_A_NUMBER
+				.CLOSURE -> return Err(.NOT_A_NUMBER)
 			}
 		}
 	}
@@ -145,12 +157,12 @@ export fn evaluate(expr &Expr, env &Confined<Env>) -> Either<Value, EvalError> {
 pure fn apply(op Operator, l Value, r Value) -> Either<Value, EvalError> {
 	const a = match l {
 		.NUMBER { of } -> of
-		.CLOSURE -> throw EvalError.NOT_A_NUMBER
+		.CLOSURE -> return Err(.NOT_A_NUMBER)
 	}
 
 	const b = match r {
 		.NUMBER { of } -> of
-		.CLOSURE -> throw EvalError.NOT_A_NUMBER
+		.CLOSURE -> return Err(.NOT_A_NUMBER)
 	}
 
 	return Ok(Value.NUMBER { of = match op {

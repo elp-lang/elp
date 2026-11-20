@@ -91,39 +91,37 @@ fn ApiError.from(value HttpError) -> Self {
 	}
 }
 
-// `Either<Content, Error>` rather than `Either<Content, ApiError>` because
-// more than one error type can reach here; the caller matches on the
-// interface and narrows if it cares (`dispatch.md`).
-export fn getBlogPost(id string) -> Either<Content, Error> {
-	return match Http.get<Content>("https://example.invalid/posts/{id}") {
-		Err(err)  -> Err(ApiError.from(err))
-		Ok(post)  -> Ok(post)
-	}
+// MIGRATED — and the comment this replaces was the clearest statement of
+// how the corpus came to be 51-to-8 for the existential.
+//
+// It read: *"`Either<Content, Error>` rather than `Either<Content, ApiError>`
+// because more than one error type can reach here; the caller matches on
+// the interface and narrows if it cares."*
+//
+// **No second error type reaches here.** Every one of the four functions in
+// this file has exactly one `Err` arm and it is `ApiError.from(HttpError)`.
+// The existential was justified by a future that had not happened, the
+// narrowing it promised was a type switch the language does not have, and
+// `error-handling.md` records that the type switch's only customer was this
+// comment. Four `?` and one concrete type now say what the code does.
+export fn getBlogPost(id string) -> Either<Content, ApiError> {
+	return Ok(Http.get<Content>("https://example.invalid/posts/{id}")?)
 }
 
 // ADDED — `screens/blog/index.velp` called this and it did not exist.
-export fn getBlogContent() -> Either<[Content], Error> {
-	return match Http.get<[Content]>("https://example.invalid/posts") {
-		Err(err)   -> Err(ApiError.from(err))
-		Ok(posts)  -> Ok(posts)
-	}
+export fn getBlogContent() -> Either<[Content], ApiError> {
+	return Ok(Http.get<[Content]>("https://example.invalid/posts")?)
 }
 
 // ADDED — `screens/about.velp` called this and it did not exist either.
-export fn getAboutContent() -> Either<Content, Error> {
-	return match Http.get<Content>("https://example.invalid/about") {
-		Err(err)     -> Err(ApiError.from(err))
-		Ok(content)  -> Ok(content)
-	}
+export fn getAboutContent() -> Either<Content, ApiError> {
+	return Ok(Http.get<Content>("https://example.invalid/about")?)
 }
 
-export fn createBlogPost(title string, body string, excerpt string) -> Either<Content, Error> {
+export fn createBlogPost(title string, body string, excerpt string) -> Either<Content, ApiError> {
 	const payload HttpBody<Content> = .new(Content.new(title, body, excerpt))
 
-	return match Http.post<Content>("https://example.invalid/posts", payload) {
-		Err(err)      -> Err(ApiError.from(err))
-		Ok(created)   -> Ok(created)
-	}
+	return Ok(Http.post<Content>("https://example.invalid/posts", payload)?)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

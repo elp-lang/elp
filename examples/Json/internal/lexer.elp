@@ -50,7 +50,7 @@ export fn Lexer.over(source string) -> Self {
 // `examples/LruCache`. This is `continue`'s: skipping insignificant
 // whitespace is the canonical use, and the alternative is an `if` wrapping
 // the entire rest of a long loop body.
-export fn Lexer.next(&var self) -> Optional<Either<Token, Error>> {
+export fn Lexer.next(&var self) -> Optional<Either<Token, LexError>> {
 	while self.at < self.source.length() {
 		const c = self.source[self.at]
 
@@ -88,7 +88,7 @@ export fn Lexer.next(&var self) -> Optional<Either<Token, Error>> {
 			't'            -> .SOME(self.keyword("true", .TRUE))
 			'f'            -> .SOME(self.keyword("false", .FALSE))
 			'n'            -> .SOME(self.keyword("null", .NULL))
-			_              -> .SOME(Err(LexError.UNEXPECTED { at = self.at, found = c }))
+			_              -> .SOME(Err(.UNEXPECTED { at = self.at, found = c }))
 		}
 	}
 
@@ -122,7 +122,7 @@ pure fn delimiter(c char) -> Token {
 // decision costs. What it argues for is stdlib surface (`[char].joined()` is
 // named in `strings.md` already as `.chars()`'s inverse), not a language
 // change, so the decision holds and the gap is a stdlib one.
-fn Lexer.text(&var self) -> Either<Token, Error> {
+fn Lexer.text(&var self) -> Either<Token, LexError> {
 	self.at += 1
 	var out [char] = []
 
@@ -138,7 +138,7 @@ fn Lexer.text(&var self) -> Either<Token, Error> {
 			self.at += 1
 
 			if self.at >= self.source.length() {
-				return Err(LexError.UNTERMINATED { at = self.at })
+				return Err(.UNTERMINATED { at = self.at })
 			}
 
 			out.append(unescape(self.source[self.at]))
@@ -150,7 +150,7 @@ fn Lexer.text(&var self) -> Either<Token, Error> {
 		self.at += 1
 	}
 
-	return Err(LexError.UNTERMINATED { at = self.at })
+	return Err(.UNTERMINATED { at = self.at })
 }
 
 pure fn unescape(c char) -> char {
@@ -162,7 +162,7 @@ pure fn unescape(c char) -> char {
 	}
 }
 
-fn Lexer.number(&var self) -> Either<Token, Error> {
+fn Lexer.number(&var self) -> Either<Token, LexError> {
 	const start = self.at
 
 	while self.at < self.source.length() {
@@ -182,7 +182,7 @@ fn Lexer.number(&var self) -> Either<Token, Error> {
 	return Ok(Token.NUMBER { of = self.source.slice(start, self.at - 1).joined() })
 }
 
-fn Lexer.keyword(&var self, word string, token Token) -> Either<Token, Error> {
+fn Lexer.keyword(&var self, word string, token Token) -> Either<Token, LexError> {
 	const letters = word.chars()
 	const start = self.at
 
@@ -190,7 +190,7 @@ fn Lexer.keyword(&var self, word string, token Token) -> Either<Token, Error> {
 		const here = start + i
 
 		if here >= self.source.length() || self.source[here] != letters[i] {
-			return Err(LexError.UNEXPECTED { at = here, found = self.source[start] })
+			return Err(.UNEXPECTED { at = here, found = self.source[start] })
 		}
 	}
 
@@ -199,8 +199,16 @@ fn Lexer.keyword(&var self, word string, token Token) -> Either<Token, Error> {
 	return Ok(token)
 }
 
-export enum LexError implements Error {
+// MIGRATED — `@error` and `@message`. This file used a *third* spelling of
+// the error conformance: `@error` (five files), `X implements Error` plus a
+// hand-written `toString` (two), and `enum X implements Error { ... }`
+// inline (this one and the parser). One spelling now.
+@error
+export enum LexError {
+	@message("unexpected `{found}` at offset {at}")
 	UNEXPECTED { at int, found char },
+
+	@message("the string beginning at offset {at} is never closed")
 	UNTERMINATED { at int },
 }
 

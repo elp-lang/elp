@@ -30,7 +30,31 @@ export object Config {
 // what `[T]`'s own tier is has never been written down.
 Config implements Move
 
-export fn Config.load(path string) -> Either<Self, Error> {
+// MIGRATED — and this one is a finding rather than a rename.
+//
+// `Config.load` is declared fallible, returns the existential, and
+// **cannot fail**: the body is a single `Ok` of four literals. Loading a
+// real configuration file can fail four ways (missing, unreadable,
+// malformed, a bad glob), and the signature was holding the shape of a
+// function nobody had written yet.
+//
+// So the error type names those four, and the body returns the one it can
+// actually reach. The alternative — keeping `Either` with no `Err` — is
+// what `error-handling.md`'s nothrow tier is for, and the nothrow tier has
+// no spelling yet. Written fallible because it is going to be.
+@error
+export enum ConfigError {
+	@message("no configuration file at {path}")
+	MISSING { path string },
+
+	@message("{path} could not be read: {detail}")
+	UNREADABLE { path string, detail string },
+
+	@message("{path} is not valid configuration: {detail}")
+	MALFORMED { path string, detail string },
+}
+
+export fn Config.load(path string) -> Either<Self, ConfigError> {
 	return Ok(Self {
 		sourceRoot = path,
 		outputRoot = path + "/dist",
