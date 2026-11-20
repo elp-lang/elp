@@ -199,48 +199,66 @@ That is correct, and it is the honest version of Rust's
 feature: `ApiError.from(HttpError)` maps status ranges onto three variants
 and discards the rest, once, in one place a reviewer can find.
 
-### `errdefer`, which is part of `?` rather than a neighbour of it
-
-**Proposed, and it must be ratified with `?` or not at all.**
+### The cleanup problem `?` creates, and why it is not a new keyword
 
 `?` works by inserting an early return the reader cannot see. The moment a
 function acquires something before the first `?` — a claimed work item, a
 created row, an opened handle — every invisible return leaks it.
-`examples/Recovery/sync.elp` is the case: `sendOne` claims an item out of
-`pending` into `inFlight` and then has six error paths, and an item left in
-`inFlight` is never retried and never acknowledged. It is silently lost,
-and the more `?` is used the more places it is lost from.
+`examples/Recovery/sync.elp` claims an item out of `pending` into
+`inFlight` and then has six error paths; an item left in `inFlight` is
+never retried and never acknowledged.
 
-Zig has `errdefer` for exactly this, and the pairing is not a coincidence:
-a language that makes early returns cheap has to make the compensation for
-them cheap too, or the ergonomics are paid for in leaks. elp's `defer` is
-the wrong tool — it runs on normal exit too, and on success the item must
-*stay* claimed.
+That problem is real, derived twice from the corpus, and **older than this
+round**: `memory-model.md`'s scoped-release section lists it as problem (2),
+in these words — *"a leak per early exit. `examples/VulkanTriangle`'s
+construction path holds five handles by the end, so every `throw` on it
+must tear down everything built above — C's `goto fail` ladder, written
+out."*
 
-```elp
-const item = self.outbox.claim(id)?
-errdefer { self.outbox.restore(item) }
-```
+**`errdefer` was proposed here and is WITHDRAWN.** It was Zig's keyword,
+and precedent is not a derivation — which is exactly what
+`functions.md`'s admission test exists to refuse. Two things killed it:
 
-Same scoping as `defer`. The rule is one sentence: **it runs when the
-enclosing scope exits with an `Err`, and not otherwise.**
+**The rule was wrong.** I wrote *"it runs when the enclosing scope exits
+with an `Err`, and not otherwise."* Zig has no cancellation, so "exits with
+an error" is a complete classification there. elp's `defer` is specified to
+run **on normal exit, on cancellation unwind, and on panic unwind**
+(`reactivity.md`), and a cancellation inside `Renderer.new` leaks all five
+Vulkan handles under the rule as stated. The borrowed word brought a
+borrowed taxonomy that does not fit a language with three kinds of exit.
 
-**The open piece: a compensation that must not fire on every failure.** In
-`sendOne`, three error paths want the item restored and three (the
-permanent ones) want it dropped — a rejected item put back in `pending` is
-retried forever against a server that will always say no, which is
-`examples/Untrusted`'s lesson in a new costume. Three answers, with costs:
+**And the problem already has an owner.** `with ... as x { }` was ratified
+*as the answer to this problem*, with multiple bindings releasing in
+reverse — which is the ordered teardown `errdefer` does not give. What
+`with` does not cover is one narrow case, stated precisely:
+
+> **`with` releases a resource used inside a block. Nothing releases a
+> resource being *assembled for a caller* when the assembly fails.**
+
+Four candidates, ranked:
 
 | | |
 |---|---|
-| **Two scopes** | Split the function so retryable and permanent paths each get their own `errdefer`. No new surface; the split is artificial and a reader has to follow it. |
-| **A disarming statement** | `errdefer.cancel`. Honest, and it is a second piece of control flow attached to the first — fine when written, bad when nested. |
-| **Bind the error** — `errdefer (e) { match e { ... } }` | The compensation decides per failure, which is where the decision belongs, at the cost of one binding in the grammar. |
+| **A consuming `with` binding** — the leading one | GAP 4 guessed this (*"assembly itself belongs in a `with`, with the handles moved out on success"*) and said it *"needs a way to cancel the release"*. The real blocker is sharper: scoped release's second safety rule is that **the binding is a borrow**, so nothing bound by a `with` can leave the block at all. A second, consuming binding form would let it, and the move out *is* the cancellation — nothing to disarm. New surface on an existing construct, and it has a second customer already: the open item on whether `release` may fail, where `Connection.close` and `Scoped.release` are the same tension about taking the resource back. |
+| **`defer` with an exit binding** | `defer (exit) { … }`, where the block can see which of the three exits happened. One grammar rule on a keyword that exists, it subsumes the per-failure compensation question below, and it forces the three exits to be named rather than collapsed into "error". Costs a `match` where `errdefer` was one word. |
+| **RAII** | **Already decided against.** `memory-model.md` has the cost table: `Drop` needs drop flags and moved-out analysis on every path, and *"a value not bound by a `with` is never released, so there is nothing to track. That is the entire cost difference."* Reopening it means paying what elp refused to pay. |
+| **`errdefer`** | Withdrawn, above. |
 
-The third is what the probe wants, and it is not a coincidence that it
-looks like a `match`: "what do I undo" has the same shape as "what do I
-report". **This is the first thing the `errdefer` proposal has to settle,
-because a compensation that fires on the wrong failure is worse than none.**
+**What the first candidate does not reach**, and the reason this is
+recorded rather than decided: `Recovery/sync.elp`'s compensation is not a
+release. Restoring a claimed item to the outbox is a **compensating
+action** on a different object, and modelling it as a `Scoped` claim guard
+whose `release` restores it needs success to take the item back out —
+which is the consuming binding again, from the other direction. Two
+customers, one missing piece. That is a better place to be than one
+keyword with one customer, and it is the piece to design.
+
+And the sub-question `errdefer` raised survives it: in `sendOne` three
+failure paths want the compensation and three (the permanent ones) want
+the item dropped, because a rejected item put back in `pending` is retried
+forever against a server that will always say no. A guard that releases on
+every failure is wrong there. Whichever mechanism wins has to answer it,
+and the `defer (exit)` candidate is the only one that answers it for free.
 
 ## What the 36 `throw` sites were really asking for
 
@@ -298,10 +316,10 @@ it replaces all twelve `?? throw` sites with two decided mechanisms.
 FFI calls in sequence, each with a status code *and* an out-parameter slot,
 which is the canonical shape `?` exists for.
 
-### And it is `VulkanTriangle` that settles `errdefer`
+### And it is `VulkanTriangle` that shows the shape
 
-GAP 4 in that file predates the `errdefer` proposal by weeks and describes
-it exactly:
+GAP 4 in that file predates this round by weeks and states the problem
+exactly:
 
 > *"every `throw` above this line still leaks everything created before it
 > … By the last call there are five live handles. A failure must destroy
@@ -309,31 +327,27 @@ it exactly:
 > before returning — and a failure is a value that returns immediately, so
 > there is no scope exit to hook."*
 
-It then guesses that assembly belongs in a `with`, *"which needs a way to
-cancel the release, and nothing proposes one."*
+Three things in that sentence, and the cleanup mechanism has to give all
+three: it must run on the error path, it must run **in reverse acquisition
+order**, and the handles must still be able to **leave on success**. The
+withdrawn keyword gave the first, not the second, and got the third by
+accident rather than by design. `with`'s reverse release gives the second
+already, which is the strongest argument for keeping this inside scoped
+release rather than beside it.
 
-**`errdefer` dissolves that rather than answering it.** There is nothing to
-cancel, because the compensation is only ever registered for the error
-path: on success it never runs and the handles leave with the value. LIFO,
-like `defer`, which is the reverse-acquisition order teardown needs.
+Two limits worth recording before anything is ratified:
 
-So the plain form is wanted by **two programs independently** —
-`Recovery/sync.elp` and `VulkanTriangle/renderer.elp`, plus a third site in
-`Playhead/main.elp` with the same shape — and the open piece is narrower
-than it looked: the *per-error* form (`errdefer (e) { ... }`) is wanted by
-one program, where three failure paths want the compensation and three do
-not. **Ratify the plain form with `?`; keep the binding form open.**
-
-Two limits, found by writing it out:
-
-- It does not reach a resource acquired in a **loop**. A `for` creating n
-  command buffers that fails at item k wants n−1 releases, and an
-  `errdefer` inside the body runs at the body's exit, not the function's.
-  Nothing in the corpus does this yet.
-- It says nothing about **order**. The four blocks in `renderer.elp` are in
-  acquisition order because they are written beside their acquisitions,
-  which is a convention. `VulkanTriangle` GAP 5's point stands: the order
-  is the specification and the compiler cannot read it.
+- **A resource acquired in a loop.** A `for` creating n command buffers
+  that fails at item k wants n−1 releases. A per-acquisition cleanup
+  registered in the body runs at the body's exit, not the function's, and a
+  `with` cannot bind a variable number of resources. Nothing in the corpus
+  does this yet, and it is the case that would decide against every
+  candidate above.
+- **Order is still unenforced.** Whatever the mechanism, nothing makes the
+  cleanups appear in acquisition order — they do in `renderer.elp` because
+  they are written beside their acquisitions. `VulkanTriangle` GAP 5's
+  point stands: the order is the specification and the compiler cannot read
+  it.
 
 ## The three guarantees, and the fallible transform
 

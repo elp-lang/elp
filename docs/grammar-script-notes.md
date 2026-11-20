@@ -35,7 +35,6 @@ genuinely language-level questions it did surface were folded into
 
    ```
    try_expr  = expr '?'
-   errdefer  = 'errdefer' ( '(' IDENT ')' )? block
    ```
 
    `expr?` is legal only in a function whose return type is `Either<_, E>`,
@@ -47,11 +46,13 @@ genuinely language-level questions it did surface were folded into
    what makes `?` safe to add: a value that escapes unconsumed is still an
    error, and `?` is one of the ways to consume it.
 
-   `errdefer` is proposed rather than ratified, with the binding form
-   (`errdefer (e) { ... }`) the open piece. It must land with `?` or not at
-   all — `?` inserts early returns a reader cannot see, and a function that
-   acquired something before the first `?` leaks it on every one of them.
-   `examples/Recovery/sync.elp` is the case.
+   `?` creates one problem it does not solve: a function that acquired
+   something before the first `?` leaks it on every invisible return. A
+   keyword for that (`errdefer`) was proposed and **withdrawn** — the
+   problem belongs to `memory-model.md`'s scoped release, which was
+   ratified as the answer to it, and the missing piece is a **consuming
+   `with` binding** rather than new statement syntax. No grammar change
+   until that is decided; `error-handling.md` carries the four candidates.
 
 4. **No `throw` in `.elp`.** The `throw` form seen in `.velp` component
    bodies lives in the view dialect, not the script dialect — script code

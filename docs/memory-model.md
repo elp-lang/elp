@@ -893,6 +893,15 @@ with Connection.open(path)? as db {
 2. **A leak per early exit.** `examples/VulkanTriangle`'s construction
    path holds five handles by the end, so every `throw` on it must tear
    down everything built above — C's `goto fail` ladder, written out.
+
+   **Amended 2026-11-20: `with` answers this only where the resource dies
+   in the block, and the constructor case is exactly where it does not.**
+   `Renderer.new` assembles five handles *for a caller*, so each must
+   outlive the function and there is no block to bound them. The error
+   path still writes the ladder out by hand. See "What a consuming binding
+   would be for" below; a keyword for the error path (`errdefer`) was
+   proposed in `error-handling.md` and withdrawn in favour of staying
+   inside this construct.
 3. **Release *order* is unexpressed.** `vkDeviceWaitIdle` before
    everything, swapchain before device, device before instance, renderer
    before window across two files and two libraries. `Move` imposes no
@@ -976,6 +985,32 @@ with Glfw.initialised() as _ {
 	...
 }
 ```
+
+### What a consuming binding would be for
+
+**The piece scoped release is missing, with two customers.** Safety rule
+two above is that *"the binding is a borrow"*, which is what stops a
+resource escaping the block — and it is also what stops a resource
+*legitimately* leaving on the success path. So:
+
+- `Renderer.new` cannot assemble its five handles under a `with` and move
+  them into the returned `Self`, which is the only reason problem (2)
+  above is still open for constructors.
+- `examples/Recovery`'s outbox claim is the same shape without an FFI
+  handle: a claim whose `release` returns the item to `pending`, cancelled
+  by the success path taking the item back.
+
+A second binding form — one that **consumes** rather than borrows, so the
+value may be moved out before the block ends and the release then does not
+run — covers both, and the move out *is* the cancellation that GAP 4 said
+*"nothing proposes"*. It needs exactly one thing elp's cost table above
+refuses for RAII in general: knowing whether the value left on this path.
+That is the question to answer, and the difference from RAII is that it is
+asked **once per `with` binding** rather than for every value of every
+type.
+
+Related, and probably the same decision: **whether `release` may fail**,
+below, is the same tension about taking the resource back out.
 
 ### Open within scoped release
 

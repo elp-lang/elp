@@ -134,24 +134,36 @@ export fn Renderer.new(window &Window) -> Either<Self, RenderError> {
 	// `Either<T, E>` and `?` propagates it — two decided things.
 	const instance = instanceSlot.orError(RenderError.NO_INSTANCE { code = 0 })?
 
-	// GAP 4, RESOLVED by `errdefer` — and this file is the second program
-	// to demand it, independently of the one that proposed it.
+	// GAP 4 — still open, and sharper than it was.
 	//
-	// GAP 4 used to read: *"every `throw` above this line still leaks
-	// everything created before it … a failure must destroy the swapchain,
-	// the device, the surface and the instance, in that order, before
-	// returning — and a failure is a value that returns immediately, so
-	// there is no scope exit to hook."* It then guessed that assembly
-	// belongs in a `with` *"which needs a way to cancel the release, and
-	// nothing proposes one."*
+	// Every error return below this line leaks everything created above it.
+	// A keyword for the error path (`errdefer`) was proposed and withdrawn
+	// (`error-handling.md`), and withdrawing it is what produced the useful
+	// statement of the gap: this function needs **three** things from a
+	// cleanup mechanism, and the keyword gave one of them.
 	//
-	// `errdefer` is the answer and it dissolves the hard half rather than
-	// solving it: there is nothing to cancel, because the compensation is
-	// only ever registered for the error path. On success these never run
-	// and the handles leave with the `Self`. LIFO like `defer`, which is
-	// the reverse-acquisition order teardown needs and `release` below
-	// documents by hand.
-	errdefer { vkDestroyInstance(instance, null) }
+	//   1. It runs on the error path. (`errdefer` gave this.)
+	//   2. It runs in **reverse acquisition order** — `vkDeviceWaitIdle`
+	//      first, swapchain before device, device before instance. Getting
+	//      this wrong corrupts memory rather than leaking, which
+	//      `memory-model.md` lists as the third problem scoped release was
+	//      ratified to solve. A per-acquisition keyword gives it only by
+	//      the author writing the blocks in order.
+	//   3. The handles must still **leave on success**, because they are
+	//      being assembled for a caller.
+	//
+	// `with ... as x { }` gives (1) and (2) today and cannot give (3): its
+	// binding is a borrow by design, so nothing bound by a `with` can
+	// escape the block. That is the whole of what is missing, and GAP 4's
+	// own guess — *"assembly itself belongs in a `with`, with the handles
+	// moved out on success … which needs a way to cancel the release"* —
+	// was right about the shape and wrong about the blocker. A consuming
+	// binding needs nothing cancelled: the move out *is* the cancellation.
+	//
+	// Left as the ladder, written out, because that is what the language
+	// has. Four comments mark where the releases would attach.
+	//
+	// CLEANUP 1 — vkDestroyInstance(instance, null)
 
 	// GAP 3, RESOLVED — the count-then-fill call, now writable.
 	//
@@ -197,11 +209,11 @@ export fn Renderer.new(window &Window) -> Either<Self, RenderError> {
 
 	const surface = surfaceSlot.orError(RenderError.NO_SURFACE { code = 0 })?
 
-	// No `errdefer` for the surface, and the omission is a finding rather
-	// than an oversight: `vkDestroySurfaceKHR` is an extension function
-	// loaded by name, which `release` below records as the one handle this
-	// program cannot destroy. So the error path leaks exactly what the
-	// success path leaks, which is the honest state of this binding.
+	// Nothing would attach here even with a mechanism, and the omission is
+	// a finding rather than an oversight: `vkDestroySurfaceKHR` is an
+	// extension function loaded by name, which `release` below records as
+	// the one handle this program cannot destroy. The error path leaks
+	// exactly what the success path leaks.
 
 	var deviceSlot Optional<VkDevice> = null
 
@@ -210,8 +222,8 @@ export fn Renderer.new(window &Window) -> Either<Self, RenderError> {
 		code -> return Err(.NO_DEVICE { code })
 	}
 
+	// CLEANUP 2 — vkDestroyDevice(device, null)
 	const device = deviceSlot.orError(RenderError.NO_DEVICE { code = 0 })?
-	errdefer { vkDestroyDevice(device, null) }
 
 	// The borrowed handle. No status code at all, because nothing is created:
 	// this reads a pointer out of the device. So the slot is the *only*
@@ -228,8 +240,8 @@ export fn Renderer.new(window &Window) -> Either<Self, RenderError> {
 		code -> return Err(.NO_SWAPCHAIN { code })
 	}
 
+	// CLEANUP 3 — vkDestroySwapchainKHR(device, swapchain, null)
 	const swapchain = swapchainSlot.orError(RenderError.NO_SWAPCHAIN { code = 0 })?
-	errdefer { vkDestroySwapchainKHR(device, swapchain, null) }
 
 	var poolSlot Optional<VkCommandPool> = null
 
@@ -238,19 +250,15 @@ export fn Renderer.new(window &Window) -> Either<Self, RenderError> {
 		code -> return Err(.NO_SWAPCHAIN { code })
 	}
 
-	// What GAP 4 leaves behind, which is smaller and still real.
+	// And the case that would decide against every candidate, recorded
+	// here because this is the file that would hit it first: a resource
+	// acquired in a **loop**. A `for` creating n command buffers that fails
+	// at item k wants n−1 releases. A `with` cannot bind a variable number
+	// of resources, and a per-acquisition cleanup inside the body is scoped
+	// to the body. Nothing in this corpus does it yet; a real renderer does
+	// it on the next line after this one.
 	//
-	// `errdefer` destroys what *this function* created. It says nothing
-	// about the order relative to `release` below, and nothing enforces
-	// that the four `errdefer` blocks appear in acquisition order — they
-	// do, because they are written next to their acquisitions, and that is
-	// a convention rather than a rule. GAP 5's point stands: the order is
-	// the specification and the compiler cannot read it.
-	//
-	// It also does not reach a resource acquired in a *loop*: a `for` that
-	// creates n command buffers and fails at item k wants n−1 releases, and
-	// `errdefer` inside the loop body runs at the body's exit rather than
-	// the function's. Nothing in this corpus does that yet.
+	// CLEANUP 4 — vkDestroyCommandPool(device, pool, null)
 	const pool = poolSlot.orError(RenderError.NO_SWAPCHAIN { code = 0 })?
 
 	return Ok(Self {
