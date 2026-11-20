@@ -56,28 +56,32 @@ on one cell trap; and returning a *derived value* from an update is what
 `-> R` is for, while returning a *reference* is refused because the `&var T`
 may not escape.
 
-### And one synthesis worth more than either
+### And one synthesis, half of which was wrong
 
-**Execution context is a body property, and that makes the algebra question
-urgent.** The review's sharpest point is that `Sendable` says whether a
-*value* may cross a thread and nothing says whether a *function* must run on
-a particular one — GLFW's event loop being the example, since it must be
-called from the thread that created the window.
+**Execution context is not a body property**, and the half that holds is
+still worth having.
 
-That is tracked in two places and connected in neither:
-`core-language-probes.md` §10 finding 7 (*"main-thread affinity is a property
-of a call, not of a value"*) and `functions.md`'s open item on declaring a
-callback's thread affinity. What nobody noticed is that it is **the same
-mechanism `functions.md` designed today**: a declared bit, checked against a
-closed set, propagated call-wise. `realtime` is one. Affinity would be
-another.
+The review's sharpest point is that `Sendable` says whether a *value* may
+cross a thread and nothing says whether a *function* must run on a
+particular one — GLFW's event loop being the example, since it must be
+called from the thread that created the window. That is real, it is tracked
+in two places and connected in neither (`core-language-probes.md` §10
+finding 7, and `functions.md`'s open item on a callback's affinity), and
+nothing answers it.
 
-`functions.md` says the language has exactly two body properties and that *"a
-third is the moment to reconsider — not now"*, with one candidate already
-queued (what may appear inside a `Synchronized` transform). This is the
-second. Two candidates is no longer "not now": it is the point at which
-either these become a small algebra with a general form, or there is a
-principled reason the set stops at two, and nobody has argued either.
+It was filed here as a fourth body property, on the grounds that it is a
+declared bit propagated call-wise. **It is not**, and `functions.md`'s
+admission test is what caught it: *"this function must run on the main
+thread"* is not a restriction on a body, it is an **obligation on callers**,
+and it propagates the other way — every caller must itself be on that
+thread. §10 finding 7 had it right the first time, in the words that were
+quoted and then ignored: *"main-thread affinity is a property of a call, not
+of a value."* A property of a call is not a property of a body.
+
+So affinity needs its own mechanism and remains open. What the episode
+settled is the thing it was raised to settle: the body-property set is
+three, and it stops there because a candidate has to pass four questions —
+not because nobody has suggested a fourth.
 
 ## What the composability probes found
 

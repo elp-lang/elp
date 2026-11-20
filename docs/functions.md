@@ -410,9 +410,13 @@ forbidden operations, propagated call-wise.** `Copy` is field-wise over a
 type; a body property is call-wise over a function. One pattern, two
 positions.
 
-The language has exactly **two** such properties: `pure` and `realtime`.
-Two is not an algebra, and if a third is ever wanted that is the moment to
-reconsider — not now.
+The language has **three** such properties: `pure`, `realtime` and
+`nonsuspending` — which is three keywords, and this section originally said
+two was not an algebra and that a third was the moment to reconsider. It is,
+and the reconsideration is "The admission test" below rather than a count:
+a candidate passes four questions or it is not one. Two of the four
+candidates that have arrived since fail it, which is the test doing the work
+the count was doing badly.
 
 **And there is one candidate third already queued, so "not now" has a
 date on it.** `aliasing.md` requires that a `Synchronized<T>` transform
@@ -485,20 +489,69 @@ rollback* needs `T` to be `Duplicate` and costs the copy the transform
 exists to avoid. *Declare partial updates possible* gives up the guarantee
 rather than discharging it.
 
-**And a second candidate arrived the same week, which settles that it is no
-longer "not now".** `Sendable` says whether a *value* may cross a thread;
-nothing says whether a *function must run on a particular one*. GLFW's event
-loop must be called from the thread that created the window, and
-`core-language-probes.md` §10 finding 7 records the general form —
-*"main-thread affinity is a property of a call, not of a value"* — while the
-Open item below asks whether a callback's affinity may be declared. Neither
-noticed that affinity is this mechanism: a declared bit, a closed set,
-call-wise propagation.
+### The admission test, and why the set stops at three
 
-So there are two candidates for a third body property and no argument on
-the table for why the set should stop at two. Either they become a small
-algebra with a general form, or the stopping point needs a reason. That is
-a decision owed rather than a question open.
+Three body properties means three keywords, which is the cost this section
+warned about and then paid without arguing. Correcting that is worth more
+than the keywords are: what was wrong was not the spelling, it was
+**declaring the question settled by adding a member**. So here is the test a
+candidate has to pass, written after the fact and applied to the four that
+were on the table.
+
+A body property must:
+
+1. **be a closed set of forbidden operations**, nameable without analysing
+   a body — "may not acquire a lock", not "may not take too long";
+2. **propagate call-wise from signatures**, so the check reads a callee's
+   declaration and never its body;
+3. **be checkable from a signature alone**, which is what makes it
+   compatible with separate compilation and with a useful diagnostic;
+4. **have a corpus program that needs it**, because three keywords is
+   already two more than this language wanted.
+
+`pure`, `realtime` and `nonsuspending` pass all four. Applied to the other
+two candidates, the test does the work the member count was doing badly.
+
+**`bounded` fails (1).** A function with no recursion can loop a number of
+times its input chooses, and one allocating a fixed amount per iteration has
+no useful upper bound either. Neither is a *forbidden operation*, so no
+closed set sees them, and the property would promise what no checker could
+deliver. Withdrawn — `core-language-probes.md` §21 has the full argument.
+
+**Thread affinity fails (2), and the reason is more interesting than the
+failure.** *"This function must run on the main thread"* is not a
+restriction on a body at all; it is an obligation on **callers**. It
+propagates the other way — every caller must itself be on that thread — so
+it is a different mechanism wearing the same clothes, and filing it here was
+a conflation. `core-language-probes.md` §10 finding 7 had it right the first
+time: *"main-thread affinity is a property of a call, not of a value."* A
+property of a call is not a property of a body.
+
+So the set is three, and it stops there for a stated reason rather than for
+want of candidates. The next one to arrive gets the four questions, and if
+it passes, three keywords becoming four is a smaller problem than a
+mechanism nobody can say no to.
+
+### One inconsistency this leaves, and it is mine
+
+`realtime` is now spelled two ways: as a modifier, `realtime fn
+fireEventsFor(…)`, and as a directive argument, `@abi(.C, realtime)`. The
+second predates the first and the first was added without reconciling them.
+
+They are not two things. `@abi(.C, realtime)` means *this function is callable
+from C **and** its body is real-time*, which is one ABI decision and one body
+property stapled together. The honest spelling is both, separately:
+
+```elp
+@abi(.C)
+realtime fn renderAudio(state Opaque<Confined<PlaybackState>>, …) -> int
+```
+
+Two markers, each saying one thing, and the body property reads the same on
+a C entry point as on the helper it calls — which is the whole point of
+propagating call-wise. Not migrated here: it touches `examples/Playhead`,
+`aliasing.md` and `functions.md` in a dozen places and belongs with the
+reactivity round rather than squeezed in front of it.
 
 ### The rule
 

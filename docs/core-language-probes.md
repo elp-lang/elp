@@ -2336,10 +2336,21 @@ intervene — `.copy()`'s depth, the refcount cascade freeing a deep
 `indirect` chain, and the macro evaluator's step count. Those are runtime
 obligations, not user-facing properties.
 
-The argument in `functions.md` is settled anyway, by a candidate that does
-hold up: `nonsuspending` is ratified as the third, thread affinity is a
-fourth, and three closed sets with no nesting between them is a mechanism
-rather than a set of special cases.
+And the argument in `functions.md` is settled a different way than either
+candidate suggested. Three body properties means three keywords, which is
+the cost that file warned about and then paid without arguing, so it now
+carries an **admission test** instead of a count: a candidate must be a
+closed set of forbidden operations, propagate call-wise from signatures, be
+checkable from a signature alone, and have a corpus program that needs it.
+
+`bounded` fails the first. **Thread affinity fails the second, and that is
+the more useful result** — *"must run on the main thread"* is not a
+restriction on a body, it is an obligation on **callers**, and it propagates
+the other way. §10 finding 7 had it right the first time: *"main-thread
+affinity is a property of a call, not of a value."* A property of a call is
+not a property of a body, and filing it as one was a conflation.
+
+So the set is three, with a reason rather than a vacancy.
 
 ### Why this is a different axis
 
